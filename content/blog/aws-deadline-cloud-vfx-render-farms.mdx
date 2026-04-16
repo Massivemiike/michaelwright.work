@@ -1,0 +1,156 @@
+---
+title: "How I Got NeatVideo 5 and BorisFX Sapphire Running on AWS Deadline Cloud Managed Fleet Workers"
+date: "2026-03-15"
+category: "AWS"
+excerpt: "A practitioner's deep-dive into deploying commercial OFX plugins on fully managed cloud render workers — with zero SSH access, no vendor documentation, and a lot of creative problem-solving."
+coverImage: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1200&q=80"
+tags: ["AWS", "Deadline Cloud", "VFX", "Render Farm", "OFX Plugins", "Cloud Infrastructure"]
+featured: true
+---
+
+Nobody told you that deploying commercial OFX plugins on AWS Deadline Cloud Service-Managed Fleet workers would be this hard. The documentation doesn't cover it. The vendors don't know their product runs on fully managed workers. And the usual answer — "just SSH in and install it" — doesn't exist in a managed fleet.
+
+This is the article I wish had existed six months ago.
+
+## The Problem
+
+AWS Deadline Cloud's Service-Managed Fleet (SMF) workers are ephemeral EC2 instances that AWS provisions and terminates automatically. You get zero persistent state, zero SSH access, and zero ability to pre-bake an AMI. Every worker boots fresh from a base image you can't modify directly.
+
+That's fine for most render software — Cinema4D, Houdini, Maya all have proper conda packages or silent installers. But NeatVideo 5 and BorisFX Sapphire are OFX plugins designed to be installed by a human on a permanent workstation. They write license files to `%PROGRAMDATA%`, register COM objects, and expect a GUI to walk through activation.
+
+None of that works on a headless EC2 worker that lives for 45 minutes.
+
+## The Architecture
+
+The key insight: **you can't install software during the job. You have to pre-stage everything the worker needs into a location it can access at render time.**
+
+Here's the architecture that worked:
+
+```
+S3 Bucket (mw-render-deps)
+├── plugins/
+│   ├── neatvideo/          ← extracted plugin files
+│   ├── borisfx-sapphire/   ← extracted plugin files
+│   └── licenses/           ← pre-activated license blobs
+└── conda-env/
+    └── environment.tar.gz  ← packed conda env with Python deps
+```
+
+On worker startup (via the Deadline Cloud job environment), a bootstrap script pulls from S3 before the render starts.
+
+## Extracting the Plugins Without Installing Them
+
+Both NeatVideo and Sapphire use NSIS-based installers. NSIS installers are archives — you can extract their contents with 7-Zip without running the installer at all:
+
+```bash
+7z x NeatVideoV5OFX-win64.exe -o./neatvideo-extracted
+7z x BorisFX_Sapphire_2024_OFX.exe -o./sapphire-extracted
+```
+
+This gets you the raw `.ofx` bundles and supporting DLLs. The catch: some DLLs need to be in specific `PATH` locations, and the plugins reference registry keys that won't exist on a fresh worker.
+
+## Solving the Registry Problem
+
+NeatVideo in particular checks for a registry key at `HKLM\SOFTWARE\Neat Video\License`. On a managed worker, this key doesn't exist and the plugin refuses to load.
+
+The fix is a `.reg` file pre-staged to S3 that gets imported via the bootstrap script:
+
+```powershell
+# bootstrap.ps1 — runs before render starts
+$s3Base = "s3://mw-render-deps/plugins"
+
+# Pull plugin files
+aws s3 sync "$s3Base/neatvideo/" "C:\ProgramData\OFX\Plugins\NeatVideo.ofx.bundle" --quiet
+aws s3 sync "$s3Base/borisfx-sapphire/" "C:\ProgramData\OFX\Plugins\Sapphire.ofx.bundle" --quiet
+
+# Import license registry keys
+aws s3 cp "$s3Base/licenses/neatvideo-license.reg" "$env:TEMP\nv-license.reg"
+reg import "$env:TEMP\nv-license.reg" /reg:64
+
+# Set OFX plugin path
+[Environment]::SetEnvironmentVariable("OFX_PLUGIN_PATH", "C:\ProgramData\OFX\Plugins", "Machine")
+```
+
+## Packaging the License
+
+Getting a pre-activated license blob requires activating NeatVideo on a real workstation first, then exporting the registry key:
+
+```
+reg export "HKLM\SOFTWARE\Neat Video" neatvideo-license.reg /y
+```
+
+Upload that `.reg` file to S3. It contains your activation state. The managed worker imports it at boot and NeatVideo sees itself as activated.
+
+> **Important**: This only works with node-locked licenses activated on the same AWS account's EC2 instances, or with floating licenses pointing to a license server in your VPC. Don't try to import a workstation license key — it won't validate against a different machine fingerprint.
+
+## BorisFX Sapphire: A Different Problem
+
+Sapphire's licensing is handled by a separate `BorisFX_License_Server` process that needs to be running before the host application starts. On a managed worker, there's no persistent service.
+
+The solution: start the license server as part of the bootstrap, pointing it at a floating license server running in your VPC:
+
+```powershell
+# Start Sapphire license service pointing at internal license server
+Start-Process "C:\Program Files\BorisFX\Sapphire\BorisFX_License_Server.exe" `
+  -ArgumentList "--server 10.0.1.45:5053" `
+  -WindowStyle Hidden
+Start-Sleep -Seconds 3  # Give it time to connect
+```
+
+Your VPC needs a `t3.micro` running the BorisFX floating license server. Set it up once, it runs forever, every managed worker connects to it.
+
+## The Conda Environment
+
+Both plugins need specific Python packages and supporting libraries. Package everything into a conda environment and use `conda-pack` to tar it:
+
+```bash
+conda activate my-render-env
+conda install conda-pack -y
+conda pack -o environment.tar.gz
+aws s3 cp environment.tar.gz s3://mw-render-deps/conda-env/
+```
+
+The bootstrap script unpacks it:
+
+```powershell
+aws s3 cp s3://mw-render-deps/conda-env/environment.tar.gz "$env:TEMP\env.tar.gz"
+tar -xzf "$env:TEMP\env.tar.gz" -C "C:\render-env"
+C:\render-env\Scripts\activate.bat
+```
+
+## Wiring It Into Deadline Cloud
+
+In your Deadline Cloud Job Template, add an `Environment` section:
+
+```yaml
+environments:
+  - name: PluginBootstrap
+    script:
+      actions:
+        onEnter:
+          command: powershell
+          args:
+            - -ExecutionPolicy
+            - Bypass
+            - -File
+            - "{{Param.BootstrapScript}}"
+```
+
+The bootstrap script runs before any task on the worker. Once it completes, NeatVideo and Sapphire are available to any application the job runs.
+
+## What Nobody Documents
+
+A few things I had to figure out through trial and error:
+
+1. **OFX plugin discovery order** — Nuke looks in `OFX_PLUGIN_PATH` first, then `C:\Program Files\Common Files\OFX\Plugins`. Set both via the bootstrap.
+2. **DLL dependency hell** — Sapphire bundles Visual C++ redistributables. On a clean AWS Windows image, some of these are missing. Add a VC++ redist install to your bootstrap.
+3. **Timing** — The license server connection takes 2-5 seconds. If your render starts before it connects, the plugin silently fails. The `Start-Sleep` is not optional.
+4. **S3 egress costs** — At scale, pulling gigabytes of plugin data per worker adds up. Cache aggressively using `aws s3 sync` with `--size-only` to skip unchanged files.
+
+## The Result
+
+After two weeks of debugging, we have NeatVideo 5 noise reduction and BorisFX Sapphire running reliably on Service-Managed Fleet workers across multiple client studios. Jobs that previously required a local render farm — because "cloud doesn't support our plugins" — now run entirely on AWS.
+
+The principle generalizes to almost any commercial OFX plugin. If you can extract the files and handle the licensing separately, you can run it on managed workers.
+
+If you're working through a similar problem, reach out — I'm happy to compare notes.

@@ -1,0 +1,105 @@
+---
+title: "Building FloAud.io in Public: Why I'm Betting on Pay-Per-Use Audio Processing"
+date: "2026-01-10"
+category: "Personal"
+excerpt: "After 20 years in post-production and a decade building cloud infrastructure, I'm combining both worlds into something that's never existed before — and sharing the whole messy process."
+coverImage: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1200&q=80"
+tags: ["FloAud.io", "Startups", "Audio", "AWS", "Building in Public", "SaaS"]
+featured: false
+---
+
+I've spent two decades in post-production — as a producer, editor, and VFX artist — and the last ten years building cloud infrastructure for studios. At some point it became obvious that the audio software world is stuck in a model that no longer makes sense.
+
+Professional audio processing tools are either:
+- Expensive perpetual licenses ($179–$499+ per plugin) that require a local install
+- Monthly subscriptions ($22–$299/month) you pay whether you process anything or not
+- Consumer tools that don't meet broadcast standards
+
+There's no middle ground for the developer who wants to add professional audio processing to their app, or the podcaster who processes 30 minutes a week and doesn't need a $399 iZotope license sitting idle.
+
+That's the gap FloAud.io fills.
+
+## What It Is
+
+FloAud.io is a browser-native, node-based audio processing platform. The core idea: professional-grade audio effects — AI noise reduction, EQ mastering, LUFS normalization, multi-format transcoding — accessible via API or browser interface, priced at $0.10/minute of processed audio.
+
+No downloads. No subscriptions. No minimum commitment.
+
+The browser interface is a node-based editor (think Blender's shader editor, but for audio). You chain effects together visually, save the chain as a preset, and either use it interactively or deploy it via API.
+
+The API looks like this:
+
+```bash
+curl -X POST https://api.floaud.io/v1/process \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "audio=@podcast-episode.mp3" \
+  -F "chain=podcast-optimizer" \
+  -F "output_format=mp3"
+```
+
+That's it. Your audio goes in, processed audio comes out, you're billed for the minutes processed.
+
+## Why Node-Based
+
+The node-based interface isn't just aesthetically interesting — it maps directly to how audio processing actually works. Every effect is a transform on a signal. Chaining transforms is composition. Branching (processing a signal two different ways and mixing them back) is trivially representable as a graph but awkward in a linear effects chain.
+
+More practically: node graphs are serializable. A chain you build in the browser becomes a JSON document that the API can execute server-side, with identical results. The visual editor is a authoring tool for API payloads.
+
+```json
+{
+  "chain": [
+    {
+      "effect": "rnnoise",
+      "params": { "model": "voice-clarity-v2", "strength": 0.85 }
+    },
+    {
+      "effect": "eq",
+      "params": { "preset": "podcast-warmth" }
+    },
+    {
+      "effect": "lufs_normalize",
+      "params": { "target": -16.0, "true_peak": -1.5 }
+    }
+  ]
+}
+```
+
+## The Technical Stack
+
+The backend is AWS-native because that's where my expertise lives and because the scalability story is straightforward.
+
+**Processing workers**: EC2 instances running Python with [Pedalboard](https://github.com/spotify/pedalboard) (Spotify's audio processing library) and FFmpeg. Pedalboard gives us VST3 plugin support and professional-grade DSP; FFmpeg handles transcoding and format conversion.
+
+**AI noise reduction**: We integrate 5 RNNoise models, ranging from aggressive (good for heavily contaminated recordings) to gentle (for subtle cleanup on already-decent audio). The model selection is exposed as a parameter.
+
+**Job queue**: SQS for async processing. Short jobs (under 30 seconds) run synchronously via API. Longer jobs return a job ID you poll for completion.
+
+**Frontend**: React + TypeScript with a custom node graph renderer. The graph editor was the hardest part to build — turns out implementing drag-and-drop node connections with correct edge routing is genuinely non-trivial.
+
+**Auth and billing**: Standard JWT auth, credits system for billing. Users buy credits; processing consumes them at $0.10/minute of audio.
+
+## What's Shipping in 2026
+
+The core processing API and browser interface are built. What's left for the July 2026 launch:
+
+- **VST3 plugin**: Process audio from your DAW using FloAud.io's API. The plugin appears in Logic, Pro Tools, Ableton, etc. as a standard audio effect, but the processing happens in the cloud.
+- **Browser DAW**: A basic multitrack editor with FloAud.io processing built in. Not trying to replace Logic — but enough to record, clean up, and export a podcast episode without leaving the browser.
+- **Direct DAW API integration**: Companion plugin that exposes FloAud.io presets directly in your existing DAW's effect chain.
+
+## Why Build in Public
+
+I'm writing about the process because I spent months unable to find any documentation on what I was trying to do. The Pedalboard + RNNoise integration, the node graph rendering approach, the pricing model — I had to figure all of it out through experimentation.
+
+If I document it, maybe someone else doesn't have to.
+
+Also: building in public creates accountability. It's much harder to delay a launch when you've told 1,600 LinkedIn followers it's coming.
+
+## The Honest Part
+
+I've been a systems engineer for a decade. I know how to build infrastructure that scales. I do not know how to market a SaaS product, and I'm learning in real time.
+
+The thing I keep coming back to: the pricing model is either the whole insight or it's the whole problem. If developers and creators see $0.10/minute as obviously better than subscriptions, this works. If they don't trust pay-per-use billing, or they don't want to think about cost per use, it won't matter how good the processing is.
+
+I'm betting it works. We'll see.
+
+[FloAud.io](https://floaud.io) launches July 2026. If you want early access, DMs are open.

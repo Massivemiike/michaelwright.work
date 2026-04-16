@@ -1,0 +1,205 @@
+---
+title: "Automating VFX Studio Render Pipelines with Python and AWS"
+date: "2026-02-20"
+category: "DevOps"
+excerpt: "How I replaced a tangle of manual handoffs, Slack messages, and spreadsheet tracking with a Python-driven pipeline that automatically routes shots from editorial through render to delivery."
+coverImage: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&q=80"
+tags: ["DevOps", "Python", "AWS", "VFX", "Automation", "Pipeline"]
+featured: false
+---
+
+VFX studios run on chaos disguised as process. Shots come in from editorial, get assigned to artists, move through rounds of review, render, and eventually deliver to the client. The "pipeline" is often a combination of shared drives, Slack channels, and a producer with an always-open spreadsheet who knows where everything is.
+
+When that producer is out sick, everything stops.
+
+I've spent the last few years automating this problem away — first at CoSA VFX, now across several studios as part of my work at GPL Technologies. Here's what actually works.
+
+## The Core Problem
+
+The manual handoff points in a typical VFX pipeline:
+
+1. Editorial delivers a new cut → someone manually updates shot lists
+2. Artists finish a render → someone manually moves files to the review server
+3. Review is approved → someone manually submits the delivery render job
+4. Delivery render finishes → someone manually packages and uploads to the client
+
+Each of these "someones" is a potential bottleneck. Each manual step is a potential error. And at 2am when a shot needs to go out, the right someone might not be available.
+
+## The Architecture
+
+The system I've landed on uses a few AWS services stitched together with Python:
+
+```
+S3 (asset storage)
+  ↓
+SQS (event queue)
+  ↓
+Lambda (routing logic)
+  ↓
+Deadline Cloud (render execution)
+  ↓
+S3 (output storage)
+  ↓
+SNS (notifications)
+```
+
+Every file move, every status change, every render completion generates an S3 event that drops a message into SQS. Lambda functions consume those messages and make routing decisions based on the shot's current state.
+
+## Shot State Machine
+
+The key abstraction is treating every shot as a state machine. A shot is always in exactly one state:
+
+```python
+from enum import Enum
+
+class ShotState(Enum):
+    EDITORIAL_IN      = "editorial_in"
+    ARTIST_ASSIGNED   = "artist_assigned"
+    RENDER_QUEUED     = "render_queued"
+    RENDER_RUNNING    = "render_running"
+    RENDER_COMPLETE   = "render_complete"
+    REVIEW_PENDING    = "review_pending"
+    REVIEW_APPROVED   = "review_approved"
+    DELIVERY_QUEUED   = "delivery_queued"
+    DELIVERED         = "delivered"
+    HOLD              = "hold"
+    ERROR             = "error"
+```
+
+State is stored in DynamoDB with a GSI on `state` so you can query "all shots currently rendering" in one call.
+
+## The S3 Event Trigger
+
+When an artist drops a render output into the correct S3 prefix, it triggers the pipeline:
+
+```python
+# lambda/on_s3_put.py
+import boto3
+import json
+from shot_state import ShotState, transition
+
+def handler(event, context):
+    for record in event['Records']:
+        key = record['s3']['object']['key']
+        
+        # Parse shot code from path convention
+        # e.g. renders/SQ010/SH0050/v003/SH0050_v003.0001.exr
+        parts = key.split('/')
+        if len(parts) < 4 or parts[0] != 'renders':
+            return
+        
+        seq, shot, version = parts[1], parts[2], parts[3]
+        shot_id = f"{seq}_{shot}"
+        
+        # Only act on the last frame (sentinel file)
+        if not key.endswith('_complete.flag'):
+            return
+        
+        transition(
+            shot_id=shot_id,
+            from_state=ShotState.RENDER_RUNNING,
+            to_state=ShotState.RENDER_COMPLETE,
+            metadata={"version": version, "output_path": key}
+        )
+        
+        # Trigger review package creation
+        sqs = boto3.client('sqs')
+        sqs.send_message(
+            QueueUrl=os.environ['REVIEW_QUEUE_URL'],
+            MessageBody=json.dumps({"shot_id": shot_id, "version": version})
+        )
+```
+
+The `_complete.flag` sentinel is written by the render job's post-task script after all frames complete. This avoids triggering on every individual frame.
+
+## Deadline Cloud Job Templates
+
+Every render type has a parameterized Deadline Cloud job template. The Python code submits jobs by filling in the template — no manual queue interaction:
+
+```python
+# pipeline/deadline.py
+import boto3
+
+deadline = boto3.client('deadline', region_name='us-west-2')
+
+def submit_render(shot_id: str, scene_path: str, frame_range: str, renderer: str):
+    template = load_template(f"templates/{renderer}.yaml")
+    
+    response = deadline.create_job(
+        farmId=os.environ['DEADLINE_FARM_ID'],
+        queueId=os.environ['DEADLINE_QUEUE_ID'],
+        template=template,
+        parameters={
+            "ScenePath": {"string": scene_path},
+            "FrameRange": {"string": frame_range},
+            "OutputPath": {"string": f"s3://studio-renders/{shot_id}/"},
+            "ShotId": {"string": shot_id},
+        },
+        priority=get_priority(shot_id),  # hot shots get higher priority
+    )
+    
+    return response['jobId']
+```
+
+Priorities are pulled from DynamoDB — a producer marks a shot "hot" in the review tool and the next render submission for that shot automatically gets elevated priority.
+
+## The Review Automation
+
+Once a render completes, the system automatically creates a review package and posts it to Frame.io (or whatever review tool you use). No artist intervention needed:
+
+```python
+# lambda/on_render_complete.py
+def handler(event, context):
+    body = json.loads(event['Records'][0]['body'])
+    shot_id = body['shot_id']
+    version = body['version']
+    
+    # Create proxy from EXR sequence
+    proxy_path = create_h264_proxy(
+        input_path=f"s3://studio-renders/{shot_id}/{version}/",
+        output_path=f"s3://studio-proxies/{shot_id}/{version}.mp4"
+    )
+    
+    # Post to Frame.io
+    review_link = frameio_upload(
+        proxy_path=proxy_path,
+        shot_id=shot_id,
+        version=version
+    )
+    
+    # Notify the supervisor via Slack
+    slack_notify(
+        channel="#shot-review",
+        message=f"*{shot_id}* {version} is ready for review",
+        link=review_link
+    )
+    
+    transition(shot_id, ShotState.RENDER_COMPLETE, ShotState.REVIEW_PENDING)
+```
+
+## What This Replaces
+
+Before this system, the workflow was:
+- Artist finishes render → messages producer on Slack
+- Producer downloads proxy locally, re-uploads to review tool
+- Supervisor reviews, approves via email
+- Producer reads email, manually submits delivery render
+- Delivery render finishes, producer packages, uploads to client FTP
+
+After:
+- Artist finishes render → system handles everything through delivery
+- Producer's job becomes approving review (one click) and handling exceptions
+
+We took a 5-touch manual process to a 1-touch process for the standard case. At a studio doing 200+ shots per week, that's significant.
+
+## The Lessons
+
+**Start with the state machine.** Before writing any code, define every state a shot can be in and every valid transition. If you can't draw the diagram, you don't understand the pipeline well enough to automate it.
+
+**Make exceptions loud.** When something falls into `ERROR` state, the notification needs to be unavoidable. We use PagerDuty for render failures on hot shots, Slack for everything else.
+
+**Don't automate away human judgment.** Review approval stays manual. Creative decisions stay manual. The system handles logistics — not creativity.
+
+**S3 prefixes are your API.** Design your folder structure before anything else. The path convention (`renders/SEQ/SHOT/VERSION/`) is the contract everything else depends on.
+
+The code is studio-specific and not open source, but the architecture is reusable. If you're building something similar, the state machine + SQS + Lambda pattern will get you 80% of the way there.
