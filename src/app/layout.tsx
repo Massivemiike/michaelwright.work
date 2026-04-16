@@ -3,6 +3,7 @@ import "./globals.css";
 import { syne, outfit, jetbrainsMono } from "@/lib/fonts";
 import Nav from "@/components/layout/Nav";
 import Footer from "@/components/layout/Footer";
+import PageWrapper from "@/components/layout/PageWrapper";
 import NodeNetworkCanvas from "@/components/background/NodeNetworkCanvas";
 import AdminPanel from "@/components/background/AdminPanel";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
@@ -36,7 +37,9 @@ export default function RootLayout({
         <NodeNetworkProvider>
           <NodeNetworkCanvas />
           <Nav />
-          <main style={{ position: "relative", zIndex: 10 }}>{children}</main>
+          <main style={{ position: "relative", zIndex: 10 }}>
+            <PageWrapper>{children}</PageWrapper>
+          </main>
           <Footer />
           <AdminPanel />
         </NodeNetworkProvider>
