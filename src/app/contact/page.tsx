@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
 import { Mail, MapPin, Clock, ExternalLink } from "lucide-react";
 import ContactForm from "@/components/contact/ContactForm";
+import { buildMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: "Contact",
   description: "Get in touch with Michael Wright — Cloud Infrastructure Architect & DevOps Engineer.",
-};
+  path: "/contact",
+});
 
 export default function ContactPage() {
   return (

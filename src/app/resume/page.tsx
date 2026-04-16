@@ -1,18 +1,36 @@
-import type { Metadata } from "next";
 import { Download, Mail, MapPin, Link2 } from "lucide-react";
 import ResumeTimeline from "@/components/resume/ResumeTimeline";
 import SkillsMatrix from "@/components/resume/SkillsMatrix";
 import CertBadges from "@/components/resume/CertBadges";
 import { timeline, skills, certifications, education } from "@/data/resume.data";
+import { buildMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: "Resume",
-  description:
-    "Michael Wright — Cloud Infrastructure Architect & DevOps Engineer. 12+ years building resilient AWS infrastructure.",
+  description: "Michael Wright — Cloud Infrastructure Architect & DevOps Engineer. 12+ years building resilient AWS infrastructure.",
+  path: "/resume",
+});
+
+const personJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: "Michael Wright",
+  jobTitle: "Cloud Infrastructure Architect & DevOps Engineer",
+  url: "https://michaelwright.work",
+  email: "michael.wright@gpltech.com",
+  sameAs: [
+    "https://www.linkedin.com/in/macgyver2026",
+  ],
+  knowsAbout: ["AWS", "DevOps", "Kubernetes", "Cloud Infrastructure", "Platform Engineering"],
 };
 
 export default function ResumePage() {
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+      />
     <div
       style={{
         minHeight: "100vh",
@@ -203,6 +221,7 @@ export default function ResumePage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

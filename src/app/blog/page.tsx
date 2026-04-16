@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { getAllPosts } from "@/lib/blog";
 import PostCard from "@/components/blog/PostCard";
 import type { BlogCategory } from "@/types/blog";
+import { buildMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: "Blog",
   description: "Thoughts on AWS, DevOps, VFX pipeline engineering, and building FloAud.io in public.",
-};
+  path: "/blog",
+});
 
 const CATEGORIES: ("All" | BlogCategory)[] = ["All", "AWS", "DevOps", "Personal"];
 

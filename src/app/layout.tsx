@@ -9,6 +9,7 @@ import AdminPanel from "@/components/background/AdminPanel";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://michaelwright.work"),
   title: {
     default: "Michael Wright — Cloud Infrastructure Architect",
     template: "%s | Michael Wright",

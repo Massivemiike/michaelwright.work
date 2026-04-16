@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import rehypePrettyCode from "rehype-pretty-code";
 import { getAllPosts, getPostBySlug } from "@/lib/blog";
 import MDXComponents from "@/components/blog/MDXComponents";
+import { buildMetadata } from "@/lib/metadata";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -14,19 +14,16 @@ export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post) return {};
-  return {
+  return buildMetadata({
     title: post.title,
     description: post.excerpt,
-    openGraph: {
-      title: post.title,
-      description: post.excerpt,
-      images: [{ url: post.coverImage }],
-    },
-  };
+    path: `/blog/${slug}`,
+    image: post.coverImage,
+  });
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
