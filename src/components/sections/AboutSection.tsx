@@ -2,7 +2,7 @@ import SectionReveal from "./SectionReveal";
 
 const STATS = [
   { value: "12+", label: "Years in Cloud Infrastructure" },
-  { value: "6",   label: "AWS Certifications" },
+  { value: "3",   label: "AWS Certifications" },
   { value: "99.9%", label: "SLA Track Record" },
 ];
 
@@ -207,9 +207,9 @@ export default function AboutSection() {
                 }}
               >
                 {[
-                  { cert: "AWS Solutions Architect — Professional", year: "2024" },
-                  { cert: "AWS DevOps Engineer — Professional", year: "2023" },
-                  { cert: "AWS Security — Specialty", year: "2023" },
+                  { cert: "AWS Certified Cloud Practitioner", year: "Exp. Mar 2029" },
+                  { cert: "AWS Partner: Generative AI Technical", year: "Mar 2026" },
+                  { cert: "AWS Partner: Technical Accredited", year: "Mar 2026" },
                 ].map(({ cert, year }) => (
                   <div
                     key={cert}

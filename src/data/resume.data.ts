@@ -147,9 +147,9 @@ export const skills: Skill[] = [
 ];
 
 export const certifications: Certification[] = [
-  { name: "AWS Partner: Generative AI Technical", issuer: "Amazon Web Services", year: "2026", badge: "GenAI" },
-  { name: "AWS Partner: Technical Accredited",    issuer: "Amazon Web Services", year: "2026", badge: "TAP" },
-  // Add remaining AWS certifications here
+  { name: "AWS Certified Cloud Practitioner",          issuer: "Amazon Web Services", year: "Expires Mar 2029", badge: "CLF" },
+  { name: "AWS Partner: Generative AI Technical",      issuer: "Amazon Web Services", year: "Mar 2026",         badge: "GenAI" },
+  { name: "AWS Partner: Technical Accredited",         issuer: "Amazon Web Services", year: "Mar 2026",         badge: "TAP" },
 ];
 
 export const education = [
