@@ -242,14 +242,15 @@ export const gplProjects: Project[] = [
     id: "cantina-poc",
     name: "Cantina Creative — Deadline Cloud POC",
     description:
-      "Proof-of-concept for Cantina Creative validating AWS Deadline Cloud for their feature-film VFX render pipeline.",
+      "Proof-of-concept for Cantina Creative that had to beat on-prem render hardware on both speed and cost — benchmarked against a real 20K-resolution, 2,000-frame production sequence.",
     highlights: [
-      "Deployed a POC farm with queues and fleets scoped to Cantina's DCC stack",
-      "Configured SMF worker bootstrap for the studio's plugin and license requirements",
-      "Validated submission flow from artist workstations to cloud farm under production-like load",
-      "Produced architecture and setup documentation for the studio team",
+      "Benchmark: on-prem hardware rendered each 20K-res frame in ~11 minutes — a full 2,000-frame pass would take ~15 days wall-time on a single box",
+      "Deployed Linux SMF worker fleet on AWS Deadline Cloud tuned for the studio's DCC stack and 20K frame workload",
+      "Per-frame time on cloud workers: 1:30–1:40 vs. 11:00 on-prem — a ~7× per-frame speedup on the same shot",
+      "Full 2,000-frame job completed in ~2h 12m across 24 parallel workers, vs. the on-prem baseline of ~15 days single-threaded",
+      "Validated the cost model beat on-prem amortized hardware spend at Cantina's render volume, clearing the bar the studio set for the POC",
     ],
-    tags: ["AWS", "Deadline Cloud", "SMF", "Feature VFX", "CloudFormation"],
+    tags: ["AWS", "Deadline Cloud", "SMF", "Linux", "20K Render", "Feature VFX", "CloudFormation"],
     status: "completed",
   },
   {
