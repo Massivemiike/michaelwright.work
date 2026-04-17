@@ -99,7 +99,7 @@ export default function AboutSection() {
 
         {/* Origin story */}
         <SectionReveal delay={0.1}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "2.5rem", marginBottom: "4.5rem" }}>
+          <div className="about-story-grid" style={{ display: "grid", gap: "2.5rem 3rem", marginBottom: "4.5rem", alignItems: "start" }}>
             <div>
               <div
                 style={{
@@ -147,14 +147,17 @@ export default function AboutSection() {
                 Editing &amp; Post-Production
               </div>
               <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: 0 }}>
-                The cable station years rolled straight into professional editing. My credits run from
-                additional editor on <em>Occupation: Hollywood</em> and assistant editor on <em>A Royal
-                Christmas</em> to visual effects on <em>One Direction: Going Our Way</em> — plus work on{" "}
-                <em>Kim Kardashian: The Fabulous Life</em>, <em>America&apos;s Sweethearts: Queens of
-                Nashville</em>, and <em>Music Revolution</em>. My most recent credit is{" "}
-                <em>Taylor Swift: Melodies and Hearts</em> (2025, 50m), where I covered the full
-                pipeline end-to-end: production, trailer cut, all of post-production, QC, and final
-                delivery.{" "}
+                The cable station years rolled straight into professional editing. Credits span roles across
+                reality, music, and scripted TV — additional editor on <em>Occupation: Hollywood</em>,
+                assistant editor on <em>A Royal Christmas</em>, visual effects on{" "}
+                <em>One Direction: Going Our Way</em>, plus work on <em>Kim Kardashian: The Fabulous Life</em>,{" "}
+                <em>America&apos;s Sweethearts: Queens of Nashville</em>, and <em>Music Revolution</em>.
+              </p>
+              <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: "1rem 0 0" }}>
+                My most recent credit is <em>Taylor Swift: Melodies and Hearts</em> (2025, 50m), where I
+                covered the full pipeline end-to-end: production, trailer cut, all of post-production, QC,
+                and final delivery. That experience — owning every stage from camera to deliverable — is
+                what shapes how I architect media pipelines today.{" "}
                 <a
                   href="https://www.imdb.com/name/nm1948208/"
                   target="_blank"
@@ -182,11 +185,16 @@ export default function AboutSection() {
               </div>
               <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: 0 }}>
                 Production work led naturally into audio. I graduated from The Los Angeles Recording School
-                with a 3.92 GPA in Recording Arts Technology and worked across tracking, mixing, and
-                mastering sessions — studio and live. That&apos;s the foundation FloAud.io is built on today:
-                six production tools (AudioFlo, StemFlo, MasterFlo, MidiFlo, Audio Cleanup) plus TeachMe, a
-                21-module audio engineering curriculum. Plugin development, custom vocal chain design, and
-                neural audio DSP are where the recording engineer and the software engineer meet.
+                with a 3.92 GPA in Recording Arts Technology and spent years working as a tracking engineer,
+                mix engineer, and mastering engineer — studio sessions, live recordings, and everything in
+                between. That hands-on foundation is non-negotiable: you cannot design audio software
+                credibly without sitting behind a console first.
+              </p>
+              <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: "1rem 0 0" }}>
+                It&apos;s also the foundation FloAud.io is built on — six production tools (AudioFlo,
+                StemFlo, MasterFlo, MidiFlo, Audio Cleanup) plus TeachMe, a 21-module audio engineering
+                curriculum. Plugin development, custom vocal chain design, and neural audio DSP are where
+                the recording engineer and the software engineer meet.
               </p>
             </div>
 
@@ -208,9 +216,13 @@ export default function AboutSection() {
                 Over the last 12+ years, the media background fused with cloud engineering. At GPL
                 Technologies I architect AWS Deadline Cloud render farms, cross-account licensing networks,
                 and production pipelines for VFX studios — Cantina Creative, Frame48, Chicken Bone FX,
-                Transit, Alliance VFX, and more. The instincts carry over cleanly from the live control
-                room: real-time problem solving, deep system knowledge, and the discipline to make complex
-                technical machinery feel invisible to the people using it.
+                Transit, Alliance VFX, JAMM, Buck Design, Sight &amp; Sound, and more.
+              </p>
+              <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: "1rem 0 0" }}>
+                The instincts carry over cleanly from the live control room: real-time problem solving,
+                deep system knowledge, and the discipline to make complex technical machinery feel
+                invisible to the people using it. Whether it&apos;s a 20K-resolution render or a live
+                broadcast, the job is the same — keep it on the rails, and make the hard part look easy.
               </p>
             </div>
           </div>
@@ -400,6 +412,16 @@ export default function AboutSection() {
         </SectionReveal>
 
       </div>
+
+      <style>{`
+        .about-story-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        @media (max-width: 1100px) {
+          .about-story-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+          .about-story-grid { grid-template-columns: minmax(0, 1fr); }
+        }
+      `}</style>
     </section>
   );
 }
