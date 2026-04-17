@@ -21,6 +21,7 @@ export interface Certification {
   issuer: string;
   year: string;
   badge: string;
+  credlyUrl: string;
 }
 
 export const timeline: TimelineEntry[] = [
@@ -147,9 +148,9 @@ export const skills: Skill[] = [
 ];
 
 export const certifications: Certification[] = [
-  { name: "AWS Certified Cloud Practitioner",          issuer: "Amazon Web Services", year: "Expires Mar 2029", badge: "CLF" },
-  { name: "AWS Partner: Generative AI Technical",      issuer: "Amazon Web Services", year: "Mar 2026",         badge: "GenAI" },
-  { name: "AWS Partner: Technical Accredited",         issuer: "Amazon Web Services", year: "Mar 2026",         badge: "TAP" },
+  { name: "AWS Certified Cloud Practitioner",          issuer: "Amazon Web Services", year: "Expires Mar 2029", badge: "CLF",   credlyUrl: "https://www.credly.com/badges/71ee0faa-f10b-4174-b407-d27e3d991728" },
+  { name: "AWS Partner: Generative AI Technical",      issuer: "Amazon Web Services", year: "Mar 2026",         badge: "GenAI", credlyUrl: "https://www.credly.com/badges/542b2049-0438-45ec-bb1f-fa870e7a34df" },
+  { name: "AWS Partner: Technical Accredited",         issuer: "Amazon Web Services", year: "Mar 2026",         badge: "TAP",   credlyUrl: "https://www.credly.com/badges/1fb727b8-2493-4585-921a-2f16f3cb155c" },
 ];
 
 export const education = [
