@@ -154,6 +154,30 @@ export const certifications: Certification[] = [
   { name: "AWS Partner: Technical Accredited",         issuer: "Amazon Web Services", year: "Mar 2026",         badge: "TAP",   credlyUrl: "https://www.credly.com/badges/1fb727b8-2493-4585-921a-2f16f3cb155c" },
 ];
 
+export interface VolunteerEntry {
+  organization: string;
+  role: string;
+  period: string;
+  hours: string;
+  bullets: string[];
+}
+
+export const volunteer: VolunteerEntry[] = [
+  {
+    organization: "City of Commerce Cable Television",
+    role: "Production Manager · Assistant Director · Head of Production",
+    period: "1999 – 2007",
+    hours: "5,000+ hours",
+    bullets: [
+      "Operated live broadcast cameras for municipal programming and live city events, including multi-camera shoots coordinated in real time from the control room.",
+      "Ran camera robotics and automated shot systems for studio productions, handling setup, programming, and live operation during broadcasts.",
+      "Designed and operated stage and studio lighting for live shows, managing the lighting rig from pre-production through live execution.",
+      "Led the City of Commerce beauty pageant production as Production Manager, Assistant Director, and Head of Production across multiple years — coordinating crew, rehearsals, technical direction, and live broadcast.",
+      "Contributed 5,000+ volunteer hours over nine years, gaining deep hands-on experience in live production that informs large-scale technical coordination and operations work today.",
+    ],
+  },
+];
+
 export const education = [
   {
     school: "Western Governors University",

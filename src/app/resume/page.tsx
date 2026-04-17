@@ -2,7 +2,7 @@ import { Download, Mail, MapPin, Link2 } from "lucide-react";
 import ResumeTimeline from "@/components/resume/ResumeTimeline";
 import SkillsMatrix from "@/components/resume/SkillsMatrix";
 import CertBadges from "@/components/resume/CertBadges";
-import { timeline, skills, certifications, education } from "@/data/resume.data";
+import { timeline, skills, certifications, education, volunteer } from "@/data/resume.data";
 import { buildMetadata } from "@/lib/metadata";
 
 export const metadata = buildMetadata({
@@ -215,6 +215,41 @@ export default function ResumePage() {
                   <div style={{ fontSize: "0.75rem", color: "#3C3F52", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace" }}>
                     {edu.period}{"note" in edu ? ` · ${edu.note}` : ""}
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Volunteer</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {volunteer.map((v) => (
+                <div
+                  key={v.organization}
+                  style={{
+                    padding: "1.25rem 1.25rem",
+                    background: "rgba(15,15,21,0.9)",
+                    border: "1px solid #1F1F2E",
+                    borderTop: "1px solid rgba(127,219,255,0.2)",
+                    borderRadius: 8,
+                  }}
+                >
+                  <div style={{ fontSize: "0.875rem", color: "#F0F2F8", fontWeight: 500, marginBottom: "0.25rem" }}>
+                    {v.organization}
+                  </div>
+                  <div style={{ fontSize: "0.8125rem", color: "#787F96", marginBottom: "0.25rem" }}>
+                    {v.role}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#3C3F52", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "0.75rem" }}>
+                    {v.period} · <span style={{ color: "#7FDBFF" }}>{v.hours}</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "1.1rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                    {v.bullets.map((b, bi) => (
+                      <li key={bi} style={{ fontSize: "0.8125rem", color: "#787F96", lineHeight: 1.65 }}>
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>
