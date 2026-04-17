@@ -73,6 +73,12 @@ export default function Footer() {
             LinkedIn Articles ↗
           </a>
           <a
+            href="mailto:m.wright2@lafilm.edu"
+            style={{ fontSize: "0.8125rem", color: "#787F96", textDecoration: "none" }}
+          >
+            m.wright2@lafilm.edu
+          </a>
+          <a
             href="mailto:michael.wright@gpltech.com"
             style={{ fontSize: "0.8125rem", color: "#787F96", textDecoration: "none" }}
           >

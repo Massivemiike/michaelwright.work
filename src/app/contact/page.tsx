@@ -32,11 +32,21 @@ export default function ContactPage() {
         {/* Left — contact info */}
         <div>
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", marginBottom: "2.5rem" }}>
+            {/* Email — two addresses */}
+            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: "rgba(255,59,47,0.08)", border: "1px solid rgba(255,59,47,0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF3B2F", flexShrink: 0 }}>
+                <Mail size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.1em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "0.2rem" }}>Email</div>
+                <a href="mailto:m.wright2@lafilm.edu" style={{ fontSize: "0.9375rem", color: "#F0F2F8", textDecoration: "none", display: "block" }}>m.wright2@lafilm.edu</a>
+                <a href="mailto:michael.wright@gpltech.com" style={{ fontSize: "0.875rem", color: "#787F96", textDecoration: "none", display: "block", marginTop: "0.2rem" }}>michael.wright@gpltech.com</a>
+              </div>
+            </div>
             {[
-              { icon: <Mail size={18} />, label: "Email", value: "michael.wright@gpltech.com", href: "mailto:michael.wright@gpltech.com" },
               { icon: <MapPin size={18} />, label: "Location", value: "Los Angeles, CA · Remote" },
               { icon: <Clock size={18} />, label: "Response time", value: "Within 24 hours" },
-            ].map(({ icon, label, value, href }) => (
+            ].map(({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: string; href?: string }) => (
               <div key={label} style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
                 <div style={{ width: 40, height: 40, borderRadius: 8, background: "rgba(255,59,47,0.08)", border: "1px solid rgba(255,59,47,0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF3B2F", flexShrink: 0 }}>
                   {icon}

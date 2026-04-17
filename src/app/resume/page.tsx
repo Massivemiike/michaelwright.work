@@ -17,7 +17,7 @@ const personJsonLd = {
   name: "Michael Wright",
   jobTitle: "Cloud Infrastructure Architect & DevOps Engineer",
   url: "https://michaelwright.work",
-  email: "michael.wright@gpltech.com",
+  email: "m.wright2@lafilm.edu",
   sameAs: [
     "https://www.linkedin.com/in/macgyver2026",
   ],
@@ -97,6 +97,7 @@ export default function ResumePage() {
 
             <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
               {[
+                { icon: <Mail size={13} />, label: "m.wright2@lafilm.edu", href: "mailto:m.wright2@lafilm.edu" },
                 { icon: <Mail size={13} />, label: "michael.wright@gpltech.com", href: "mailto:michael.wright@gpltech.com" },
                 { icon: <MapPin size={13} />, label: "Remote", href: null },
                 { icon: <Link2 size={13} />, label: "linkedin.com/in/macgyver2026", href: "https://www.linkedin.com/in/macgyver2026" },
