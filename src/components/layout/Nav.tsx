@@ -8,6 +8,7 @@ import { ExternalLink, Menu, X } from "lucide-react";
 
 const INTERNAL_LINKS = [
   { href: "/", label: "Home" },
+  { href: "/#about", label: "About" },
   { href: "/resume", label: "Resume" },
   { href: "/projects", label: "Projects" },
   { href: "/blog", label: "Blog" },
@@ -39,6 +40,7 @@ export default function Nav() {
   }, [mobileOpen]);
 
   function isActive(href: string) {
+    if (href.includes("#")) return false;
     return href === "/" ? pathname === "/" : pathname.startsWith(href);
   }
 

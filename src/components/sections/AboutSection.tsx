@@ -49,6 +49,7 @@ export default function AboutSection() {
         background: "rgba(8,8,12,0.78)",
         backdropFilter: "blur(4px)",
         borderTop: "1px solid #1F1F2E",
+        scrollMarginTop: 66,
       }}
     >
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
