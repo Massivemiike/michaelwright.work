@@ -12,6 +12,9 @@ const AUDIO_SPECIALTIES = [
   "Mastering Engineer",
   "Recording / Tracking Engineer",
   "Live Broadcast Production",
+  "Film / TV Editor",
+  "Trailer Cutting & QC",
+  "Post-Production Pipeline",
   "Professional Audio Software",
   "Plugin Development (JUCE / VST3)",
   "Custom Vocal Chain Development",
@@ -140,6 +143,40 @@ export default function AboutSection() {
                   marginBottom: "0.875rem",
                 }}
               >
+                Editing &amp; Post-Production
+              </div>
+              <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: 0 }}>
+                The cable station years rolled straight into professional editing. My credits run from
+                additional editor on <em>Occupation: Hollywood</em> and assistant editor on <em>A Royal
+                Christmas</em> to visual effects on <em>One Direction: Going Our Way</em> — plus work on{" "}
+                <em>Kim Kardashian: The Fabulous Life</em>, <em>America&apos;s Sweethearts: Queens of
+                Nashville</em>, and <em>Music Revolution</em>. My most recent credit is{" "}
+                <em>Taylor Swift: Melodies and Hearts</em> (2025, 50m), where I covered the full
+                pipeline end-to-end: production, trailer cut, all of post-production, QC, and final
+                delivery.{" "}
+                <a
+                  href="https://www.imdb.com/name/nm1948208/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#7FDBFF", textDecoration: "none", borderBottom: "1px solid rgba(127,219,255,0.3)" }}
+                >
+                  IMDb ↗
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <div
+                style={{
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  letterSpacing: "0.15em",
+                  color: "#3C3F52",
+                  textTransform: "uppercase",
+                  fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace",
+                  marginBottom: "0.875rem",
+                }}
+              >
                 The audio years
               </div>
               <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: 0 }}>
@@ -251,11 +288,11 @@ export default function AboutSection() {
                     fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace",
                   }}
                 >
-                  Audio &amp; Media Engineering
+                  Media, Post &amp; Audio Engineering
                 </span>
               </div>
               <p style={{ color: "#787F96", fontSize: "0.875rem", lineHeight: 1.6, marginTop: 0, marginBottom: "1.25rem" }}>
-                Professional recording, mixing, and mastering credentials grounded by a Sound Engineering degree — now extended into plugin development and neural audio software.
+                Professional recording, mixing, and mastering grounded by a Sound Engineering degree — paired with a film / TV editor filmography on IMDb and now extended into plugin development and neural audio software.
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                 {AUDIO_SPECIALTIES.map((s) => (
