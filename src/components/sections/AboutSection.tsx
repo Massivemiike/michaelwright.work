@@ -115,8 +115,16 @@ export default function AboutSection() {
                 in the mid-90s — VX1000s, late-night tape-to-tape sessions, color correction on whatever
                 hardware I could get my hands on — taught me the discipline of real-time craft long before
                 it was a career. By 1999 I was volunteering at the City of Commerce Cable Television station,
-                running live broadcast cameras, studio robotics, and lighting. Over nine years I logged 5,000+ hours there, eventually running the city&apos;s annual beauty pageant
-                as Production Manager, Assistant Director, and Head of Production.
+                running live broadcast cameras, studio robotics, and lighting. Over nine years I logged 5,000+
+                hours there, eventually running the city&apos;s annual beauty pageant as Production Manager,
+                Assistant Director, and Head of Production.
+              </p>
+              <p style={{ color: "#787F96", lineHeight: 1.85, fontSize: "1rem", margin: "1rem 0 0" }}>
+                At 16, I saved up and went to NAB in Vegas by myself — hitchhiked from the bus terminal to
+                my hotel, sat in on world-class broadcast training all week, bought my first fisheye lens on
+                the show floor, and scraped together just enough to fly home. That trip set the tone for
+                everything after it: go where the work is, learn from people who actually do it, and figure
+                out the logistics on the way.
               </p>
             </div>
 
