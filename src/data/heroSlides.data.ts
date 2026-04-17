@@ -16,7 +16,7 @@ export const heroSlides: HeroSlideData[] = [
       "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1920&q=80",
     imageAlt: "Data center server rows",
     eyebrow: "AWS · Cloud Architecture",
-    headline: ["Built right.", "Every time."],
+    headline: ["Built Wright.", "Every time."],
     subheadline:
       "12+ years building infrastructure that engineering teams rely on — resilient, observable, and designed to scale from day one.",
     ctaLabel: "View Resume",
