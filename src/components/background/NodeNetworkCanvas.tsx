@@ -184,7 +184,6 @@ export default function NodeNetworkCanvas() {
     }
 
     function onWheel(e: WheelEvent) {
-      e.preventDefault();
       const s = settingsRef.current;
       state.scrollBoost += e.deltaY * s.scrollSensitivity;
       const maxBoost = s.flowSpeed * 20;
@@ -202,7 +201,7 @@ export default function NodeNetworkCanvas() {
 
     resize();
     state.rafId = requestAnimationFrame(animate);
-    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("resize", onResize);
 
     return () => {
