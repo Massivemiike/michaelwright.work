@@ -7,7 +7,15 @@ import SectionReveal from "@/components/sections/SectionReveal";
 import type { TimelineEntry } from "@/data/resume.data";
 
 export default function ResumeTimeline({ entries }: { entries: TimelineEntry[] }) {
-  const [expanded, setExpanded] = useState<string>(entries[0]?.id ?? "");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(["floaudio", "gpltech"]));
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div style={{ position: "relative" }}>
@@ -25,7 +33,7 @@ export default function ResumeTimeline({ entries }: { entries: TimelineEntry[] }
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         {entries.map((entry, i) => {
-          const isOpen = expanded === entry.id;
+          const isOpen = expanded.has(entry.id);
           return (
             <SectionReveal key={entry.id} delay={i * 0.08}>
               <div style={{ paddingLeft: "3rem", position: "relative" }}>
@@ -57,7 +65,7 @@ export default function ResumeTimeline({ entries }: { entries: TimelineEntry[] }
                 >
                   {/* Header — always visible */}
                   <button
-                    onClick={() => setExpanded(isOpen ? "" : entry.id)}
+                    onClick={() => toggle(entry.id)}
                     style={{
                       width: "100%",
                       padding: "1.25rem 1.5rem",

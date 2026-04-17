@@ -9,6 +9,7 @@ import { ExternalLink, Menu, X } from "lucide-react";
 const INTERNAL_LINKS = [
   { href: "/", label: "Home" },
   { href: "/resume", label: "Resume" },
+  { href: "/projects", label: "Projects" },
   { href: "/blog", label: "Blog" },
   { href: "/gallery", label: "Gallery" },
   { href: "/contact", label: "Contact" },
