@@ -266,7 +266,7 @@ export default function ProjectsPage() {
           />
 
           {/* FloAud.io hero card */}
-          {personalProjects.map((project, i) => {
+          {personalProjects.filter(p => p.id === "floaudio").map((project, i) => {
             const status = STATUS_STYLES[project.status];
             return (
               <SectionReveal key={project.id} delay={i * 0.07}>
