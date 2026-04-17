@@ -12,7 +12,6 @@ const INTERNAL_LINKS = [
   { href: "/resume", label: "Resume" },
   { href: "/projects", label: "Projects" },
   { href: "/blog", label: "Blog" },
-  { href: "/gallery", label: "Gallery" },
   { href: "/contact", label: "Contact" },
 ];
 
