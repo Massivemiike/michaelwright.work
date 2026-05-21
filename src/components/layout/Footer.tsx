@@ -10,7 +10,7 @@ export default function Footer() {
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         borderTop: "1px solid #1F1F2E",
-        padding: "3rem",
+        padding: "3rem clamp(1.25rem, 5vw, 3rem)",
       }}
     >
       <div
@@ -18,7 +18,7 @@ export default function Footer() {
           maxWidth: 1200,
           margin: "0 auto",
           display: "grid",
-          gridTemplateColumns: "2fr 1fr 1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
           gap: "2rem",
           marginBottom: "2rem",
         }}
@@ -96,6 +96,8 @@ export default function Footer() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
         }}
       >
         <span style={{ fontSize: "0.75rem", color: "#3C3F52" }}>

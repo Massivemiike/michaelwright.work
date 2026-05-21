@@ -81,7 +81,7 @@ export default function TrnscodeProjectPage() {
           background: "rgba(8,8,12,0.85)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid #1F1F2E",
-          padding: "3rem 4rem",
+          padding: "3rem clamp(1.25rem, 5vw, 4rem)",
         }}
       >
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -177,7 +177,7 @@ export default function TrnscodeProjectPage() {
       </div>
 
       {/* Body */}
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "4rem" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 4rem)" }}>
         {/* The pitch */}
         <SectionReveal>
           <section style={{ marginBottom: "4rem" }}>
@@ -198,7 +198,7 @@ export default function TrnscodeProjectPage() {
             <h2 style={{ fontFamily: "var(--font-display-var,'Syne'),sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#F0F2F8", margin: "0 0 1.75rem" }}>
               What ships in the box
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(290px, 100%), 1fr))", gap: "1rem" }}>
               {trnscodeModules.map((mod) => (
                 <div
                   key={mod.name}
@@ -288,7 +288,7 @@ export default function TrnscodeProjectPage() {
             <h2 style={{ fontFamily: "var(--font-display-var,'Syne'),sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#F0F2F8", margin: "0 0 1.75rem" }}>
               What I built
             </h2>
-            <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "0.75rem 2rem" }}>
+            <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(380px, 100%), 1fr))", gap: "0.75rem 2rem" }}>
               {project.highlights.map((h, idx) => (
                 <li key={idx} style={{ fontSize: "0.9375rem", color: "#787F96", lineHeight: 1.7 }}>
                   {h}

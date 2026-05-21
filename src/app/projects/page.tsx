@@ -229,7 +229,7 @@ export default function ProjectsPage() {
           background: "rgba(8,8,12,0.85)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid #1F1F2E",
-          padding: "3rem 4rem",
+          padding: "3rem clamp(1.25rem, 5vw, 4rem)",
         }}
       >
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -263,7 +263,7 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "4rem" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "clamp(2rem, 6vw, 4rem) clamp(1.25rem, 5vw, 4rem)" }}>
 
         {/* ── Personal Projects ── */}
         <section style={{ marginBottom: "5rem" }}>
@@ -398,7 +398,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1rem" }}>
                       What I built
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "0.5rem 2rem" }}>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: "0.5rem 2rem" }}>
                       {project.highlights.map((h, idx) => (
                         <li key={idx} style={{ fontSize: "0.875rem", color: "#787F96", lineHeight: 1.7 }}>{h}</li>
                       ))}
@@ -410,7 +410,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1.25rem" }}>
                       6 components · 1 fleet
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: "1rem" }}>
                       {trnscodeModules.map((mod) => (
                         <div
                           key={mod.name}
@@ -544,7 +544,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1rem" }}>
                       What I built
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "0.5rem 2rem" }}>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: "0.5rem 2rem" }}>
                       {project.highlights.map((h, idx) => (
                         <li key={idx} style={{ fontSize: "0.875rem", color: "#787F96", lineHeight: 1.7 }}>{h}</li>
                       ))}
@@ -556,7 +556,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1.25rem" }}>
                       6 modules · 1 desktop app
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: "1rem" }}>
                       {graffitiModules.map((mod) => (
                         <div
                           key={mod.name}
@@ -767,7 +767,7 @@ export default function ProjectsPage() {
                         margin: 0,
                         paddingLeft: "1.25rem",
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))",
                         gap: "0.5rem 2rem",
                       }}
                     >
@@ -800,7 +800,7 @@ export default function ProjectsPage() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
                         gap: "1rem",
                       }}
                     >
@@ -1030,7 +1030,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1rem" }}>
                       What I built
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "0.5rem 2rem" }}>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: "0.5rem 2rem" }}>
                       {project.highlights.map((h, idx) => (
                         <li key={idx} style={{ fontSize: "0.875rem", color: "#787F96", lineHeight: 1.7 }}>{h}</li>
                       ))}
@@ -1042,7 +1042,7 @@ export default function ProjectsPage() {
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1.25rem" }}>
                       Compute tiers · per node-hour
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.875rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(220px, 100%), 1fr))", gap: "0.875rem" }}>
                       {rndrTiers.map((tier) => (
                         <div
                           key={tier.name}
@@ -1101,7 +1101,7 @@ export default function ProjectsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(480px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(480px, 100%), 1fr))",
               gap: "1.25rem",
             }}
           >
