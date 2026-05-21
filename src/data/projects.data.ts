@@ -8,6 +8,90 @@ export interface Project {
   status: "live" | "in-progress" | "completed";
 }
 
+export interface ProjectModule {
+  name: string;
+  label: string;
+  detail: string;
+}
+
+export const trnscodeModules: ProjectModule[] = [
+  {
+    name: "Master service",
+    label: "FastAPI coordinator",
+    detail:
+      "Owns the job queue, the SQLite state store, the web UI, and every chunk's signed HTTP transfer. One brain per fleet.",
+  },
+  {
+    name: "Worker daemon",
+    label: "Distributed encoder",
+    detail:
+      "Probes hardware, registers via mDNS, pulls chunks over signed URLs, and streams live progress back over a bidi gRPC channel.",
+  },
+  {
+    name: "Chunking engine",
+    label: "Keyframe-aligned",
+    detail:
+      "Reads the source's keyframe index via ffprobe and picks GOP-aligned boundaries — no source re-encoding for closed-GOP H.264 / HEVC.",
+  },
+  {
+    name: "Scheduler",
+    label: "Cost-based dispatch",
+    detail:
+      "Scores idle workers against pending chunks on encode speed (EMA), network distance, queue delay, and capability fit — lowest cost wins.",
+  },
+  {
+    name: "Presets",
+    label: "25 production recipes",
+    detail:
+      "YouTube 4K HEVC, Instagram Reels, Premiere Pro proxies, ProRes 422 HQ, DNxHR HQX, AV1 — every flag pinned, every output verified.",
+  },
+  {
+    name: "Frozen exes",
+    label: "Single-file install",
+    detail:
+      "PyInstaller-packaged master.exe and worker.exe — Python runtime, ffmpeg, and ffprobe baked in. No installer, no PATH wrangling.",
+  },
+];
+
+export const graffitiModules: ProjectModule[] = [
+  {
+    name: "Library",
+    label: "AI image tagging",
+    detail:
+      "Walks a folder, runs every supported image through a local vision-language model, and writes natural-language captions + 12–20 keywords into standard XMP / IPTC fields.",
+  },
+  {
+    name: "Edit",
+    label: "Lightroom-style develop",
+    detail:
+      "Exposure, tone curve, split toning, vignette, grain, crop, AI background removal, 2×/4× upscale, LaMa generative fill. Every slider writes to Adobe Camera Raw's crs:* XMP namespace.",
+  },
+  {
+    name: "Browse",
+    label: "Cull + light-table",
+    detail:
+      "Preview folders before importing — no DB writes, fast thumbnail grid, metadata-aware filter chips, rate / pick / reject keyboard shortcuts.",
+  },
+  {
+    name: "People",
+    label: "Face recognition",
+    detail:
+      "Opt-in InsightFace buffalo_l + sqlite-vec kNN — drop a reference photo, find every other photo of that person across workspaces. EULA-gated.",
+  },
+  {
+    name: "Model Hub",
+    label: "Ollama + LM Studio",
+    detail:
+      "Browse, pull, and benchmark vision models from inside the app. Knows which models fit your VRAM and which licenses require explicit acceptance.",
+  },
+  {
+    name: "Export",
+    label: "Six formats",
+    detail:
+      "CSV, JSON, Lightroom XMP sidecars, NeoFinder XML, Markdown manifests, hierarchical Keywords.txt — plus AES-256-GCM encrypted .gvdb archives for Studio.",
+  },
+];
+
 export interface FloTool {
   name: string;
   label: string;
@@ -86,6 +170,44 @@ export const rndrTiers: RndrTier[] = [
 ];
 
 export const personalProjects: Project[] = [
+  {
+    id: "trnscode",
+    name: "TRNSCODE",
+    description:
+      "Distributed video transcoding for on-prem hardware — slices any video into keyframe-aligned chunks, dispatches them across every encoder on the LAN, and stitches the output back together. Built as solo technical founder from chunking algorithm through frozen exes.",
+    highlights: [
+      "Architected the full master/worker system in Python — FastAPI master with SQLite job queue, async worker daemons, mDNS auto-discovery, and HMAC-signed chunk transfer over HTTP",
+      "Designed scene-aware chunking that reads the source's keyframe index via ffprobe and picks GOP-aligned boundaries — no source re-encoding for closed-GOP H.264 / HEVC",
+      "Wrote a cost-based scheduler that scores idle workers against pending chunks on four signals: historical encode speed (EMA per worker × preset), network distance, queue delay, and capability fit",
+      "Built failure classification into the dispatcher — transient retries with exponential backoff, OOM falls back to smaller chunks, permanent decode errors fail the job, disk-full pauses",
+      "Shipped 25 production-ready presets out of the box — YouTube 4K HEVC, Instagram Reels, Premiere Pro proxies, ProRes 422 HQ, DNxHR HQX, AV1, and more",
+      "Packaged the entire stack — Python runtime, ffmpeg, ffprobe — into single-file PyInstaller exes (master.exe ~225MB, worker.exe ~210MB) with auto-elevating Windows firewall installers",
+      "React + Vite + TypeScript SPA with live WebSocket progress, optional Tauri 2.x desktop shell, and a Swiss-grid editorial design system",
+      "Verifies every assembled output — PTS monotonicity, duration within ±1 frame of source, audio present if expected, and matching codec signatures across chunks",
+    ],
+    tags: ["Python", "FastAPI", "FFmpeg", "gRPC", "React", "Vite", "TypeScript", "Tauri", "SQLite", "mDNS", "Distributed Systems", "Founder"],
+    href: "https://trnscode.com",
+    status: "in-progress",
+  },
+  {
+    id: "graffiti",
+    name: "Graffiti",
+    description:
+      "Local-first AI desktop app for photographers, agencies, and stock teams — tags thousands of images with a vision-language model running on the user's own machine, then develops them in a Lightroom-style editor. Every byte round-trips with Adobe Bridge, Lightroom Classic, and NeoFinder. Built as solo technical founder.",
+    highlights: [
+      "Built a PySide6 (Qt 6) desktop app architected to keep the main thread responsive — async I/O for HTTP and LLM via qasync, CPU-bound work (thumbnails, hashing, AI inference) on QThreadPool, ~60 fps grid at 100k assets",
+      "Integrated Ollama and LM Studio as first-class local model runners — bundled the Ollama CLI in the installer, built a Model Hub that fetches and benchmarks Qwen 2.5-VL, Llama 3.2 Vision, Gemma 3, MiniCPM-V, LLaVA, Moondream, and Pixtral",
+      "Wrote a full Lightroom-style develop module — exposure, tone curve, split toning, vignette, grain, crop, AI background removal (rembg / BiRefNet), 2×/4× upscale (Real-ESRGAN), and LaMa generative fill — every slider writes to Adobe Camera Raw's crs:* XMP namespace",
+      "Designed an industrial-strength job queue: 5 priority lanes, RAM- and VRAM-aware backpressure (pauses at 90% memory, resumes at 75%), persistent across crashes via SQLite WAL, cooperative cancellation, sanity validator with fallback model retry",
+      "Implemented round-trippable metadata writers for IPTC Photo Metadata 2024 — dc:description, dc:subject, Iptc4xmpExt:PersonInImage, IPTC-IIM mirrors — via exiftool subprocess as primary and pyexiv2 as the fast path",
+      "Opt-in face recognition via InsightFace buffalo_l + sqlite-vec kNN, gated behind explicit EULA attestation with per-workspace match thresholds",
+      "Six export formats covering every workflow — CSV, JSON, Lightroom XMP sidecars, NeoFinder XML, Markdown manifests, hierarchical Keywords.txt — plus AES-256-GCM encrypted .gvdb archives for Studio teams",
+      "Per-model license-acceptance gate before any download — SHA-256 hash of the license text persisted per model, so a relicense re-prompts the user; no model file lands on disk without explicit consent",
+      "22 bundled themes, all WCAG 2.1 AA verified — Cryptolens-signed activations with tier-aware offline grace periods (3 / 14 / 60 days)",
+    ],
+    tags: ["Python", "PySide6", "Qt 6", "Ollama", "LM Studio", "ONNX Runtime", "SQLite", "exiftool", "libvips", "InsightFace", "Adobe XMP", "Cryptolens", "Local-First AI", "Founder"],
+    status: "in-progress",
+  },
   {
     id: "floaudio",
     name: "FloAud.io",
