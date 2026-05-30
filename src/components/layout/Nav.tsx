@@ -27,7 +27,7 @@ const INTERNAL_LINKS: NavLink[] = [
     label: "Projects",
     children: [
       { href: "/projects", label: "All projects", hint: "Summary index" },
-      { href: "/projects/trnscode", label: "TRNSCODE", hint: "Distributed transcoding" },
+      { href: "/projects/trnscode", label: "TRNSCODE", hint: "On-prem M&E + VFX platform" },
       { href: "/projects/graffiti", label: "Graffiti", hint: "Local-first AI tagging" },
       { href: "/projects/floaudio", label: "FloAud.io", hint: "Browser audio platform" },
       { href: "/projects/rndrwork", label: "rndr.work", hint: "Cloud render farm" },

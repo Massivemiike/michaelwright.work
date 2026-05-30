@@ -16,40 +16,40 @@ export interface ProjectModule {
 
 export const trnscodeModules: ProjectModule[] = [
   {
-    name: "Master service",
-    label: "FastAPI coordinator",
+    name: "Encoding engine",
+    label: "Master + worker fleet",
     detail:
-      "Owns the job queue, the SQLite state store, the web UI, and every chunk's signed HTTP transfer. One brain per fleet.",
+      "Master/worker orchestration with five chunking strategies — closed-GOP slice, open-GOP remux, scene-aware, cut-aligned to AAF/EDL/FCPXML, and frame-range for EXR sequences. Cost-based scheduler with EMA-tracked runtime per worker × preset, GPU session budgeting, and work-stealing.",
   },
   {
-    name: "Worker daemon",
-    label: "Distributed encoder",
+    name: "Broadcast pack",
+    label: "M&E delivery",
     detail:
-      "Probes hardware, registers via mDNS, pulls chunks over signed URLs, and streams live progress back over a bidi gRPC channel.",
+      "46 presets across 7 families with codec-spec conformance verification on every assembled output. HDR10 / HLG / SDR color metadata classification with zscale + tonemap chains. Deliverable-profile QC (LUFS + true-peak) against broadcast_atsc / broadcast_ebu_r128 / ott_netflix.",
   },
   {
-    name: "Chunking engine",
-    label: "Keyframe-aligned",
+    name: "NLE round-trip",
+    label: "Resolve · Premiere · FCP · OTIO",
     detail:
-      "Reads the source's keyframe index via ffprobe and picks GOP-aligned boundaries — no source re-encoding for closed-GOP H.264 / HEVC.",
+      "FCP-XML 1.10 + FCPXML + xmeml + OpenTimelineIO + EDL/AAF, plus opt-in direct Resolve project-DB linking. A hard backup-first rule snapshots every customer project file before any write — every relink is reversible.",
   },
   {
-    name: "Scheduler",
-    label: "Cost-based dispatch",
+    name: "VFX studio ingest",
+    label: "EXR · OCIO · ACES · Flow",
     detail:
-      "Scores idle workers against pending chunks on encode speed (EMA), network distance, queue delay, and capability fit — lowest cost wins.",
+      "EXR sequences via exrseq://, working-space + display transforms through oiiotool, ACES Studio Config v4 bundled. Shot domain model (Project → IngestProfile → Shot → ShotVersion). Flow Production Tracking with HMAC-SHA1 webhook + EventLog reconciler. Five-step ingest profile wizard.",
   },
   {
-    name: "Presets",
-    label: "25 production recipes",
+    name: "Operator console",
+    label: "React · TanStack · 13 themes",
     detail:
-      "YouTube 4K HEVC, Instagram Reels, Premiere Pro proxies, ProRes 422 HQ, DNxHR HQX, AV1 — every flag pinned, every output verified.",
+      "Vite SPA served from the same origin as the API. Dashboard, Queue, tabbed job detail (Chunks / Workers / Logs / Spec / Forensics), Review (HLS preview), Ingest, Shots, virtualized Activity feed. Cmd-K command palette switches surfaces and themes. Simple and Advanced density modes.",
   },
   {
-    name: "Frozen exes",
-    label: "Single-file install",
+    name: "Ops + integrations",
+    label: "JWT · MAM · CLI · firewall",
     detail:
-      "PyInstaller-packaged master.exe and worker.exe — Python runtime, ffmpeg, and ffprobe baked in. No installer, no PATH wrangling.",
+      "JWT auth with approval-gated worker enrollment and HMAC-signed chunk URLs (60-min TTL). MAM push to Iconik / Dalet / Avid via a deliverable matrix. CLI for admin reset, DB backup/restore, firewall install, worker discover/probe/test-encode. Self-installing Windows firewall rules.",
   },
 ];
 
@@ -174,18 +174,20 @@ export const personalProjects: Project[] = [
     id: "trnscode",
     name: "TRNSCODE",
     description:
-      "Distributed video transcoding for on-prem hardware — slices any video into keyframe-aligned chunks, dispatches them across every encoder on the LAN, and stitches the output back together. Built as solo technical founder from chunking algorithm through frozen exes.",
+      "On-prem Media & Entertainment delivery and VFX ingest platform. Started as a fast parallel transcoder; grew into broadcast-grade QC, HDR/SDR color management, ProRes/DNxHR/DPX/EXR mezzanines, NLE round-trip across Resolve / Premiere / FCP / OTIO / EDL / AAF, a full VFX studio ingest pipeline with OCIO/ACES and Flow Production Tracking, RAW/CinemaDNG ingest, and AI-assisted preset selection — all running on hardware you already own. Built as solo technical founder.",
     highlights: [
-      "Architected the full master/worker system in Python — FastAPI master with SQLite job queue, async worker daemons, mDNS auto-discovery, and HMAC-signed chunk transfer over HTTP",
-      "Designed scene-aware chunking that reads the source's keyframe index via ffprobe and picks GOP-aligned boundaries — no source re-encoding for closed-GOP H.264 / HEVC",
-      "Wrote a cost-based scheduler that scores idle workers against pending chunks on four signals: historical encode speed (EMA per worker × preset), network distance, queue delay, and capability fit",
-      "Built failure classification into the dispatcher — transient retries with exponential backoff, OOM falls back to smaller chunks, permanent decode errors fail the job, disk-full pauses",
-      "Shipped 25 production-ready presets out of the box — YouTube 4K HEVC, Instagram Reels, Premiere Pro proxies, ProRes 422 HQ, DNxHR HQX, AV1, and more",
-      "Packaged the entire stack — Python runtime, ffmpeg, ffprobe — into single-file PyInstaller exes (master.exe ~225MB, worker.exe ~210MB) with auto-elevating Windows firewall installers",
-      "React + Vite + TypeScript SPA with live WebSocket progress, optional Tauri 2.x desktop shell, and a Swiss-grid editorial design system",
-      "Verifies every assembled output — PTS monotonicity, duration within ±1 frame of source, audio present if expected, and matching codec signatures across chunks",
+      "Started as a parallel transcoder; grew into an on-prem M&E delivery and VFX ingest platform — broadcast QC, NLE round-trip, VFX studio ingest, RAW/CinemaDNG, AI-assisted preset selection, all running on hardware the operator already owns",
+      "Ships 46 presets across 7 families (Social, Delivery, Mezzanine, Proxy, Camera, VFX, Audio) with codec-spec conformance verification on every assembled output",
+      "Seven-verifier correctness pass — PSNR/SSIM/VMAF via libvmaf, bit-exact reproducibility (elementary-stream sha256), deterministic argv audit, PTS/DTS timeline, sample-accurate audio concat, source fixity, codec conformance, and color consistency across chunks",
+      "HDR10 / HLG / SDR color metadata classification per source with zscale + tonemap HDR→SDR chains; per-chunk color signatures refuse assembly if HDR/SDR metadata drifts mid-stream",
+      "Complete VFX ingest pipeline — EXR sequences via exrseq://, oiiotool working-space + display transforms, OCIO/ACES with bundled ACES Studio Config v4, slate/burn-in/handles/versioning, shot domain model, Flow Production Tracking with HMAC-SHA1 webhook + EventLog reconciler",
+      "NLE round-trip across DaVinci Resolve (FCP-XML + opt-in direct project-DB link), Premiere xmeml, Final Cut Pro FCPXML + Share extension, OpenTimelineIO, and EDL/AAF — every customer project file is snapshotted before any write so a bad relink is always reversible",
+      "React + Vite + TanStack SPA with a 13-theme palette, Cmd-K command palette, Simple/Advanced density modes, tabbed job-detail (Chunks / Workers / Logs / Spec / Forensics), HLS-preview review platform, and a virtualized live-tailing activity feed",
+      "Cost-based scheduler scores workers on runtime EMA × preset class, network distance, queue delay, and capability fit; GPU sessions budgeted per (worker, GPU) with a token bucket sized from each card's NVENC session limit; work-stealing rescues idle chunks",
+      "AI-assisted preset selection in three modes (Manual / Guided / Auto), backed by a rule-based scorer + OpenCLIP ViT-B/32 with graceful fallback — never passes off a deterministic pick as an AI pick",
+      "Ships as single-file Windows executables (master.exe ~400 MB, worker.exe ~210 MB) bundling Python + ffmpeg/ffprobe + OpenImageIO + OpenColorIO + ACES Studio Config v4 + CLIP runtime; mDNS auto-discovery, double-click to run, self-installing firewall rules",
     ],
-    tags: ["Python", "FastAPI", "FFmpeg", "gRPC", "React", "Vite", "TypeScript", "Tauri", "SQLite", "mDNS", "Distributed Systems", "Founder"],
+    tags: ["Python", "FastAPI", "FFmpeg", "OCIO", "ACES", "OpenImageIO", "gRPC", "WebSockets", "React 19", "Vite", "TanStack", "TypeScript", "Tauri 2.x", "SQLite", "JWT", "mDNS", "PyInstaller", "Flow Production Tracking", "M&E", "VFX", "Founder"],
     href: "https://trnscode.com",
     status: "in-progress",
   },

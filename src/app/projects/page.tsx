@@ -408,7 +408,7 @@ export default function ProjectsPage() {
                   {/* Modules grid */}
                   <div style={{ padding: "1.75rem 2rem", borderBottom: "1px solid #1F1F2E" }}>
                     <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1.25rem" }}>
-                      6 components · 1 fleet
+                      6 pillars · 1 platform
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: "1rem" }}>
                       {trnscodeModules.map((mod) => (
