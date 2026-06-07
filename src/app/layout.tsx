@@ -7,6 +7,7 @@ import PageWrapper from "@/components/layout/PageWrapper";
 import NodeNetworkCanvas from "@/components/background/NodeNetworkCanvas";
 import AdminPanel from "@/components/background/AdminPanel";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://michaelwright.work"),
@@ -44,6 +45,7 @@ export default function RootLayout({
           <Footer />
           <AdminPanel />
         </NodeNetworkProvider>
+        <Analytics />
       </body>
     </html>
   );

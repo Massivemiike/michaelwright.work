@@ -10,6 +10,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@next/mdx": "^16.2.4",
+    "@vercel/analytics": "^2.0.1",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "gray-matter": "^4.0.3",
