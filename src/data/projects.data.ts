@@ -92,6 +92,45 @@ export const graffitiModules: ProjectModule[] = [
   },
 ];
 
+export const reactor48Modules: ProjectModule[] = [
+  {
+    name: "Open PvP",
+    label: "Every survivor is real",
+    detail:
+      "No NPCs to farm. Knock someone down and you choose what happens next — walk away, or pick them clean. Turn-based combat where every probability is shown before you commit: no hidden dice, no secret formula.",
+  },
+  {
+    name: "The Ward",
+    label: "When it goes wrong",
+    detail:
+      "Going down isn't a respawn. You're left for dead with a triage timer counting and an injury that follows you — cracked ribs at −10% accuracy until someone patches you up. A stranger running Stabilize on you is a real player choosing to.",
+  },
+  {
+    name: "Player-run market",
+    label: "No vendor prices",
+    detail:
+      "Every rebreather and round of ammo was scavenged, crafted, or looted by another player — and priced by them. Haul goods across the Rads between regions and eat the spread. List fees and sale tax burn out of circulation.",
+  },
+  {
+    name: "Crime",
+    label: "Risk on the table",
+    detail:
+      "Every job shows success odds, payout range, stamina cost, body burden, and critical-fail chance before you attempt it. Blow the roll badly enough and a Tracker takes your scent.",
+  },
+  {
+    name: "Reckoning",
+    label: "Faction war",
+    detail:
+      "Bind into a Faction, drill in its Cell, and put its name on the map. Multi-day wars tracked on war-points and momentum tiers — territory, rackets, and reckoning on a ledger everyone can see.",
+  },
+  {
+    name: "Five skills, one life",
+    label: "Permanent consequences",
+    detail:
+      "Muscle, Hardening, Reflex, Fieldcraft, Wits — one survivor, no wasted stats and no respec. Training costs Conditioning and accrues soreness. Ten regions to cross, and every road wants you dead.",
+  },
+];
+
 export interface FloTool {
   name: string;
   label: string;
@@ -190,6 +229,27 @@ export const personalProjects: Project[] = [
     tags: ["Python", "FastAPI", "FFmpeg", "OCIO", "ACES", "OpenImageIO", "gRPC", "WebSockets", "React 19", "Vite", "TanStack", "TypeScript", "Tauri 2.x", "SQLite", "JWT", "mDNS", "PyInstaller", "Flow Production Tracking", "M&E", "VFX", "Founder"],
     href: "https://trnscode.com",
     status: "in-progress",
+  },
+  {
+    id: "reactor48",
+    name: "Reactor 48",
+    description:
+      "A persistent post-nuclear text MMO where every survivor on the map is a real person. Turn-based and server-authoritative, played in ten minutes a day while the wasteland grinds on without you — open PvP, a market run entirely by players, faction wars fought over days, and five skills you can never respec. Early access, free to play. Built as solo technical founder.",
+    highlights: [
+      "Designed and built a persistent server-paced world — stamina regens, crimes cool, caravans arrive, and enemies move whether or not you're logged in; no seasonal resets, no wipes, one continuous world",
+      "Server-authoritative to the last click, with every probability surfaced before the player commits — success odds, payout range, stamina cost, body burden, and critical-fail chance all shown up front",
+      "Built a fully player-run economy with no vendor prices and no fixed loot — every item in circulation was scavenged, crafted, or looted by a player and priced by one, with list fees and sale tax burning currency out of the supply",
+      "Implemented open-world PvP with real consequences — downed players enter The Ward with a triage timer and persistent injuries (cracked ribs at −10% accuracy) that other players can choose to stabilize",
+      "Shipped a five-skill progression system (Muscle, Hardening, Reflex, Fieldcraft, Wits) with no respec — permanent consequences by design, where a crippled leg slows every road you walk until someone patches you up",
+      "Built multi-day faction warfare — Reckonings tracked on war-points and momentum tiers across territory, rackets, and a public ledger every player can audit",
+      "Ten interconnected regions where travel is time and risk — bigger payoffs sit behind deadlier corridors, making route choice a core economic decision",
+      "Wrote a five-act narrative spine that runs beneath the systems — earned progressively through play rather than delivered as a tutorial or cutscene",
+      "Committed to a strict no-pay-to-win economy — premium currency buys time and comfort, never power, never caps, never a single skill point",
+      "Live world telemetry surfaced on the marketing site — survivors stirred, crimes pulled, currency in circulation, and active Reckonings all pulled from the running game world",
+    ],
+    tags: ["MMO", "Game Design", "Persistent World", "PvP", "Player Economy", "Turn-Based", "Server-Authoritative", "Web", "Founder"],
+    href: "https://reactor48.com",
+    status: "live",
   },
   {
     id: "graffiti",
