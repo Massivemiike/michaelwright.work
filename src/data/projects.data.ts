@@ -131,6 +131,45 @@ export const reactor48Modules: ProjectModule[] = [
   },
 ];
 
+export const sieveModules: ProjectModule[] = [
+  {
+    name: "Download engine",
+    label: "1,000+ sites · yt-dlp",
+    detail:
+      "Paste any supported link — YouTube, SoundCloud, Twitch, Dailymotion, and the rest of yt-dlp's ecosystem. Sieve analyzes it and shows the title, channel, and duration before you commit to anything.",
+  },
+  {
+    name: "One-tap presets",
+    label: "8 download presets",
+    detail:
+      "Best video + audio, 1080p / 720p / 4K MP4, best-quality audio, MP3 320 kbps, Opus for the smallest files, and a full-quality MKV archive with subtitles and metadata.",
+  },
+  {
+    name: "On-device transcoder",
+    label: "52 presets · hardware encode",
+    detail:
+      "Convert anything in your library — MP4 (H.264/HEVC at every common resolution), WebM/VP9, ProRes for editors, audio-only formats, social-friendly outputs. Runs on the phone's MediaCodec hardware encoder chips, with automatic software fallback.",
+  },
+  {
+    name: "A real queue",
+    label: "Background · resumable",
+    detail:
+      "Downloads and transcodes run in the background with progress notifications and pause / resume / retry — and the queue survives app restarts.",
+  },
+  {
+    name: "Files where you expect",
+    label: "Download/Sieve",
+    detail:
+      "Everything saves to the phone's Download/Sieve folder — or a folder you choose — visible to every other app. No opaque app-private storage.",
+  },
+  {
+    name: "Self-maintaining",
+    label: "Signed self-update",
+    detail:
+      "The app updates itself — signed and checksum-verified, with the published APK's SHA-256 pinned in the update manifest — and keeps its yt-dlp engine current automatically, so site changes don't break it.",
+  },
+];
+
 export interface FloTool {
   name: string;
   label: string;
@@ -249,6 +288,24 @@ export const personalProjects: Project[] = [
     ],
     tags: ["MMO", "Game Design", "Persistent World", "PvP", "Player Economy", "Turn-Based", "Server-Authoritative", "Web", "Founder"],
     href: "https://reactor48.com",
+    status: "live",
+  },
+  {
+    id: "sieve",
+    name: "Sieve",
+    description:
+      "Free, open-source media downloader and transcoder for Android — a clean Material 3 interface over the industry-standard yt-dlp engine and a purpose-built FFmpeg pipeline. Paste a link, get the file: download from 1,000+ sites, then convert on-device with hardware acceleration. No ads, no trackers, no accounts, no monetization of any kind. Built and maintained as solo developer.",
+    highlights: [
+      "Built a native Kotlin + Jetpack Compose (Material 3) Android app over yt-dlp — paste any supported link and Sieve analyzes it, showing title, channel, and duration before you commit",
+      "Ships 8 one-tap download presets — best video + audio, 1080p/720p/4K MP4, best-quality audio, MP3 320 kbps, Opus, and a full-quality MKV archive with subtitles and metadata",
+      "Wrote an on-device transcoder with 52 presets — MP4 (H.264/HEVC at every common resolution), WebM/VP9, ProRes for editors, audio-only and social-friendly outputs — on MediaCodec hardware encoders with automatic software fallback",
+      "Self-built a full-GPL FFmpeg (x264/x265 + MediaCodec hardware encode), 16 KB-page-ready, with the build scripts published as corresponding source",
+      "Background job queue with progress notifications and pause/resume/retry that survives app restarts; files land in the phone's Download/Sieve folder, visible to every app",
+      "Self-updating distribution: signed, checksum-verified updates with the APK's SHA-256 pinned in the manifest, and the yt-dlp engine kept current automatically so site changes don't break downloads",
+      "Released free under GPLv3 with no ads, analytics, tracking, accounts, or paid tiers — distributed as a direct signed APK (~77 MB) and validated end-to-end on physical hardware before every release",
+    ],
+    tags: ["Android", "Kotlin", "Jetpack Compose", "Material 3", "yt-dlp", "FFmpeg", "MediaCodec", "x264/x265", "GPLv3", "Open Source"],
+    href: "https://massivemiike.github.io/sieve-android/",
     status: "live",
   },
   {

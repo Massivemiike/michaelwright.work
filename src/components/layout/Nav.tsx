@@ -29,6 +29,7 @@ const INTERNAL_LINKS: NavLink[] = [
       { href: "/projects", label: "All projects", hint: "Summary index" },
       { href: "/projects/trnscode", label: "TRNSCODE", hint: "On-prem M&E + VFX platform" },
       { href: "/projects/reactor48", label: "Reactor 48", hint: "Persistent post-nuclear MMO" },
+      { href: "/projects/sieve", label: "Sieve", hint: "Android downloader + transcoder" },
       { href: "/projects/graffiti", label: "Graffiti", hint: "Local-first AI tagging" },
       { href: "/projects/floaudio", label: "FloAud.io", hint: "Browser audio platform" },
       { href: "/projects/rndrwork", label: "rndr.work", hint: "Cloud render farm" },
