@@ -20,23 +20,29 @@ export default function HeroSlide({ slide, isActive, priority }: HeroSlideProps)
         flexShrink: 0,
       }}
     >
-      {/* Layer 1 — Photo */}
+      {/* Layer 1 — Photo (app showcases pin the UI to the right so the text owns the left) */}
       <Image
         src={slide.imageSrc}
         alt={slide.imageAlt}
         fill
         priority={priority}
-        style={{ objectFit: "cover", objectPosition: "center" }}
+        style={{ objectFit: "cover", objectPosition: slide.appShowcase ? "right center" : "center" }}
         sizes="100vw"
       />
 
-      {/* Layer 2+3 — Dark gradient + red wash */}
+      {/* Layer 2+3 — Dark gradient + red wash (app showcases add a strong left scrim for legibility) */}
       <div
         aria-hidden
         style={{
           position: "absolute",
           inset: 0,
-          background: `
+          background: slide.appShowcase
+            ? `
+            linear-gradient(to right, rgba(8,8,12,0.96) 0%, rgba(8,8,12,0.88) 34%, rgba(8,8,12,0.45) 62%, rgba(8,8,12,0.2) 100%),
+            linear-gradient(to bottom, rgba(8,8,12,0.5) 0%, rgba(8,8,12,0.15) 35%, rgba(8,8,12,0.15) 60%, rgba(8,8,12,0.9) 100%),
+            radial-gradient(ellipse 55% 90% at -8% 50%, rgba(255,59,47,0.16) 0%, transparent 65%)
+          `
+            : `
             linear-gradient(to bottom, rgba(8,8,12,0.55) 0%, rgba(8,8,12,0.1) 30%, rgba(8,8,12,0.1) 55%, rgba(8,8,12,0.95) 100%),
             radial-gradient(ellipse 55% 90% at -8% 50%, rgba(255,59,47,0.16) 0%, transparent 65%)
           `,

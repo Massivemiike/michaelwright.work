@@ -7,8 +7,11 @@ export interface HeroSlideData {
   subheadline: string;
   ctaLabel: string;
   ctaHref: string;
+  /** App-screenshot slides: pin the image right and add a strong left scrim so the headline stays legible. */
+  appShowcase?: boolean;
 }
 
+// Order interleaves brand slides with application showcases: brand, app, brand, app, brand, app.
 export const heroSlides: HeroSlideData[] = [
   {
     id: 1,
@@ -23,6 +26,18 @@ export const heroSlides: HeroSlideData[] = [
     ctaHref: "/resume",
   },
   {
+    id: 4,
+    imageSrc: "/images/projects/trnscode/01-dashboard.png",
+    imageAlt: "The TRNSCODE console dashboard — dark UI with live job, worker, and queue telemetry",
+    eyebrow: "TRNSCODE · Founder · M&E + VFX",
+    headline: ["Broadcast-grade delivery.", "Yours."],
+    subheadline:
+      "An on-prem Media & Entertainment delivery and VFX ingest platform — 46 presets, a seven-verifier correctness pass, and NLE round-trip. Built as solo technical founder.",
+    ctaLabel: "Explore TRNSCODE",
+    ctaHref: "/projects/trnscode",
+    appShowcase: true,
+  },
+  {
     id: 2,
     imageSrc:
       "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1920&q=80",
@@ -33,6 +48,18 @@ export const heroSlides: HeroSlideData[] = [
       "Turning on-call nightmares into boring, predictable systems through disciplined platform engineering and thoughtful automation.",
     ctaLabel: "Read the Blog",
     ctaHref: "/blog",
+  },
+  {
+    id: 5,
+    imageSrc: "/images/projects/condascope/01-browse.png",
+    imageAlt: "CondaScope's Browse screen listing the AWS Deadline Cloud software catalog with exact versions",
+    eyebrow: "CondaScope · AWS Deadline Cloud",
+    headline: ["Your render farm,", "fully mapped."],
+    subheadline:
+      "A click-to-run desktop tool for Deadline Cloud admins — every version in AWS's managed conda channel, and the queue environment that pins it, generated in minutes.",
+    ctaLabel: "Explore CondaScope",
+    ctaHref: "/projects/condascope",
+    appShowcase: true,
   },
   {
     id: 3,
@@ -47,15 +74,15 @@ export const heroSlides: HeroSlideData[] = [
     ctaHref: "/contact",
   },
   {
-    id: 4,
-    imageSrc:
-      "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1920&q=80",
-    imageAlt: "Server infrastructure at scale",
-    eyebrow: "Leadership · Engineering Culture",
-    headline: ["The team", "behind the uptime."],
+    id: 6,
+    imageSrc: "/images/projects/sieve/01-download-page.png",
+    imageAlt: "The Sieve for Android download page — dark UI with amber accents and a phone mockup of the app",
+    eyebrow: "Sieve · Android · Open Source",
+    headline: ["Paste a link.", "Get the file."],
     subheadline:
-      "Building not just infrastructure but the DevOps culture, tooling, and practices that let engineering teams ship with confidence.",
-    ctaLabel: "About Me",
-    ctaHref: "/#about",
+      "A free, open-source media downloader and transcoder for Android — 1,000+ sites through yt-dlp, hardware-accelerated on-device conversion, no ads, no trackers, no accounts.",
+    ctaLabel: "Explore Sieve",
+    ctaHref: "/projects/sieve",
+    appShowcase: true,
   },
 ];
