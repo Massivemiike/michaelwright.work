@@ -131,6 +131,45 @@ export const reactor48Modules: ProjectModule[] = [
   },
 ];
 
+export const condascopeModules: ProjectModule[] = [
+  {
+    name: "Catalog browser",
+    label: "Every version · Win + Linux",
+    detail:
+      "Every package in the Deadline Cloud managed channel with its exact version and build — platform toggle, live search, sortable columns, and an \"Apps only\" filter that hides adaptors and dependencies.",
+  },
+  {
+    name: "Job-based reader",
+    label: "boto3 · CloudWatch Logs",
+    detail:
+      "Automates AWS's supported method: submits a short conda-search job to your farm, polls it, and parses the results out of CloudWatch logs — no more digging through render logs by hand.",
+  },
+  {
+    name: "Queue Environment Builder",
+    label: "YAML/JSON · generate-only",
+    detail:
+      "Tick versions, choose minor-line or exact pins, preview live YAML ⇄ JSON, then save the file and copy the exact aws deadline create-queue-environment command. It never touches the farm itself.",
+  },
+  {
+    name: "Win ⇄ Linux compare",
+    label: "Version drift",
+    detail:
+      "Version differences first, then packages that exist on only one platform's catalog — the answer to \"can we standardize this queue across fleets?\" at a glance.",
+  },
+  {
+    name: "Cache that behaves",
+    label: "24h TTL · stale fallback",
+    detail:
+      "Catalog results cache for a day; when a live fetch fails the app serves the stale cache with a clear warning, and an empty fetch never overwrites good data.",
+  },
+  {
+    name: "Zero-install distribution",
+    label: "Single exe · no credentials",
+    detail:
+      "One double-click .exe on WebView2. Uses your ambient AWS CLI / SSO / Deadline Cloud monitor session — it never prompts for, displays, or stores secrets.",
+  },
+];
+
 export const sieveModules: ProjectModule[] = [
   {
     name: "Download engine",
@@ -268,6 +307,24 @@ export const personalProjects: Project[] = [
     tags: ["Python", "FastAPI", "FFmpeg", "OCIO", "ACES", "OpenImageIO", "gRPC", "WebSockets", "React 19", "Vite", "TanStack", "TypeScript", "Tauri 2.x", "SQLite", "JWT", "mDNS", "PyInstaller", "Flow Production Tracking", "M&E", "VFX", "Founder"],
     href: "https://trnscode.com",
     status: "in-progress",
+  },
+  {
+    id: "condascope",
+    name: "CondaScope",
+    description:
+      "Windows desktop tool for AWS Deadline Cloud IT administrators — see exactly which software versions AWS's managed conda channel offers your farm, then pin them. AWS's documented method is submitting a render job and digging through CloudWatch logs; CondaScope wraps that whole flow in a click-to-run GUI: sign in with the AWS CLI, enter a Farm ID and Queue ID, and browse the full catalog. Tick the versions you want and it generates a ready-to-upload YAML/JSON conda queue environment plus the exact AWS command to apply it — minutes instead of an afternoon. Built at GPL Technologies for Deadline Cloud customers.",
+    highlights: [
+      "Built a Python desktop app — a pywebview + WebView2 GPL-branded shell over a UI-agnostic engine — with light/dark themes and a scriptable CLI (grr) driving the same core",
+      "Automated AWS's recommended discovery flow: submits a short conda-search job via boto3/OpenJD, polls it, and parses per-platform results out of CloudWatch logs between sentinel markers",
+      "Browse every package with exact version + build for win-64 and linux-64 fleets — live search, sorting, app/adaptor/dependency classification, and a Win ⇄ Linux compare that surfaces version drift and platform-only packages",
+      "Queue Environment Builder emits spec-valid OpenJD queue environments — minor-line (cinema4d=2026.1.*) or exact pins, editable channels/priority/name, live YAML ⇄ JSON preview, and the exact aws deadline create-queue-environment command; generate-only, it never modifies the farm",
+      "24-hour catalog cache with stale-cache fallback keeps the app useful offline — and a live fetch that returns nothing never overwrites good data",
+      "Ships as a single ~54 MB PyInstaller exe: no install, no stored credentials — it rides the admin's ambient AWS CLI / SSO / Deadline Cloud monitor session, and no account-specific identifiers are baked into the build",
+      "95 unit tests across repodata parsing, channel merge, queue-env generation, caching, and the JS bridge — no network required — plus a manual pre-release checklist run on real hardware",
+    ],
+    tags: ["Python", "AWS Deadline Cloud", "boto3", "OpenJD", "conda", "CloudWatch", "pywebview", "WebView2", "PyInstaller", "Windows"],
+    href: "/downloads/CondaScope-win64.zip",
+    status: "live",
   },
   {
     id: "reactor48",
