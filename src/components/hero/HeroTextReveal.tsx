@@ -42,8 +42,8 @@ export default function HeroTextReveal({ lines, isActive }: HeroTextRevealProps)
                     display: "inline-block",
                     fontWeight: isFirst ? 300 : 800,
                     fontSize: isFirst
-                      ? "clamp(1.75rem,3.5vw,3rem)"
-                      : "clamp(3rem,6.5vw,6rem)",
+                      ? "clamp(1.5rem,3.5vw,3rem)"
+                      : "clamp(2rem,6.5vw,6rem)",
                     color: li === lines.length - 1 ? "#FF3B2F" : "#F0F2F8",
                     textTransform: isFirst ? "none" : "uppercase",
                     letterSpacing: isFirst ? "normal" : "-0.02em",
