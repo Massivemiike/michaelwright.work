@@ -26,7 +26,11 @@ export default function HeroSlide({ slide, isActive, priority }: HeroSlideProps)
         alt={slide.imageAlt}
         fill
         priority={priority}
-        style={{ objectFit: "cover", objectPosition: slide.appShowcase ? "right center" : "center" }}
+        style={{
+          objectFit: "cover",
+          objectPosition: slide.appShowcase ? "right center" : "center",
+          filter: slide.appShowcase ? "brightness(1.22)" : undefined,
+        }}
         sizes="100vw"
       />
 
@@ -38,8 +42,8 @@ export default function HeroSlide({ slide, isActive, priority }: HeroSlideProps)
           inset: 0,
           background: slide.appShowcase
             ? `
-            linear-gradient(to right, rgba(8,8,12,0.96) 0%, rgba(8,8,12,0.88) 34%, rgba(8,8,12,0.45) 62%, rgba(8,8,12,0.2) 100%),
-            linear-gradient(to bottom, rgba(8,8,12,0.5) 0%, rgba(8,8,12,0.15) 35%, rgba(8,8,12,0.15) 60%, rgba(8,8,12,0.9) 100%),
+            linear-gradient(to right, rgba(8,8,12,0.9) 0%, rgba(8,8,12,0.68) 30%, rgba(8,8,12,0.22) 55%, rgba(8,8,12,0.04) 100%),
+            linear-gradient(to bottom, rgba(8,8,12,0.35) 0%, rgba(8,8,12,0.06) 35%, rgba(8,8,12,0.06) 60%, rgba(8,8,12,0.78) 100%),
             radial-gradient(ellipse 55% 90% at -8% 50%, rgba(255,59,47,0.16) 0%, transparent 65%)
           `
             : `
