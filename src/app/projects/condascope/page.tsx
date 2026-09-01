@@ -123,7 +123,7 @@ export default function CondaScopeProjectPage() {
             CondaScope
           </h1>
           <p style={{ color: "#F0F2F8", fontSize: "1.125rem", maxWidth: 680, lineHeight: 1.55, margin: "0 0 1.5rem" }}>
-            See exactly what your render farm can run. Browse the Deadline Cloud software catalog, compare Windows and Linux fleets, and generate the queue environment that pins it — in minutes, not an afternoon of log spelunking.
+            See exactly what your render farm can run. Browse the Deadline Cloud software catalog, compare Windows and Linux fleets, and generate the queue environment that pins it — in minutes, not an afternoon of digging through logs.
           </p>
 
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -198,7 +198,7 @@ export default function CondaScopeProjectPage() {
           <section style={{ marginBottom: "4rem" }}>
             <SectionLabel icon={<Zap size={13} />} label="What it is" />
             <h2 style={{ fontFamily: "var(--font-display-var,'Syne'),sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#F0F2F8", margin: "0 0 1.25rem" }}>
-              The Deadline Cloud catalog, without the log spelunking.
+              The Deadline Cloud catalog, without the log digging.
             </h2>
             <p style={{ color: "#787F96", fontSize: "1rem", lineHeight: 1.75, maxWidth: 760, margin: "0 0 1rem" }}>
               AWS Deadline Cloud's service-managed fleets install DCC software — Blender, Maya, Houdini, Nuke, Cinema 4D, Unreal, renderers, and their adaptors — from a managed conda channel. When an admin needs to pin software to a specific version, they need to know exactly which versions exist. AWS's docs list only major versions; the documented way to get the real list is to submit a render job and dig through its CloudWatch logs.
