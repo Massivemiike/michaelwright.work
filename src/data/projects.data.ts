@@ -170,6 +170,45 @@ export const condascopeModules: ProjectModule[] = [
   },
 ];
 
+export const sieveWindowsModules: ProjectModule[] = [
+  {
+    name: "Download engine",
+    label: "8 presets · 1,800+ sites",
+    detail:
+      "Paste a URL and analyze first — title, chapters, playlist selection with skip filters — then one-tap a preset from best-quality video to MP3, Opus, or a full MKV archive. Batch-paste and drag-drop queue everything at once.",
+  },
+  {
+    name: "Transcode suite",
+    label: "52 presets · NVENC-aware",
+    detail:
+      "H.264, HEVC, AV1, and VP9 for the web; ProRes and DNxHR for editors; social crops and device targets — with hardware-encoder detection, encoder-aware quality tiers, and genuine two-pass bitrate encoding.",
+  },
+  {
+    name: "Batch + watch folders",
+    label: "Set-and-forget",
+    detail:
+      "Convert one file, a folder full, or point Sieve at a watch folder and it transcodes whatever lands there — with live mid-batch encoder rerouting when you want jobs on a different chip.",
+  },
+  {
+    name: "Quality metrics",
+    label: "VMAF · Media Info",
+    detail:
+      "Score an encode with VMAF, inspect streams with Media Info, verify file integrity, and auto-detect crop bars — the answer to \"did that transcode actually look good?\"",
+  },
+  {
+    name: "Subscriptions",
+    label: "Channels on a schedule",
+    detail:
+      "Subscribe to channels and playlists; auto-check fetches the newest videos on a schedule and skips what you already have, turning Sieve into an ongoing content pipeline.",
+  },
+  {
+    name: "Power-user chrome",
+    label: "Ctrl+K · diagnostics",
+    detail:
+      "Command palette, keyboard-first flows everywhere, theme presets, a live yt-dlp command preview, and one-click diagnostics with a copyable bug-report bundle.",
+  },
+];
+
 export const sieveModules: ProjectModule[] = [
   {
     name: "Download engine",
@@ -349,9 +388,9 @@ export const personalProjects: Project[] = [
   },
   {
     id: "sieve",
-    name: "Sieve",
+    name: "Sieve for Android",
     description:
-      "Free, open-source media downloader and transcoder for Android — a clean Material 3 interface over the industry-standard yt-dlp engine and a purpose-built FFmpeg pipeline. Paste a link, get the file: download from 1,000+ sites, then convert on-device with hardware acceleration. No ads, no trackers, no accounts, no monetization of any kind. Built and maintained as solo developer.",
+      "Free, open-source media downloader and transcoder for Android — a clean Material 3 interface over the industry-standard yt-dlp engine and a purpose-built FFmpeg pipeline. Paste a link, get the file: download from 1,000+ sites, then convert on-device with hardware acceleration. No ads, no trackers, no accounts, no monetization of any kind. A sibling Sieve for Windows desktop app shares the name and spirit with its own codebase and feature set. Built and maintained as solo developer.",
     highlights: [
       "Built a native Kotlin + Jetpack Compose (Material 3) Android app over yt-dlp — paste any supported link and Sieve analyzes it, showing title, channel, and duration before you commit",
       "Ships 8 one-tap download presets — best video + audio, 1080p/720p/4K MP4, best-quality audio, MP3 320 kbps, Opus, and a full-quality MKV archive with subtitles and metadata",
@@ -363,6 +402,24 @@ export const personalProjects: Project[] = [
     ],
     tags: ["Android", "Kotlin", "Jetpack Compose", "Material 3", "yt-dlp", "FFmpeg", "MediaCodec", "x264/x265", "GPLv3", "Open Source"],
     href: "https://massivemiike.github.io/sieve-android/",
+    status: "live",
+  },
+  {
+    id: "sieve-windows",
+    name: "Sieve for Windows",
+    description:
+      "Free desktop downloader and transcoder for Windows — the desktop sibling of Sieve for Android, not a port. An Electron + React app over yt-dlp and ffmpeg: paste a link and use 8 one-tap download presets across 1,800+ sites, then hand files to a 52-preset transcode suite with NVIDIA hardware-encoder detection, batch and watch-folder modes, VMAF quality scoring, and channel subscriptions that fetch new videos on a schedule. Free, no ads, no accounts. Built and maintained as solo developer.",
+    highlights: [
+      "Built an Electron 33 + React 18 + TypeScript desktop app over yt-dlp and ffmpeg — frameless window, system tray, Ctrl+K command palette, theme presets, and a live yt-dlp command-preview drawer",
+      "8 one-tap download presets over 1,800+ supported sites with an analyze-first flow: chapters, playlist selection with skip filters, a full format table, filename templates, trim, and subtitles",
+      "52-preset transcode suite across 8 categories — H.264/HEVC/AV1/VP9, ProRes and DNxHR for editors, social and device targets — with GPU encoder detection (NVENC), encoder-aware quality tiers, and genuine two-pass bitrate encoding",
+      "Batch and watch-folder transcode modes with live mid-batch encoder rerouting — in-flight jobs can move between encoders, and every reroute is tracked and logged",
+      "Quality tooling built in: VMAF scoring, Media Info stream inspection, file-integrity verification, and auto-crop detection",
+      "Channel and playlist subscriptions with scheduled auto-check and per-subscription download archives, plus a queue with pause/resume/retry, drag reordering, color tags, notes, and bulk actions",
+      "Ships as a one-click NSIS installer with bundled ffmpeg/yt-dlp, in-app GPL license compliance (ffmpeg spawned as a child process, licenses viewable in-app), a yt-dlp self-updater, and real QA infrastructure — smoke tests, packaged-app e2e, and a screenshot harness",
+    ],
+    tags: ["Windows", "Electron", "React", "TypeScript", "yt-dlp", "FFmpeg", "NVENC", "VMAF", "Zustand", "Vite"],
+    href: "https://github.com/Massivemiike/sieve-windows/releases/latest",
     status: "live",
   },
   {

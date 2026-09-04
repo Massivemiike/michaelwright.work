@@ -8,7 +8,7 @@ import {
   rndrTiers,
   trnscodeModules,
   graffitiModules,
-  reactor48Modules, sieveModules, condascopeModules,
+  reactor48Modules, sieveModules, condascopeModules, sieveWindowsModules,
   type Project,
 } from "@/data/projects.data";
 import { buildMetadata } from "@/lib/metadata";
@@ -745,6 +745,173 @@ export default function ProjectsPage() {
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: "1rem" }}>
                       {sieveModules.map((mod) => (
+                        <div
+                          key={mod.name}
+                          style={{
+                            padding: "1.125rem 1.25rem",
+                            background: "rgba(8,8,12,0.6)",
+                            border: "1px solid #1F1F2E",
+                            borderRadius: 8,
+                          }}
+                        >
+                          <div style={{ fontSize: "0.625rem", fontWeight: 600, letterSpacing: "0.12em", color: "#e0a458", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "0.2rem" }}>
+                            {mod.label}
+                          </div>
+                          <div style={{ fontFamily: "var(--font-display-var,'Syne'),sans-serif", fontWeight: 700, fontSize: "1rem", color: "#F0F2F8", marginBottom: "0.5rem" }}>
+                            {mod.name}
+                          </div>
+                          <p style={{ fontSize: "0.8125rem", color: "#787F96", lineHeight: 1.6, margin: 0 }}>
+                            {mod.detail}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div style={{ padding: "1.25rem 2rem", display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
+                    {project.tags.map((tag) => (
+                      <span key={tag} style={{ padding: "0.25rem 0.625rem", background: "rgba(31,31,46,0.8)", border: "1px solid #27273A", borderRadius: 4, fontSize: "0.6875rem", color: "#3C3F52", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace" }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </SectionReveal>
+            );
+          })()}
+
+          {/* Sieve for Windows hero card */}
+          {(() => {
+            const project = personalProjects.find(p => p.id === "sieve-windows")!;
+            const status = STATUS_STYLES[project.status];
+            return (
+              <SectionReveal delay={0.03}>
+                <div
+                  style={{
+                    background: "rgba(15,15,21,0.9)",
+                    border: "1px solid #1F1F2E",
+                    borderTop: "1px solid rgba(224,164,88,0.3)",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    marginBottom: "1.5rem",
+                  }}
+                >
+                  {/* Header */}
+                  <div style={{ padding: "2rem", borderBottom: "1px solid #1F1F2E", display: "flex", alignItems: "flex-start", gap: "1.5rem" }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 10,
+                        background: "rgba(224,164,88,0.08)",
+                        border: "1px solid rgba(224,164,88,0.2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontFamily: "var(--font-display-var,'Syne'),sans-serif",
+                        fontWeight: 800,
+                        fontSize: "1rem",
+                        color: "#e0a458",
+                        flexShrink: 0,
+                        letterSpacing: "-0.02em",
+                      }}
+                    >
+                      SW
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                        <h2 style={{ fontFamily: "var(--font-display-var,'Syne'),sans-serif", fontWeight: 800, fontSize: "1.5rem", color: "#F0F2F8", margin: 0 }}>
+                          {project.name}
+                        </h2>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            fontSize: "0.625rem",
+                            fontWeight: 600,
+                            letterSpacing: "0.1em",
+                            textTransform: "uppercase",
+                            color: status.color,
+                            background: status.bg,
+                            border: `1px solid ${status.border}`,
+                            padding: "3px 8px",
+                            borderRadius: 4,
+                            fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace",
+                          }}
+                        >
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: status.dot, boxShadow: `0 0 5px ${status.dot}`, display: "inline-block" }} />
+                          {status.label}
+                        </span>
+                      </div>
+                      <p style={{ color: "#787F96", fontSize: "0.9375rem", lineHeight: 1.7, margin: "0 0 1rem", maxWidth: 640 }}>
+                        {project.description}
+                      </p>
+                      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                        <a
+                          href={project.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            padding: "0.5rem 1.25rem",
+                            background: "rgba(224,164,88,0.1)",
+                            border: "1px solid rgba(224,164,88,0.25)",
+                            color: "#e0a458",
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            fontSize: "0.875rem",
+                            textDecoration: "none",
+                            fontFamily: "var(--font-body-var,'Outfit'),sans-serif",
+                          }}
+                        >
+                          Download for Windows <ArrowUpRight size={14} />
+                        </a>
+                        <Link
+                          href="/projects/sieve-windows"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            padding: "0.5rem 1.25rem",
+                            background: "transparent",
+                            border: "1px solid #27273A",
+                            color: "#787F96",
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            fontSize: "0.875rem",
+                            textDecoration: "none",
+                            fontFamily: "var(--font-body-var,'Outfit'),sans-serif",
+                          }}
+                        >
+                          View project <ArrowRight size={14} />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Highlights */}
+                  <div style={{ padding: "1.75rem 2rem", borderBottom: "1px solid #1F1F2E" }}>
+                    <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1rem" }}>
+                      What I built
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: "0.5rem 2rem" }}>
+                      {project.highlights.map((h, idx) => (
+                        <li key={idx} style={{ fontSize: "0.875rem", color: "#787F96", lineHeight: 1.7 }}>{h}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Modules grid */}
+                  <div style={{ padding: "1.75rem 2rem", borderBottom: "1px solid #1F1F2E" }}>
+                    <div style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.12em", color: "#3C3F52", textTransform: "uppercase", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", marginBottom: "1.25rem" }}>
+                      6 pieces · desktop pipeline
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: "1rem" }}>
+                      {sieveWindowsModules.map((mod) => (
                         <div
                           key={mod.name}
                           style={{
