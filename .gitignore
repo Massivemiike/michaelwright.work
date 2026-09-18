@@ -44,3 +44,6 @@ next-env.d.ts
 # local claude / playwright tmp
 .claude/
 .playwright-mcp/
+
+# superpowers SDD scratch (ledgers, briefs, review packages)
+.superpowers/
