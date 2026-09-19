@@ -82,3 +82,12 @@ export const addTower = (t: Towers, f: TowerInit): number => {
   t.cooldown[i] = 0; t.targetId[i] = -1;
   return i;
 };
+
+export const removeTower = (t: Towers, slot: number): void => {
+  const last = --t.count;
+  if (slot !== last) {
+    t.type[slot] = t.type[last]; t.tile[slot] = t.tile[last];
+    t.level[slot] = t.level[last]; t.cooldown[slot] = t.cooldown[last];
+    t.targetId[slot] = t.targetId[last];
+  }
+};

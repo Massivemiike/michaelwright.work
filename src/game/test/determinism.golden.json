@@ -1,0 +1,35 @@
+{
+  "replay": {
+    "seed": 20260918,
+    "simVersion": 1,
+    "mode": "daily",
+    "commands": [
+      {
+        "tick": 0,
+        "type": "place",
+        "tower": 4,
+        "tile": 12
+      },
+      {
+        "tick": 60,
+        "type": "place",
+        "tower": 1,
+        "tile": 40
+      },
+      {
+        "tick": 600,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 1200,
+        "type": "place",
+        "tower": 4,
+        "tile": 55
+      }
+    ]
+  },
+  "score": 0,
+  "wave": 4,
+  "hash": "c39253d3"
+}
