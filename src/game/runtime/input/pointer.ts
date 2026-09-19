@@ -20,9 +20,16 @@ import { toFloat } from "@/game/sim/math/fixed";
 import { TILE_COUNT, TILE_SIZE, TILES, TOWERS } from "@/game/titles/circle-td/content";
 
 // A candidate must fall within half a tile's width of a tile's own centre
-// to count as "on" that tile — matches TILE_SIZE, the pitch every tile was
-// generated on (content.ts), so adjacent tile centres are always at least
-// TILE_SIZE apart and this radius can never straddle two of them.
+// to count as "on" that tile. content.ts's generator only guarantees
+// adjacent tile centres are >= ~0.75*TILE_SIZE apart (MIN_TILE_SPACING,
+// final-review finding #4) — a little under the full TILE_SIZE this
+// HALF_TILE radius assumes — so for the closest-allowed pair (24-32px
+// apart) a point in the sliver between them can fall within HALF_TILE of
+// BOTH. That's a same-tile-or-nearest-neighbour ambiguity, never a miss
+// into empty space: the loop below keeps updating `best` on ties (`<=`),
+// so it resolves to whichever of the two is scanned last — always a real,
+// valid tile, just not guaranteed to be the nearer one in that narrow edge
+// case.
 const HALF_TILE = TILE_SIZE / 2;
 const RADIUS_SQ = HALF_TILE * HALF_TILE;
 

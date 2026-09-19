@@ -1,9 +1,12 @@
-# Circle TD — balance-constant tuning (§5.4 sweep, 2026-09-18; re-tuned 2026-09-19)
+# Circle TD — balance-constant tuning (§5.4 sweep, 2026-09-18; re-tuned 2026-09-19; re-measured 2026-09-19 for the nested-loop geometry fix)
 
-**Status: current.** The constants below (`START_BANK=125`, `GAMMA=5`,
-`ALPHA_BP=200`) are re-tuned against Plan 2's REAL spiral track/tile geometry
+**Status: current.** The constants (`START_BANK=125`, `GAMMA=5`,
+`ALPHA_BP=200`) are UNCHANGED by the final-review #4/#5 geometry fix — see
+"Nested-loop re-geometry" at the very end for that fix's honest re-measurement
+(only `balance.sweep.test.ts`'s FULL-block thresholds moved). The constants
+themselves are tuned against Plan 2's REAL spiral track/tile geometry
 (`src/game/titles/circle-td/content.ts`) and the Task 3 by-maxHp bounty fix —
-see "Real-geometry re-tune" further down for the full story. The sections
+see "Real-geometry re-tune" further down for that full story. The sections
 immediately below (through "Fast/slow test split") are kept as-is for
 history: they document the ORIGINAL 2026-09-18 sweep against Plan 1's now-
 replaced placeholder/INVENTED geometry (a square spiral with a uniform 24px
@@ -299,13 +302,100 @@ unlock" pattern) was already established by the Plan-1 sweep's method, and
 the goal here was finding a robust `gamma` for the restored `startBank=125`,
 not re-deriving the whole grid from scratch.
 
+## Nested-loop re-geometry (final-review findings #4/#5, 2026-09-19)
+
+The "Real-geometry re-tune" section above tuned against a track/tile
+geometry that final review later found was itself broken: `content.ts`
+built each of `TRACK.outer`/`TRACK.inner` as a multi-ring inward spiral, and
+on the 840x680 stage that put consecutive rings only 15-90px apart — well
+under `TRACK_WIDTH` (64px) — so OUTER self-crossed twice, INNER self-crossed
+once, and the two loops crossed each other four times (finding #5).
+Separately, the flanking-tile dedup snapped candidates onto a coarse
+half-tile grid and only rejected exact re-hits in the same half-cell, so
+tiles generated near a corner from different segments could land as little
+as 1px apart (finding #4).
+
+Both are now fixed in `content.ts`:
+
+- **Geometry:** each loop is a single rectangular ring (`buildLoopPoints`,
+  replacing the old `buildSpiralPoints`), with OUTER `(60,60)-(780,620)` and
+  INNER `(210,210)-(630,450)` chosen so the measured minimum distance
+  between ANY point of one loop and ANY point of the other is a uniform
+  ~150px — comfortably above the required `TRACK_WIDTH + 2*TILE_SIZE`
+  (128px) floor. Verified in `content.test.ts`: zero self-crossings, zero
+  cross-crossings, INNER's bounding box strictly inside OUTER's.
+- **Tiles:** `buildTiles()` now rejects a flanking candidate outright when
+  it's within `MIN_TILE_SPACING` (0.75×`TILE_SIZE` = 24px) of an
+  already-accepted tile — a real distance check against kept positions,
+  not a grid the positions were never snapped to. Verified in
+  `content.test.ts`: minimum pairwise tile-centre distance across all 216
+  tiles is ~25.3px, clearing the 24px floor.
+- `TRACK_WIDTH` (64px, unchanged) is now exported from `content.ts` and
+  imported by `Canvas2DRenderer.ts` instead of being a second, only
+  comment-coupled copy — the drift between "what the renderer draws" and
+  "what the geometry assumes" was part of how the previous interleaving
+  went unnoticed.
+
+### Effect on TILE_COUNT and balance
+
+`TILE_COUNT` moved from 223 (old interleaved geometry) to **216** — a
+differently-shaped, slightly smaller in-range set (fewer, wider-spaced
+rings), not a coverage regression. Per the task brief, this warranted a
+single confirmatory `BALANCE_SWEEP=1 npm test` run with the SAME
+`START_BANK=125`/`GAMMA=5`/`ALPHA_BP=200` — **no full parameter-grid
+re-sweep** — to check the fix didn't break winnability.
+
+Result: still winnable-and-climbing, just a few waves lower than the old
+(buggy) geometry's floor:
+
+| seed | 20260918 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| wave (old interleaved geometry) | 54 | 58 | 54 | 54 | 57 |
+| wave (new nested geometry) | 49 | 56 | 51 | 50 | 52 |
+
+`hitCeiling: false` in every case (the game still always ends via the
+population cap), and active defense still outlasts pure banking (wave 4,
+unaffected by geometry) by a ~12x margin at the worst seed. This is a
+modest, expected shift (a smaller, differently-shaped tile set naturally
+supports slightly fewer/less-overlapping towers), not a sign the economy
+broke — so **no GAMMA change was made**; `START_BANK=125`/`GAMMA=5` stand
+as-is. The FAST per-commit guard's capped-bot natural-death wave also
+tightened slightly, from 19-21 to a clean 19 on both of its seeds — again
+comfortably clear of `targetWave=15`/`FLOOR=10`, no change needed there
+either.
+
+The only things that changed in `balance.sweep.test.ts`: the FULL block's
+"meaningful wave" floor (50 → 45, still pinned below the new measured
+minimum of 49, same "floor below the observed minimum" methodology as
+before) and the seed=4 test's floor (50 → 45 to match), plus comments
+citing the old 223/450 tile counts and 54-58/57 wave figures updated to the
+new 216/49-56/52. Full details and rationale live inline in
+`balance.sweep.test.ts`'s own "Nested-loop re-geometry" header comment.
+
+### Golden fixture regeneration (again)
+
+The geometry change altered tile indices (`IN_RANGE` in
+`determinism.test.ts` is recomputed from the new `TILE_COUNT`/`TRACK`), so
+the scripted replay's hash changed even though its script (fractions of
+`IN_RANGE`, not raw indices) needed no edits. Regenerated via
+`UPDATE_GOLDEN=1 npx vitest run src/game/test/determinism.test.ts` and
+re-run (no flag) to pin:
+
+- **hash:** `6385413f`
+- **score:** 1526 (> 0 ✓)
+- **wave:** 29 (≥ 20 ✓)
+- **maxTowerLevel:** 9 (> 0 ✓)
+
 ## References
 
 - Sweep implementation and current acceptance thresholds:
   `src/game/test/balance.sweep.test.ts`.
 - Tuned constants: `src/game/titles/circle-td/content.ts` (`START_BANK`,
-  `TILE_SIZE`, `TILE_COUNT`), `src/game/titles/circle-td/balance.ts`
+  `TILE_SIZE`, `TILE_COUNT`, `TRACK_WIDTH`), `src/game/titles/circle-td/balance.ts`
   (`GAMMA`, `ALPHA_BP`, `bounty`).
+- Nested-loop geometry and tile-spacing fix (final-review findings #4/#5):
+  `src/game/titles/circle-td/content.ts` (`buildLoopPoints`, `buildTiles`),
+  verified in `src/game/titles/circle-td/content.test.ts`.
 - Golden determinism fixture exercising a real (upgrading) defense:
   `src/game/test/determinism.test.ts` / `determinism.golden.json`.
 - Full Plan-1 sweep narrative (gitignored, not authoritative outside this

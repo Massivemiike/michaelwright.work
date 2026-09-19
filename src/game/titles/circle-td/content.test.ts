@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   TOWERS, TARGET_AIR, TARGET_LAND, TARGET_BOTH, trackLength, posAt, TRACK,
-  TILES, TILE_COUNT, TILE_SIZE,
+  TILES, TILE_COUNT, TILE_SIZE, TRACK_WIDTH,
 } from "./content";
 import { fromInt, toFloat } from "@/game/sim/math/fixed";
 
@@ -142,5 +142,131 @@ describe("Circle TD content", () => {
       }
       expect(best).toBeLessThanOrEqual(maxFlankDist);
     }
+  });
+
+  // --- Final-review findings #4/#5: nested-not-interleaved loops, and
+  // non-overlapping build tiles ---
+
+  it("finding #5: INNER's bounding box sits strictly inside OUTER's (genuinely nested)", () => {
+    const bbox = (poly: Int32Array) => {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < poly.length; i += 2) {
+        const x = toFloat(poly[i]), y = toFloat(poly[i + 1]);
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+      return { minX, maxX, minY, maxY };
+    };
+    const outer = bbox(TRACK.outer);
+    const inner = bbox(TRACK.inner);
+    expect(inner.minX).toBeGreaterThan(outer.minX);
+    expect(inner.maxX).toBeLessThan(outer.maxX);
+    expect(inner.minY).toBeGreaterThan(outer.minY);
+    expect(inner.maxY).toBeLessThan(outer.maxY);
+  });
+
+  it("finding #5: OUTER and INNER never touch/cross, and stay >= TRACK_WIDTH + 2*TILE_SIZE apart", () => {
+    // Dense point sampling (every ~2px) along both loops, checked pairwise —
+    // the review's own measurement method (rings interleaving, crossing
+    // counts) reduces to "the two loops' minimum separation is 0"; this
+    // asserts the fixed geometry's separation is not just positive but
+    // actually wide enough for a lane + flanking tiles on each side.
+    const minGap = TRACK_WIDTH + 2 * TILE_SIZE; // plain px, per the review's own rule
+    const step = fromInt(4);
+    const outerLen = trackLength(TRACK.outer);
+    const innerLen = trackLength(TRACK.inner);
+    const outerPts: { x: number; y: number }[] = [];
+    for (let d = 0; d <= outerLen; d += step) outerPts.push(posAt(TRACK.outer, d));
+    let minDist = Infinity;
+    for (let d = 0; d <= innerLen; d += step) {
+      const p2 = posAt(TRACK.inner, d);
+      for (const p1 of outerPts) {
+        const dx = toFloat(p1.x - p2.x), dy = toFloat(p1.y - p2.y);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) minDist = dist;
+      }
+    }
+    expect(minDist).toBeGreaterThanOrEqual(minGap);
+  });
+
+  it("finding #5: neither loop self-crosses, and the two loops never cross each other", () => {
+    // Axis-aligned segments: a bounding-box overlap test exactly detects
+    // intersection/overlap/touching in every case (perpendicular, parallel,
+    // and collinear-overlapping) — see content.ts's own pointSegDistSq for
+    // the same axis-aligned assumption used elsewhere in this file.
+    function segsOf(poly: Int32Array): Array<[number, number, number, number]> {
+      const segs: Array<[number, number, number, number]> = [];
+      const n = poly.length / 2;
+      for (let i = 0; i < n - 1; i++) {
+        const x0 = toFloat(poly[i * 2]), y0 = toFloat(poly[i * 2 + 1]);
+        const x1 = toFloat(poly[(i + 1) * 2]), y1 = toFloat(poly[(i + 1) * 2 + 1]);
+        if (x0 === x1 && y0 === y1) continue; // the zero-length wrap edge
+        segs.push([x0, y0, x1, y1]);
+      }
+      return segs;
+    }
+    const rangesOverlap = (a0: number, a1: number, b0: number, b1: number) =>
+      Math.max(Math.min(a0, a1), Math.min(b0, b1)) <= Math.min(Math.max(a0, a1), Math.max(b0, b1));
+    const segsIntersect = (a: readonly number[], b: readonly number[]) =>
+      rangesOverlap(a[0], a[2], b[0], b[2]) && rangesOverlap(a[1], a[3], b[1], b[3]);
+
+    const outerSegs = segsOf(TRACK.outer);
+    const innerSegs = segsOf(TRACK.inner);
+
+    // Self-crossing: every pair of NON-adjacent segments (adjacent segments,
+    // and the first/last pair which close the loop, legitimately share an
+    // endpoint) must not intersect at all.
+    for (const segs of [outerSegs, innerSegs]) {
+      for (let i = 0; i < segs.length; i++) {
+        for (let j = i + 1; j < segs.length; j++) {
+          if (j === i + 1) continue;
+          if (i === 0 && j === segs.length - 1) continue;
+          expect(segsIntersect(segs[i], segs[j])).toBe(false);
+        }
+      }
+    }
+
+    // Cross-crossing: no OUTER segment may touch any INNER segment.
+    for (const a of outerSegs) {
+      for (const b of innerSegs) {
+        expect(segsIntersect(a, b)).toBe(false);
+      }
+    }
+  });
+
+  it("finding #4: no two tiles are closer than ~0.75*TILE_SIZE (minimum pairwise centre spacing)", () => {
+    const minSpacing = TILE_SIZE * 0.75;
+    let minDist = Infinity;
+    for (let i = 0; i < TILE_COUNT; i++) {
+      for (let j = i + 1; j < TILE_COUNT; j++) {
+        const dx = toFloat(TILES[i * 2] - TILES[j * 2]);
+        const dy = toFloat(TILES[i * 2 + 1] - TILES[j * 2 + 1]);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) minDist = dist;
+      }
+    }
+    expect(minDist).toBeGreaterThanOrEqual(minSpacing);
+  });
+
+  it("finding #5: build tiles exist in the board's centre region (inside INNER's ring)", () => {
+    // A tile "in the centre region" is one that falls inside INNER's own
+    // bounding box — i.e. flanking INNER's ring from the interior, the
+    // region the old interleaved geometry painted over entirely.
+    const bbox = (poly: Int32Array) => {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < poly.length; i += 2) {
+        const x = toFloat(poly[i]), y = toFloat(poly[i + 1]);
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+      return { minX, maxX, minY, maxY };
+    };
+    const inner = bbox(TRACK.inner);
+    let centreTiles = 0;
+    for (let ti = 0; ti < TILE_COUNT; ti++) {
+      const tx = toFloat(TILES[ti * 2]), ty = toFloat(TILES[ti * 2 + 1]);
+      if (tx > inner.minX && tx < inner.maxX && ty > inner.minY && ty < inner.maxY) centreTiles++;
+    }
+    expect(centreTiles).toBeGreaterThan(0);
   });
 });

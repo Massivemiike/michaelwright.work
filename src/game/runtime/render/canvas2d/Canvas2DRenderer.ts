@@ -21,7 +21,7 @@ import { interpolateById } from "../Renderer";
 import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
 import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
-import { STAGE_H, STAGE_W, TILE_SIZE, TILES, TOWERS, TRACK } from "@/game/titles/circle-td/content";
+import { STAGE_H, STAGE_W, TILE_SIZE, TILES, TOWERS, TRACK, TRACK_WIDTH } from "@/game/titles/circle-td/content";
 
 interface RGB {
   r: number;
@@ -62,11 +62,13 @@ const FALLBACK_PALETTE_HEX = {
 
 const IDENTITY_TRANSFORM: Transform = { scale: 1, offsetX: 0, offsetY: 0 };
 
-// Path "width" for the stroked track polylines: half of it (TILE_SIZE)
-// matches content.ts's FLANK_OFFSET, so a buildable tile's near edge sits
-// right against the drawn track edge — same contract the tile generator
-// itself documents.
-const TRACK_WIDTH = TILE_SIZE * 2;
+// Path "width" for the stroked track polylines — imported from content.ts
+// (final-review finding #5) rather than kept as a local copy: half of it
+// (TILE_SIZE) matches content.ts's FLANK_OFFSET so a buildable tile's near
+// edge sits right against the drawn track edge, AND content.ts's own
+// OUTER/INNER ring-to-ring gap is sized directly off this same constant —
+// two files agreeing by comment was how the previous geometry drifted out
+// of sync in the first place.
 
 // How long a hit flash burst stays visible, in real milliseconds (this is a
 // renderer-side visual effect timed off wall-clock frame delivery, not sim

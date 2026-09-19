@@ -44,6 +44,27 @@
 //     is the "scheduled CI job" the original Task 12 comment referred to
 //     for the grid sweep itself — same idea, applied to the expensive
 //     acceptance measurements this file also grew.
+//
+// Nested-loop re-geometry (final-review findings #4/#5, 2026-09-19): the
+// track/tile geometry in content.ts changed again — the OLD "real spiral"
+// above turned out to interleave its own rings (outer self-crossed twice,
+// inner once, outer×inner crossed 4x, painting the board centre as one
+// solid blob with no build tiles), and its tile dedup let adjacent tiles
+// land as little as 1px apart. Both are now fixed: OUTER and INNER are each
+// a single rectangular ring, genuinely nested with a uniform ~150px gap
+// (comfortably above the required TRACK_WIDTH + 2*TILE_SIZE = 128px), and
+// tile placement now rejects any candidate within ~0.75*TILE_SIZE of an
+// already-accepted tile. Net effect on this file: TILE_COUNT moved 223 ->
+// 216 (a differently-shaped, slightly smaller in-range set, not a coverage
+// bug), and a ONE-TIME `BALANCE_SWEEP=1` run with the SAME START_BANK=125/
+// GAMMA=5/ALPHA_BP=200 (no retune) showed the measured wave floor moving
+// from 54-58 down to 49-56 — still comfortably winnable-and-climbing
+// (hitCeiling false every seed, active still ~12x pure banking), so only
+// the FULL block's thresholds below were updated to the new honest
+// minimum; the constants themselves did not change. Per the task brief:
+// a full parameter-grid re-sweep was NOT re-run for this — the geometry
+// fix's qualitative effect (a modest, expected floor shift) was already
+// clear from the one gated run.
 import { describe, it, expect } from "vitest";
 import { makeSim } from "@/game/titles/circle-td";
 import { applyCommand } from "@/game/sim/replay";
@@ -124,7 +145,7 @@ interface ActiveDefenseResult {
 // killing on wave 1, which is what actually funds the climb to Damage.
 //
 // Plays all the way to gameOver (or the tick ceiling) with every in-range
-// tile available — this is the FULL, expensive measurement (all 223
+// tile available — this is the FULL, expensive measurement (all 216
 // in-range tiles eventually filled; see
 // docs/superpowers/2026-09-18-circle-td-balance-tuning.md). Used only by the
 // slowIt-gated tests below; the always-on fast guard uses
@@ -219,13 +240,15 @@ function playPureBanking(seed: number): BankingResult {
 // --- FAST per-commit guard constants (empirical calibration, see
 // docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Real-geometry
 // re-tune") ---
-// 40 towers is a realistic partial defense (vs. 223 in-range tiles, which
+// 40 towers is a realistic partial defense (vs. 216 in-range tiles, which
 // only a play-to-gameOver run ever fully occupies) — cheap enough per tick
 // that even playing several of these to completion takes well under a
-// second. Re-measured on the real geometry with START_BANK=125/GAMMA=5:
-// this cap's bot played to death naturally dies at wave 19-21 across the
-// guard's own two seeds (was 21-23 on Plan 1's placeholder geometry — close
-// enough that the existing targetWave/floor below didn't need to change).
+// second. Re-measured on the nested-loop geometry (final-review findings
+// #4/#5, 2026-09-19) with START_BANK=125/GAMMA=5: this cap's bot played to
+// death naturally dies at wave 19 for both of the guard's own seeds (was
+// 19-21 on the previous interleaved-spiral geometry, 21-23 on Plan 1's
+// placeholder before that — close enough each time that the existing
+// targetWave/floor below didn't need to change).
 // targetWave=15 stays comfortably below that natural death wave, so a
 // healthy run stops via "reached the target" every time, not "ran out of
 // luck at the ceiling". FLOOR=10 leaves margin below the target itself (not
@@ -242,10 +265,11 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     const tiles = inRangeTiles();
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] inRangeTiles(): ${tiles.length} of ${TILE_COUNT} tiles in range`);
-    // OBSERVED on the real spiral geometry: all 223 tiles come back in
-    // range of the Damage tower (125px) from SOME point on the track. This
-    // is expected and correct-by-construction now, not a geometry-fidelity
-    // artifact the way it was on Plan 1's placeholder grid: every tile in
+    // OBSERVED on the nested-loop geometry (final-review findings #4/#5):
+    // all 216 tiles come back in range of the Damage tower (125px) from
+    // SOME point on the track. This is expected and correct-by-construction
+    // now, not a geometry-fidelity artifact the way it was on Plan 1's
+    // placeholder grid: every tile in
     // content.ts's TILES is generated as a cell flanking some path segment
     // at a fixed ~1 tile-width offset, which is always well inside 125px —
     // so "in range of the path somewhere" is true by definition. What the
@@ -287,7 +311,7 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   // --- FULL sweep-measurement block, opt-in only: `BALANCE_SWEEP=1 npm test` ---
   // These reproduce the actual §5.4 sweep acceptance numbers
   // (docs/superpowers/2026-09-18-circle-td-balance-tuning.md) but each one
-  // plays a full, uncapped (all 450 in-range tiles) game to
+  // plays a full, uncapped (all 216 in-range tiles) game to
   // gameOver, which is real O(towers x creeps)-per-tick compute — several
   // minutes combined. Not part of the default per-commit suite; run on
   // demand or wire into a scheduled CI job (mirrors the original Task 12
@@ -319,18 +343,22 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     const minWave = Math.min(...results.map((r) => r.wave));
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] min wave across seeds: ${minWave}`);
-    // OBSERVED on the real spiral geometry with START_BANK=125 (SOURCED,
-    // restored) + GAMMA=5 (re-tuned) + ALPHA_BP=200 (unchanged) — see
-    // docs/superpowers/2026-09-18-circle-td-balance-tuning.md's
-    // "Real-geometry re-tune": all five seeds (including the
-    // previously-concerning seed=4) reach wave 54-58 (all 223 in-range
-    // tiles eventually filled). The real geometry's narrower per-tower path
-    // coverage makes this a lower floor than the placeholder geometry's 78
-    // — a real, honest measurement of the new board, not the old number
-    // carried over. Pinned to a floor (50) below the measured minimum (54),
-    // not padded up to it.
-    expect(minWave).toBeGreaterThanOrEqual(50);
-    // Five full runs to wave ~54-58 each comfortably exceed vitest's
+    // RE-MEASURED 2026-09-19 on the nested-loop geometry (final-review
+    // findings #4/#5 fix — content.ts's interleaved multi-ring spiral
+    // replaced by two genuinely nested single rings, 216 tiles instead of
+    // 223) with the SAME START_BANK=125/GAMMA=5/ALPHA_BP=200: all five
+    // seeds (including the previously-concerning seed=4) reach wave 49-56
+    // (all 216 in-range tiles eventually filled), a few waves below the
+    // prior interleaved geometry's 54-58 — expected, since 216 tiles is a
+    // slightly smaller, differently-shaped in-range set than the old
+    // (overlapping-rings) 223, not a balance regression: hitCeiling is
+    // still false for every seed, and active defense still vastly outlasts
+    // pure banking (see below). No GAMMA change was needed; only this
+    // threshold moved, to stay honest about the new floor. Pinned to 45
+    // (below the measured minimum of 49), not padded up to it — same
+    // methodology as the previous floor (50, below a measured 54).
+    expect(minWave).toBeGreaterThanOrEqual(45);
+    // Five full runs to wave ~49-56 each comfortably exceed vitest's
     // 5000ms default.
   }, 300_000);
 
@@ -342,15 +370,15 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     // only looked at the un-multiplied hp(wave)). Task 3 changed bounty to
     // pay by the killed creep's own maxHp (which DOES include typeMul), and
     // that alone fixed seed=4: it's now folded into the main "meaningful
-    // wave" test above and behaves like every other seed (wave 57 on the
-    // real geometry, no longer a documented non-asserting outlier). This
-    // test exists only to record that the old concern is gone, not to
-    // re-litigate the mechanism.
+    // wave" test above and behaves like every other seed (wave 52 on the
+    // nested-loop geometry as of the 2026-09-19 re-measurement, no longer a
+    // documented non-asserting outlier). This test exists only to record
+    // that the old concern is gone, not to re-litigate the mechanism.
     const r = playActiveDefense(4);
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] seed=4 (formerly KNOWN CONCERN): wave=${r.wave} tilesUsed=${r.tilesUsed}`);
     expect(r.hitCeiling).toBe(false);
-    expect(r.wave).toBeGreaterThanOrEqual(50);
+    expect(r.wave).toBeGreaterThanOrEqual(45);
   }, 60_000);
 
   slowIt("FULL: does not allow trivial infinite survival (terminates by gameOver, not the tick ceiling)", () => {
@@ -359,12 +387,13 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   }, 120_000);
 
   slowIt("FULL: active defense outlasts pure banking", () => {
-    // Measured on the real geometry with the re-tuned defaults: active
-    // defense reaches wave ~54-58 (score ~3000, all 223 in-range tiles
+    // Re-measured 2026-09-19 on the nested-loop geometry: active defense
+    // reaches wave ~49-56 (score ~2700-3150, all 216 in-range tiles
     // eventually filled — see the "meaningful wave" test above) vs. wave 4
     // for pure banking (which buys nothing and kills nothing, so
-    // population-cap timing is the same regardless of the economy
-    // constants). A ~13-14x margin, not a marginal one — see
+    // population-cap timing is unaffected by geometry or the economy
+    // constants — same wave 4 as the prior geometry). A ~12x margin at the
+    // worst seed, not a marginal one — see
     // docs/superpowers/2026-09-18-circle-td-balance-tuning.md.
     const seed = 20260918;
     const active = playActiveDefense(seed);
