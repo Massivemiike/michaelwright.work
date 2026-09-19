@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Avoid piling up redundant runs when a branch is pushed to repeatedly.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Typecheck, test, build, bundle budget
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No lint step: this repo has no ESLint config (`eslint.config.*` /
+      # `.eslintrc*`) checked in yet. Add one here if/when that changes —
+      # don't invent a config just to have a lint step.
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Fast Vitest suite (~1-2s, 136 passed / 5 skipped as of Plan 2). This
+      # includes src/game/test/lazy-boundary.test.ts, the source-level
+      # import-graph bundle-budget gate: no marketing/layout file may import
+      # @/game/** by alias OR by a relative path that resolves into
+      # src/game/**. It also runs the sim purity guard and the determinism
+      # golden-fixture gate.
+      #
+      # Deliberately NOT run here: `BALANCE_SWEEP=1 npm test`, the gated
+      # slow balance sweep (~4 min) — that's a separate scheduled/manual
+      # job, not a per-commit check. Cross-engine Playwright determinism
+      # (WebGPU vs Canvas2D) is Plan 3 and doesn't exist yet.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Build-output-level bundle-budget check (complements, doesn't
+      # replace, the source-level import-graph test above): confirms the
+      # actual compiled production output never references game-engine code
+      # from a prerendered marketing route's initial HTML. See
+      # scripts/check-bundle-budget.mjs for the full method and its known
+      # limitations (fully dynamic routes with no prerendered HTML, e.g.
+      # /blog, aren't scanned by this step — they're covered by the
+      # source-level test instead).
+      - name: Bundle budget (build-output check)
+        run: npm run check:bundle-budget
