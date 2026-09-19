@@ -11,4 +11,7 @@ export const nextU32 = (r: Rng): number => {
 };
 
 // Unbiased-enough modulo for game use (n is always small).
-export const nextRange = (r: Rng, n: number): number => nextU32(r) % n;
+export const nextRange = (r: Rng, n: number): number => {
+  if (n <= 0) throw new RangeError("nextRange: n must be > 0");
+  return nextU32(r) % n;
+};

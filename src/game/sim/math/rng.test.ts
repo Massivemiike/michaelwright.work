@@ -21,6 +21,10 @@ describe("mulberry32 PRNG", () => {
       expect(v).toBeLessThan(5);
     }
   });
+  it("throws for n <= 0", () => {
+    const r = makeRng(1);
+    expect(() => nextRange(r, 0)).toThrow(RangeError);
+  });
   it("produces integers only", () => {
     const r = makeRng(99);
     const v = nextU32(r);

@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { sinFx, cosFx } from "@/game/sim/math/trig";
 
 const ROOTS = ["src/game/sim", "src/game/titles/circle-td"];
 const BANNED = [
@@ -28,7 +29,12 @@ describe("simulation purity", () => {
     const violations: string[] = [];
     for (const root of ROOTS) {
       let files: string[];
-      try { files = walk(root); } catch { continue; } // dir may not exist yet
+      try {
+        files = walk(root);
+      } catch (e: any) {
+        if (e && e.code === "ENOENT") continue; // dir may not exist yet
+        throw e;
+      }
       for (const file of files) {
         if (ALLOW.has(file.replace(/\\/g, "/"))) continue;
         const src = readFileSync(file, "utf8");
@@ -38,5 +44,16 @@ describe("simulation purity", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  it("actually detects violations (guard is not vacuous)", () => {
+    const bad = "window document navigator performance ; new Date() ; Date.now() ; Math.random() Math.sin() Math.cos() Math.tan() Math.atan2() Math.pow()";
+    const missed = BANNED.filter((re) => !re.test(bad));
+    expect(missed).toEqual([]);
+  });
+
+  it("trig runtime functions use no Math.* (only the table build may)", () => {
+    expect(sinFx.toString()).not.toMatch(/Math\./);
+    expect(cosFx.toString()).not.toMatch(/Math\./);
   });
 });
