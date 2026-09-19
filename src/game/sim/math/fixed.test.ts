@@ -1,12 +1,15 @@
 // src/game/sim/math/fixed.test.ts
 import { describe, it, expect } from "vitest";
-import { SCALE, fromInt, fromFloat, toInt, mul, div, sqrt, clamp } from "./fixed";
+import { SCALE, fromInt, fromFloat, toInt, toFloat, mul, div, sqrt, clamp } from "./fixed";
 
 describe("fixed-point Q16.16", () => {
   it("round-trips integers", () => {
     expect(fromInt(5)).toBe(5 * SCALE);
     expect(toInt(fromInt(5))).toBe(5);
     expect(toInt(fromInt(-3))).toBe(-3);
+  });
+  it("converts back to a float", () => {
+    expect(toFloat(fromInt(5))).toBe(5);
   });
   it("multiplies deterministically", () => {
     // 2.5 * 4 = 10

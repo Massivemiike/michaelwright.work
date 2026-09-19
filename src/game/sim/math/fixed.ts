@@ -2,7 +2,6 @@
 import type { Fx } from "../types";
 
 export const SCALE = 65536;
-const SHIFT = 16;
 
 export const fromInt = (n: number): Fx => Math.trunc(n) * SCALE;
 export const fromFloat = (n: number): Fx => Math.trunc(n * SCALE);
