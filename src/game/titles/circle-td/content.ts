@@ -15,7 +15,7 @@ export interface TowerDef {
   name: string; cost: number; targets: number; footprint: number;
   dmg0: number; dmgStep: number; range0: Fx; rangeStep: Fx;
   cooldownTicks: number;          // INVENTED
-  slowPct0: number; slowStep: number;
+  slowPct: readonly number[];     // per-level table; [] = tower has no slow effect
   splashRadius0: Fx; splashStep: Fx;
 }
 
@@ -25,19 +25,24 @@ const R = (px: number): Fx => fromInt(px);
 export const TOWERS: readonly TowerDef[] = [
   { name: "Fast",   cost: 50,  targets: TARGET_BOTH, footprint: 1,
     dmg0: 9,   dmgStep: 8,   range0: R(150), rangeStep: R(7),
-    cooldownTicks: 6,  slowPct0: 0, slowStep: 0, splashRadius0: 0, splashStep: 0 },
+    cooldownTicks: 6,  slowPct: [], splashRadius0: 0, splashStep: 0 },
   { name: "Air",    cost: 45,  targets: TARGET_AIR,  footprint: 1,
     dmg0: 18,  dmgStep: 16,  range0: R(180), rangeStep: R(9),
-    cooldownTicks: 12, slowPct0: 0, slowStep: 0, splashRadius0: 0, splashStep: 0 },
+    cooldownTicks: 12, slowPct: [], splashRadius0: 0, splashStep: 0 },
   { name: "Slow",   cost: 45,  targets: TARGET_BOTH, footprint: 1,
     dmg0: 1,   dmgStep: 0,   range0: R(150), rangeStep: R(7),
-    cooldownTicks: 15, slowPct0: 60, slowStep: 3, splashRadius0: 0, splashStep: 0 },
+    cooldownTicks: 15,
+    // SOURCED per-level slow% (original game's exact sequence): +3 for the
+    // first 7 steps, then +4, +4 — NOT a uniform step, so it can't be a
+    // base+step pair. Must stay a literal table.
+    slowPct: [60, 63, 66, 69, 72, 75, 78, 81, 85, 89],
+    splashRadius0: 0, splashStep: 0 },
   { name: "Splash", cost: 125, targets: TARGET_LAND, footprint: 2,
     dmg0: 42,  dmgStep: 38,  range0: R(100), rangeStep: R(5),
-    cooldownTicks: 30, slowPct0: 0, slowStep: 0, splashRadius0: R(40), splashStep: R(2) },
+    cooldownTicks: 30, slowPct: [], splashRadius0: R(40), splashStep: R(2) },
   { name: "Damage", cost: 260, targets: TARGET_LAND, footprint: 3,
     dmg0: 250, dmgStep: 227, range0: R(125), rangeStep: R(6),
-    cooldownTicks: 60, slowPct0: 0, slowStep: 0, splashRadius0: 0, splashStep: 0 },
+    cooldownTicks: 60, slowPct: [], splashRadius0: 0, splashStep: 0 },
 ];
 
 export const WAVE_SIZE = 30;             // SOURCED (15 per entrance × 2)
