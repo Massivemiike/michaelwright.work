@@ -76,24 +76,45 @@ const tickOnce = (s: SimState): void => {
 const packSnapshot = (s: SimState): RenderSnapshot => {
   const c = s.creeps;
   const t = s.towers;
-  const snap = makeRenderSnapshot(c.count, t.count);
+
+  // A creep with dist < 0 is STAGED (queued off-track, not yet spawned onto
+  // the path) — it must be excluded from the snapshot's creep list so the
+  // renderer never draws it at a wrapped mid-track position. Staged creeps
+  // still count toward the population cap; that's SimState.creeps.count,
+  // untouched here.
+  let onTrackCount = 0;
+  for (let i = 0; i < c.count; i++) {
+    if (c.dist[i] >= 0) onTrackCount++;
+  }
+
+  const snap = makeRenderSnapshot(onTrackCount, t.count);
   snap.tick = s.tick;
   snap.bank = s.bank;
   snap.score = s.score;
   snap.wave = s.wave;
   snap.gameOver = s.gameOver;
+  snap.creepCount = onTrackCount;
 
+  let j = 0;
   for (let i = 0; i < c.count; i++) {
+    if (c.dist[i] < 0) continue;
     const poly = c.entrance[i] === 0 ? TRACK.outer : TRACK.inner;
     const p = posAt(poly, c.dist[i]);
-    snap.creepXY[i * 2] = toFloat(p.x);
-    snap.creepXY[i * 2 + 1] = toFloat(p.y);
+    snap.creepXY[j * 2] = toFloat(p.x);
+    snap.creepXY[j * 2 + 1] = toFloat(p.y);
+    snap.creepId[j] = c.id[i];
+    const hp01 = c.hp[i] / c.maxHp[i];
+    snap.creepHp01[j] = Math.max(0, Math.min(1, hp01));
+    snap.creepFlags[j] = c.flags[i];
+    j++;
   }
 
   for (let i = 0; i < t.count; i++) {
     const tile = t.tile[i];
     snap.towerXY[i * 2] = toFloat(TILES[tile * 2]);
     snap.towerXY[i * 2 + 1] = toFloat(TILES[tile * 2 + 1]);
+    snap.towerType[i] = t.type[i];
+    snap.towerLevel[i] = t.level[i];
   }
 
   return snap;

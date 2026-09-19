@@ -39,4 +39,23 @@ describe("Circle TD sim assembly", () => {
       expect(Number.isFinite(snap.towerXY[i])).toBe(true);
     }
   });
+
+  it("snapshot carries id/hp01/flags and tower type/level, and skips staged (dist<0) creeps", () => {
+    const sim = makeSim({ seed: 7, mode: "free" });
+    for (let i = 0; i < 30; i++) sim.tick(); // some creeps on-track, some may still be staged
+    const s = sim.snapshot();
+    expect(s.creepId.length).toBe(s.creepCount);
+    expect(s.creepHp01.length).toBe(s.creepCount);
+    expect(s.creepFlags.length).toBe(s.creepCount);
+    expect(s.towerType.length).toBe(s.towerCount);
+    expect(s.towerLevel.length).toBe(s.towerCount);
+    for (let i = 0; i < s.creepCount; i++) {
+      expect(s.creepHp01[i]).toBeGreaterThan(0);
+      expect(s.creepHp01[i]).toBeLessThanOrEqual(1);
+    }
+    // every packed creep must be on-track (no NaN coords from a wrapped negative dist)
+    for (let i = 0; i < s.creepCount * 2; i++) expect(Number.isFinite(s.creepXY[i])).toBe(true);
+    // the sim's raw creep count includes staged (dist<0) creeps; the snapshot excludes them
+    expect(s.creepCount).toBeLessThanOrEqual(sim.state.creeps.count);
+  });
 });
