@@ -39,8 +39,11 @@ describe("balance", () => {
     const capped = interest(1_000_000_000, 150, O);
     expect(capped).toBeLessThan(1_000_000_000 * 0.05);
   });
-  it("bounty scales with HP", () => {
+  it("bounty scales with the killed creep's own maxHp (Task 3: not the current wave)", () => {
     expect(bounty(10)).toBeGreaterThanOrEqual(1);
     expect(bounty(200)).toBeGreaterThan(bounty(10));
+    // A Hard creep (2x maxHp) pays ~2x a Normal one from the same maxHp base.
+    expect(bounty(200)).toBeGreaterThanOrEqual(2 * bounty(100) - 1);
+    expect(bounty(200)).toBeLessThanOrEqual(2 * bounty(100) + 1);
   });
 });

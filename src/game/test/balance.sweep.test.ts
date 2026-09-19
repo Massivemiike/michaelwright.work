@@ -2,24 +2,36 @@
 //
 // Task 12: balance acceptance / sweep harness. This is a MEASUREMENT task —
 // it empirically drives the sim with scripted strategies and asserts on the
-// ACTUAL observed behavior. Per controller ruling R12, the track/tile
-// geometry in content.ts is an INVENTED placeholder (the real visual layout
-// is Plan 2's job), so tower placement is computed on the fly via
-// inRangeTiles() instead of hardcoding specific tile indices — this
-// measures the balance MATH (interest cap, HP curve, bounty), not geometry
-// luck.
+// ACTUAL observed behavior. Tower placement is computed on the fly via
+// inRangeTiles() instead of hardcoding specific tile indices, so this file
+// survives geometry changes without hand-updating tile numbers.
 //
-// Plan-1 addendum (§5.4 tuning, 2026-09-18): the headless grid sweep
-// described in docs/superpowers/2026-09-18-circle-td-balance-tuning.md
-// retuned the defaults (START_BANK 125->250 in content.ts; GAMMA 400->20 in
-// balance.ts; ALPHA_BP unchanged at 200) so this strategy is actually
-// winnable-and-climbing instead of dying at wave 5. Those constants are
-// PROVISIONAL — see that doc's "Pending owner decision".
+// Plan-1 tuning (§5.4, 2026-09-18): a headless grid sweep on Plan 1's
+// placeholder geometry found START_BANK=250/GAMMA=20/ALPHA_BP=200 winnable
+// (reaching wave 78-81), documented in
+// docs/superpowers/2026-09-18-circle-td-balance-tuning.md.
 //
-// Same-day addendum: playing the tuned game to wave 78-81 with all 450
-// in-range tiles filled is real O(towers x creeps)-per-tick compute — it
-// made the DEFAULT `npm test` take several minutes, which is CI-flakiness
-// risk for no per-commit benefit. Split:
+// Real-geometry re-tune (Task 2+3, 2026-09-19): Plan 2 replaced that
+// placeholder with a real square-spiral track and flanking-only buildable
+// tiles (content.ts) — each tile now only covers a narrow stretch of a much
+// longer track, instead of the placeholder's uniform whole-board grid where
+// a tower could often reach many different points on the path at once. The
+// SAME START_BANK=250/GAMMA=20 that worked on the placeholder now traps the
+// economy at wave 5-9 on the real board. Separately, the bounty formula
+// changed from `bounty(wave)` to `bounty(killedCreep.maxHp)` (Task 3, fixes
+// a gold exploit and the old seed=4 underpayment). Re-sweeping on the real
+// geometry with the new bounty found START_BANK=125 (SOURCED, restored) +
+// GAMMA=5 (INVENTED) + ALPHA_BP=200 (unchanged) winnable-and-climbing again
+// — see docs/superpowers/2026-09-18-circle-td-balance-tuning.md's
+// "Real-geometry re-tune" section for the full sweep landscape. All
+// thresholds below are updated to the numbers actually observed on the new
+// board with these constants — honest measurements, not carried over from
+// the placeholder-geometry sweep.
+//
+// Same-day addendum (still current): playing the tuned game to gameOver
+// with every in-range tile filled is real O(towers x creeps)-per-tick
+// compute — it made the DEFAULT `npm test` take several minutes, which is
+// CI-flakiness risk for no per-commit benefit. Split:
 //
 //   - FAST (always on, part of `npm test`): a capped bot (40 towers, a
 //     realistic partial defense rather than every in-range tile) that
@@ -28,10 +40,9 @@
 //     "the game is winnable, not dying at wave 5" in a couple hundred
 //     milliseconds.
 //   - FULL (opt-in via `BALANCE_SWEEP=1 npm test`): the original uncapped,
-//     play-to-gameOver measurements across the sweep's full seed set,
-//     including the wave 78-81 floor and the seed=4 known-concern finding.
-//     This is the "scheduled CI job" the original Task 12 comment referred
-//     to for the grid sweep itself — same idea, applied to the expensive
+//     play-to-gameOver measurements across the sweep's full seed set. This
+//     is the "scheduled CI job" the original Task 12 comment referred to
+//     for the grid sweep itself — same idea, applied to the expensive
 //     acceptance measurements this file also grew.
 import { describe, it, expect } from "vitest";
 import { makeSim } from "@/game/titles/circle-td";
@@ -54,13 +65,10 @@ const DAMAGE_TOWER = 4;
 // first, falling through to cheaper ones. Costs/ids from content.ts's
 // TOWERS array (Fast=0, Air=1, Slow=2, Splash=3, Damage=4). A realistic
 // opening buys whatever it can afford immediately to start killing — with
-// START_BANK=250 that's two Splash towers (125 each) back-to-back, which
-// stays below the Damage tower's 260 cost so the opening never flips into
-// a single slow-cooldown Damage buy (docs/superpowers/2026-09-18-circle-td-balance-tuning.md
-// found that crossing that 260 threshold makes outcomes seed-chaotic: it
-// happens to rescue one bad seed while breaking a previously-fine one). Killing
-// creeps flows bounty income, which is the snowball this strategy is meant
-// to exercise.
+// START_BANK=125 that's a single Splash tower (125) to start, then whatever
+// the next few kills afford. Killing creeps flows bounty income (by the
+// killed creep's own maxHp as of Task 3), which is the snowball this
+// strategy is meant to exercise.
 const AFFORD_ORDER: ReadonlyArray<{ type: number; cost: number }> = [
   { type: 4, cost: TOWERS[4].cost }, // Damage 260
   { type: 3, cost: TOWERS[3].cost }, // Splash 125
@@ -116,9 +124,9 @@ interface ActiveDefenseResult {
 // killing on wave 1, which is what actually funds the climb to Damage.
 //
 // Plays all the way to gameOver (or the tick ceiling) with every in-range
-// tile available — this is the FULL, expensive measurement (all 450 tiles
-// eventually filled, ~45s per run once the economy escapes the wave-5
-// trap; see docs/superpowers/2026-09-18-circle-td-balance-tuning.md). Used only by the
+// tile available — this is the FULL, expensive measurement (all 223
+// in-range tiles eventually filled; see
+// docs/superpowers/2026-09-18-circle-td-balance-tuning.md). Used only by the
 // slowIt-gated tests below; the always-on fast guard uses
 // playCappedDefense instead.
 function playActiveDefense(seed: number): ActiveDefenseResult {
@@ -209,33 +217,42 @@ function playPureBanking(seed: number): BankingResult {
 }
 
 // --- FAST per-commit guard constants (empirical calibration, see
-// docs/superpowers/2026-09-18-circle-td-balance-tuning.md) ---
-// 40 towers is a realistic partial defense (vs. 450 in-range tiles, which
+// docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Real-geometry
+// re-tune") ---
+// 40 towers is a realistic partial defense (vs. 223 in-range tiles, which
 // only a play-to-gameOver run ever fully occupies) — cheap enough per tick
 // that even playing several of these to completion takes well under a
-// second. targetWave=15 is comfortably below the measured 21-23 natural
-// death wave for all four sweep seeds at this tower cap, so a healthy run
-// stops via "reached the target" every time, not "ran out of luck at the
-// ceiling". FLOOR=10 leaves margin below the target itself (not just below
-// the natural-death wave) so a run that's a little slower to snowball
-// still passes without the assertion being fragile to minor changes.
+// second. Re-measured on the real geometry with START_BANK=125/GAMMA=5:
+// this cap's bot played to death naturally dies at wave 19-21 across the
+// guard's own two seeds (was 21-23 on Plan 1's placeholder geometry — close
+// enough that the existing targetWave/floor below didn't need to change).
+// targetWave=15 stays comfortably below that natural death wave, so a
+// healthy run stops via "reached the target" every time, not "ran out of
+// luck at the ceiling". FLOOR=10 leaves margin below the target itself (not
+// just below the natural-death wave) so a run that's a little slower to
+// snowball still passes without the assertion being fragile to minor
+// changes.
 const FAST_MAX_TOWERS = 40;
 const FAST_TARGET_WAVE = 15;
 const FAST_TICK_CEILING = 50_000; // safety valve; actual runs finish by tick ~8,400
 const FAST_WAVE_FLOOR = 10;
 
 describe("balance acceptance / sweep harness (spec §5.4)", () => {
-  it("computes a non-empty set of Damage-tower-in-range tiles (placeholder geometry sanity)", () => {
+  it("computes a non-empty set of Damage-tower-in-range tiles (real geometry sanity)", () => {
     const tiles = inRangeTiles();
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] inRangeTiles(): ${tiles.length} of ${TILE_COUNT} tiles in range`);
-    // OBSERVED: currently ALL 450 tiles come back in range (the Damage
-    // tower's 125px range plus the spiral track's footprint covers the
-    // whole placeholder tile grid). That's a property of the INVENTED
-    // content.ts geometry (content.ts's own header disclaims pixel fidelity
-    // to Plan 2's real layout), not a harness bug — noted since this file's
-    // earlier revisions, since it means this sanity check can't yet fail on
-    // a geometry regression that leaves *some* tiles in range.
+    // OBSERVED on the real spiral geometry: all 223 tiles come back in
+    // range of the Damage tower (125px) from SOME point on the track. This
+    // is expected and correct-by-construction now, not a geometry-fidelity
+    // artifact the way it was on Plan 1's placeholder grid: every tile in
+    // content.ts's TILES is generated as a cell flanking some path segment
+    // at a fixed ~1 tile-width offset, which is always well inside 125px —
+    // so "in range of the path somewhere" is true by definition. What the
+    // real geometry actually bounds (unlike the placeholder) is whether a
+    // single tower can reach MULTIPLE distant sections of the track at
+    // once, which this particular sanity check doesn't measure — see
+    // content.test.ts's flanking/clearance tests for that property instead.
     expect(tiles.length).toBeGreaterThan(0);
   });
 
@@ -285,11 +302,12 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   }, 180_000);
 
   slowIt("FULL: active defense reaches a meaningful wave (measured floor across seeds, see docs/superpowers/2026-09-18-circle-td-balance-tuning.md)", () => {
-    // Seeds match the §5.4 sweep's own tested set exactly
-    // (docs/superpowers/2026-09-18-circle-td-balance-tuning.md, "Method"),
-    // so this assertion is pinned to numbers the sweep actually
-    // produced, not a superset invented after the fact.
-    const seeds = [20260918, 1, 2, 3];
+    // Seeds match the §5.4 sweep's own tested set PLUS seed=4 — folded in
+    // here because the Task 3 bounty-by-maxHp fix resolved seed=4's old
+    // "known concern" (see the test below): it now behaves like every
+    // other seed, so it belongs in the main measured set instead of a
+    // separate non-asserting observation.
+    const seeds = [20260918, 1, 2, 3, 4];
     const results = seeds.map((seed) => ({ seed, ...playActiveDefense(seed) }));
     for (const r of results) {
       // eslint-disable-next-line no-console
@@ -301,40 +319,38 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     const minWave = Math.min(...results.map((r) => r.wave));
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] min wave across seeds: ${minWave}`);
-    // OBSERVED with the tuned defaults (START_BANK=250, GAMMA=20,
-    // ALPHA_BP=200 unchanged — see docs/superpowers/2026-09-18-circle-td-balance-tuning.md):
-    // all four seeds now
-    // reach wave 78-81 (all 450 in-range tiles eventually filled), a
-    // ~16x improvement over the pre-tuning floor of 5. Pinned to the
-    // measured floor (78), not padded.
-    expect(minWave).toBeGreaterThanOrEqual(78);
-    // Four full runs to wave ~78-81 each (~45s apiece once the economy
-    // escapes the wave-5 trap) comfortably exceed vitest's 5000ms default.
+    // OBSERVED on the real spiral geometry with START_BANK=125 (SOURCED,
+    // restored) + GAMMA=5 (re-tuned) + ALPHA_BP=200 (unchanged) — see
+    // docs/superpowers/2026-09-18-circle-td-balance-tuning.md's
+    // "Real-geometry re-tune": all five seeds (including the
+    // previously-concerning seed=4) reach wave 54-58 (all 223 in-range
+    // tiles eventually filled). The real geometry's narrower per-tower path
+    // coverage makes this a lower floor than the placeholder geometry's 78
+    // — a real, honest measurement of the new board, not the old number
+    // carried over. Pinned to a floor (50) below the measured minimum (54),
+    // not padded up to it.
+    expect(minWave).toBeGreaterThanOrEqual(50);
+    // Five full runs to wave ~54-58 each comfortably exceed vitest's
+    // 5000ms default.
   }, 300_000);
 
-  slowIt("FULL: KNOWN CONCERN: seed=4 does not escape under these defaults (see docs/superpowers/2026-09-18-circle-td-balance-tuning.md)", () => {
-    // Not part of the §5.4 sweep's own seed set (only seeds
-    // [20260918,1,2,3] were swept per the task brief) — logged as an
-    // explicit, non-blocking observation rather than silently omitted.
-    // seed=4 stalls at wave 7 (only 11 towers ever bought) while the four
-    // swept seeds reach wave 78+. This is NOT cleanly explained by a single
-    // cause: seed=4 does draw an early CREEP_HARD wave (wave 2), which
-    // doubles spawned HP via typeMul() without a matching bounty increase
-    // (bounty() uses the un-multiplied hp(wave)) — but seed=2 draws the
-    // *same* offsetHard (HARD at wave 2 too, combined with FAST) and still
-    // escapes fine, so that alone isn't the full story; some other
-    // seed-derived factor (spawn stagger / targeting order interacting
-    // with the fixed tile-fill sequence) also matters and wasn't fully
-    // isolated. Separately CONFIRMED: raising START_BANK to 400 rescues
-    // seed=4 (wave 82) but *breaks* seed=3 (wave 5) by crossing the 260
-    // Damage-tower-cost threshold and flipping the opening buy — so this
-    // "best affordable" bot is genuinely chaotic near the escape
-    // threshold, not a simple monotonic economy dial. This test only
-    // documents the number; it does not assert a floor.
+  slowIt("FULL: seed=4's old bounty-exploit concern is resolved by the by-maxHp bounty fix", () => {
+    // Historical context: under the OLD bounty(wave, gamma) formula, seed=4
+    // stalled at wave 7 on the placeholder geometry while the swept seeds
+    // reached wave 78+ — an unexplained outlier attributed at the time to
+    // typeMul()'s CREEP_HARD doubling not being reflected in bounty (which
+    // only looked at the un-multiplied hp(wave)). Task 3 changed bounty to
+    // pay by the killed creep's own maxHp (which DOES include typeMul), and
+    // that alone fixed seed=4: it's now folded into the main "meaningful
+    // wave" test above and behaves like every other seed (wave 57 on the
+    // real geometry, no longer a documented non-asserting outlier). This
+    // test exists only to record that the old concern is gone, not to
+    // re-litigate the mechanism.
     const r = playActiveDefense(4);
     // eslint-disable-next-line no-console
-    console.log(`[balance.sweep] KNOWN CONCERN seed=4: wave=${r.wave} tilesUsed=${r.tilesUsed}`);
-    expect(r.hitCeiling).toBe(false); // still terminates; just early
+    console.log(`[balance.sweep] seed=4 (formerly KNOWN CONCERN): wave=${r.wave} tilesUsed=${r.tilesUsed}`);
+    expect(r.hitCeiling).toBe(false);
+    expect(r.wave).toBeGreaterThanOrEqual(50);
   }, 60_000);
 
   slowIt("FULL: does not allow trivial infinite survival (terminates by gameOver, not the tick ceiling)", () => {
@@ -343,12 +359,13 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   }, 120_000);
 
   slowIt("FULL: active defense outlasts pure banking", () => {
-    // Measured with the tuned defaults: active defense reaches wave 81
-    // (score ~4600, all 450 in-range tiles eventually filled — see the
-    // "meaningful wave" test above) vs. wave 4 for pure banking (which buys
-    // nothing and kills nothing, so population-cap timing is the same
-    // regardless of the economy constants). A ~20x margin, not a marginal
-    // one — see docs/superpowers/2026-09-18-circle-td-balance-tuning.md.
+    // Measured on the real geometry with the re-tuned defaults: active
+    // defense reaches wave ~54-58 (score ~3000, all 223 in-range tiles
+    // eventually filled — see the "meaningful wave" test above) vs. wave 4
+    // for pure banking (which buys nothing and kills nothing, so
+    // population-cap timing is the same regardless of the economy
+    // constants). A ~13-14x margin, not a marginal one — see
+    // docs/superpowers/2026-09-18-circle-td-balance-tuning.md.
     const seed = 20260918;
     const active = playActiveDefense(seed);
     const banking = playPureBanking(seed);

@@ -2,8 +2,8 @@ import { nextRange, type Rng } from "@/game/sim/math/rng";
 import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
 import { WAVE_SIZE } from "./content";
 
-export const ALPHA_BP = 200; // INVENTED — interest-cap coefficient in basis points (200 = 2% = 0.02). Re-confirmed unchanged by the §5.4 sweep 2026-09-18 (see docs/superpowers/2026-09-18-circle-td-balance-tuning.md): varying alphaBp alone did not move the outcome once startBank/gamma escaped the wave-5 trap.
-export const GAMMA = 20; // INVENTED — tuned by §5.4 sweep 2026-09-18 (was 400; see docs/superpowers/2026-09-18-circle-td-balance-tuning.md)
+export const ALPHA_BP = 200; // INVENTED — interest-cap coefficient in basis points (200 = 2% = 0.02). Re-confirmed unchanged by the real-geometry re-tune (2026-09-19; see docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Real-geometry re-tune"): varying alphaBp alone did not move the outcome once startBank/gamma escaped the early wave-5 trap.
+export const GAMMA = 5; // INVENTED — re-tuned 2026-09-19 for the real spiral geometry (content.ts) + the by-maxHp bounty fix together (was 20, tuned for Plan 1's placeholder geometry + the old by-wave bounty; see docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Real-geometry re-tune"). The real geometry's flanking tiles give each tower much narrower path coverage than the placeholder's uniform grid did, so the same GAMMA that worked before now traps the economy at wave 5-9; GAMMA=5 escapes it and climbs to wave ~50-58 across seeds [20260918,1,2,3,4].
 export const INTEREST_RATE_PCT = 5; // SOURCED
 
 export const hp = (wave: number): number =>
@@ -46,5 +46,13 @@ export const interest = (bank: number, wave: number, o: Offsets, alphaBp: number
   return Math.min(uncapped, cap);
 };
 
-export const bounty = (wave: number, gamma: number = GAMMA): number =>
-  Math.max(1, Math.floor(hp(wave) / gamma)); // spec §5.2, INVENTED γ
+// Bounty pays by the KILLED CREEP'S OWN maxHp, not the current wave (Task 3
+// fix, final-review finding #6). The old bounty(wave,gamma) = hp(wave)/gamma
+// let killing an old, weak, already-spawned creep late in the game pay a
+// huge current-wave bonus (a gold exploit) and underpaid CREEP_HARD (2x
+// maxHp via typeMul) kills, since hp(wave) never accounted for typeMul.
+// Paying by the creep's own maxHp fixes both: a Hard creep now pays ~2x a
+// Normal one from the same wave, and re-killing old creeps late can never
+// pay more than their own (small) maxHp allows.
+export const bounty = (maxHp: number, gamma: number = GAMMA): number =>
+  Math.max(1, Math.floor(maxHp / gamma)); // spec §5.2, INVENTED γ

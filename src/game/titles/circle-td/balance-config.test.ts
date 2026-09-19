@@ -30,17 +30,19 @@ describe("balance overrides (SimConfig.balance)", () => {
     expect(sim.state.alphaBp).toBe(50);
   });
 
-  it("a smaller gamma raises bounty for the same wave", () => {
+  it("a smaller gamma raises bounty for the same killed creep's maxHp", () => {
     // Compares two explicit gamma values rather than the module default vs
     // a hardcoded override — the default itself is a tuned INVENTED value
     // (see balance.ts) that can be retuned again, and pinning this test to
     // "bigger than whatever GAMMA currently is" would silently invert
-    // (bounty(wave, 50) was a smaller gamma than the old default 400, but
-    // is now LARGER than the tuned default 20 — exactly what broke here
-    // when §5.4's sweep changed GAMMA). Testing bounty()'s own monotonic
-    // relationship directly is what should never need re-tuning.
-    const wave = 20;
-    expect(bounty(wave, 10)).toBeGreaterThan(bounty(wave, 100));
+    // (bounty(maxHp, 50) was a smaller gamma than an old default of 400,
+    // but could be LARGER than a later-tuned default — exactly what broke
+    // here once before when a sweep changed GAMMA). Testing bounty()'s own
+    // monotonic relationship directly is what should never need re-tuning.
+    // (Task 3: bounty's first argument is the killed creep's own maxHp,
+    // not the current wave — kept as a plain number here either way.)
+    const maxHp = 300;
+    expect(bounty(maxHp, 10)).toBeGreaterThan(bounty(maxHp, 100));
   });
 
   it("a smaller alphaBp lowers the interest cap for the same bank/wave", () => {

@@ -102,9 +102,8 @@ describe("spawn + movement", () => {
 });
 
 describe("targeting, damage, hitscan fire", () => {
-  it("a Damage tower (type 4) in range kills a low-hp creep, awarding bank + score", () => {
+  it("a Damage tower (type 4) in range kills a low-hp creep, awarding bank + score by the creep's own maxHp", () => {
     const s = makeTestState(1);
-    s.wave = 3; // arbitrary small wave so bounty() is well-defined
     const dist = 0;
     const p = posAt(TRACK.outer, dist);
     addCreep(s.creeps, { id: 1, dist, hp: 5, maxHp: 5, speed: fromInt(1), flags: 0, entrance: 0 });
@@ -123,8 +122,48 @@ describe("targeting, damage, hitscan fire", () => {
     expect(hits.length).toBe(1);
     expect(hits[0]).toEqual({ towerType: 4, tile, creepId: 1, killed: true });
     expect(s.creeps.count).toBe(countBefore - 1);
-    expect(s.bank).toBe(bankBefore + bounty(s.wave));
+    // Task 3: bounty pays by the killed creep's own maxHp (5), not s.wave —
+    // s.wave is left at its default (0) here specifically to prove that.
+    expect(s.wave).toBe(0);
+    expect(s.bank).toBe(bankBefore + bounty(5));
     expect(s.score).toBe(scoreBefore + 2);
+  });
+
+  it("bounty pays the same for a kill regardless of the current wave, and ~2x for a Hard (2x maxHp) creep", () => {
+    const s1 = makeTestState(10);
+    s1.wave = 1;
+    const p1 = posAt(TRACK.outer, 0);
+    addCreep(s1.creeps, { id: 1, dist: 0, hp: 100, maxHp: 100, speed: fromInt(1), flags: 0, entrance: 0 });
+    const tile1 = findInRangeTile(p1, towerRangeSq(4, 0));
+    addTower(s1.towers, { type: 4, tile: tile1, level: 9 }); // one-shot regardless of wave
+    const bank1Before = s1.bank;
+    fireTowers(s1);
+    const gained1 = s1.bank - bank1Before;
+
+    const s2 = makeTestState(10);
+    s2.wave = 500; // a huge current wave must not change the payout
+    const p2 = posAt(TRACK.outer, 0);
+    addCreep(s2.creeps, { id: 1, dist: 0, hp: 100, maxHp: 100, speed: fromInt(1), flags: 0, entrance: 0 });
+    const tile2 = findInRangeTile(p2, towerRangeSq(4, 0));
+    addTower(s2.towers, { type: 4, tile: tile2, level: 9 });
+    const bank2Before = s2.bank;
+    fireTowers(s2);
+    const gained2 = s2.bank - bank2Before;
+
+    expect(gained2).toBe(gained1);
+    expect(gained1).toBe(bounty(100));
+
+    // A Hard creep (2x maxHp of an otherwise-identical Normal one) pays ~2x.
+    const s3 = makeTestState(10);
+    const p3 = posAt(TRACK.outer, 0);
+    addCreep(s3.creeps, { id: 1, dist: 0, hp: 200, maxHp: 200, speed: fromInt(1), flags: 0, entrance: 0 });
+    const tile3 = findInRangeTile(p3, towerRangeSq(4, 0));
+    addTower(s3.towers, { type: 4, tile: tile3, level: 9 });
+    const bank3Before = s3.bank;
+    fireTowers(s3);
+    const gained3 = s3.bank - bank3Before;
+    expect(gained3).toBe(bounty(200));
+    expect(gained3).toBeCloseTo(gained1 * 2, -1);
   });
 
   it("does not one-shot a high-hp creep, and damages it by exactly towerDamage()", () => {
