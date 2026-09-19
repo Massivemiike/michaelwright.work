@@ -17,17 +17,51 @@
 // SUPPOSED to reference @/game/**), not a hole in the guard.
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import sitemap from "@/app/sitemap";
 import { SITE_URL } from "@/lib/metadata";
 import { games } from "@/data/games.data";
 
-// Matches a static `from "@/game/..."` / `from "@/game"`, a dynamic
-// `import("@/game/...")`, or a `require("@/game/...")` — covers both
-// import forms, since even a stray dynamic import outside PlayGate.tsx
-// would still make some non-game page fire an extra chunk request no
-// visitor asked for.
-const GAME_IMPORT = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']@\/game(?:\/|["'])/;
+// Every quoted specifier following a static `from`, a dynamic
+// `import(`, or a `require(` — i.e. every module reference a scanned
+// file makes, not just ones already shaped like "@/game/...". Each hit
+// is then classified by isGameSpecifier below: an alias-only regex (the
+// original version of this guard) would miss a RELATIVE path that
+// reaches the exact same files — e.g. `from "../../../game/titles/
+// circle-td"` from three levels down in src/app/projects/** resolves
+// into src/game/ just as surely as the @/game alias does, and would
+// leak the engine into a shared/marketing chunk just as badly.
+const IMPORT_SPECIFIER = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
+
+// True if `specifier`, written inside `fromFile`, resolves into
+// src/game/** — either directly via the `@/game` alias, or via a
+// relative specifier (`./`, `../`) that lands there once resolved
+// against the importing file's own directory. Bare package specifiers
+// ("react", "next/dynamic") and every OTHER "@/..." alias (e.g.
+// "@/data/games.data", which merely shares the substring "game") are
+// never flagged.
+function isGameSpecifier(specifier: string, fromFile: string): boolean {
+  if (specifier === "@/game" || specifier.startsWith("@/game/")) return true;
+  if (specifier.startsWith(".")) {
+    // `resolve` normalizes ".."/"." segments AND the separator style, so
+    // this works whether `fromFile`/`specifier` use "/" or (on Windows)
+    // "\\" — then re-normalized to "/" for a single substring check.
+    const resolved = resolve(dirname(fromFile), specifier).split(sep).join("/");
+    return resolved.includes("/src/game/") || resolved.endsWith("/src/game");
+  }
+  return false;
+}
+
+// Every @/game-or-relative-into-src/game specifier a file references —
+// empty when the file makes none.
+function findGameImports(src: string, fromFile: string): string[] {
+  const hits: string[] = [];
+  for (const match of src.matchAll(IMPORT_SPECIFIER)) {
+    const specifier = match[1];
+    if (isGameSpecifier(specifier, fromFile)) hits.push(specifier);
+  }
+  return hits;
+}
 
 function walk(path: string): string[] {
   const stat = statSync(path);
@@ -77,32 +111,55 @@ const GUARDED_ROOTS = [
   "src/components/layout",
 ];
 
-describe("lazy boundary: @/game/** never leaks into marketing chrome", () => {
-  it("no guarded file imports from @/game/**", () => {
+describe("lazy boundary: src/game/** never leaks into marketing chrome", () => {
+  it("no guarded file imports from src/game/**, by alias or by relative path", () => {
     const violations: string[] = [];
     for (const file of collectFiles(GUARDED_ROOTS)) {
       const src = readFileSync(file, "utf8");
-      if (GAME_IMPORT.test(src)) violations.push(file);
+      if (findGameImports(src, file).length > 0) violations.push(file);
     }
     expect(violations).toEqual([]);
   });
 
-  it("actually detects a real import shape (guard is not vacuous)", () => {
+  it("actually detects a real @/game alias import (guard is not vacuous)", () => {
+    const fromFile = "src/app/layout.tsx";
     const staticImport = `import { makeSim } from "@/game/titles/circle-td";`;
     const dynamicImport = `const load = () => import("@/game/titles/circle-td");`;
     const bareRequire = `const m = require("@/game/runtime/loop");`;
-    expect(GAME_IMPORT.test(staticImport)).toBe(true);
-    expect(GAME_IMPORT.test(dynamicImport)).toBe(true);
-    expect(GAME_IMPORT.test(bareRequire)).toBe(true);
+    expect(findGameImports(staticImport, fromFile)).toEqual(["@/game/titles/circle-td"]);
+    expect(findGameImports(dynamicImport, fromFile)).toEqual(["@/game/titles/circle-td"]);
+    expect(findGameImports(bareRequire, fromFile)).toEqual(["@/game/runtime/loop"]);
   });
 
-  it("does not false-positive on an unrelated '@/game...'-shaped string or a comment", () => {
+  it("also catches a RELATIVE import that resolves into src/game/** — not just the @/game alias", () => {
+    // Three levels down from src/game/ itself (mirrors a real guarded
+    // file such as src/app/projects/trnscode/page.tsx), reaching the sim
+    // via a relative path instead of the alias. This is exactly the leak
+    // an alias-only regex would miss entirely — the bug this test fixes.
+    const fromFile = "src/app/projects/trnscode/page.tsx";
+    const relativeImport = `import { makeSim } from "../../../game/titles/circle-td";`;
+    expect(findGameImports(relativeImport, fromFile)).toEqual([
+      "../../../game/titles/circle-td",
+    ]);
+
+    // A shallower relative path from directly inside src/app/ (one level
+    // up from src/, i.e. "../game/...") also resolves into src/game/.
+    const fromShallowFile = "src/app/page.tsx";
+    const shallowRelative = `import type { SimConfig } from "../game/titles/circle-td";`;
+    expect(findGameImports(shallowRelative, fromShallowFile)).toEqual([
+      "../game/titles/circle-td",
+    ]);
+  });
+
+  it("does not false-positive on an unrelated '@/game...'/relative-looking specifier, or a bare comment", () => {
+    const fromFile = "src/components/layout/Nav.tsx";
     const ok = [
       `// mentions @/game/foo in a comment only, never imported`,
       `const gamePlanPath = "@/game-plan/foo";`, // "@/game-plan", not "@/game/"
       `import { Game } from "@/data/games.data";`, // "@/data", not "@/game"
+      `import { helper } from "../../lib/utils";`, // relative, but resolves outside src/game/
     ].join("\n");
-    expect(GAME_IMPORT.test(ok)).toBe(false);
+    expect(findGameImports(ok, fromFile)).toEqual([]);
   });
 });
 

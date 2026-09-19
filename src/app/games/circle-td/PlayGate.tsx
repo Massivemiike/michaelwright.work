@@ -26,7 +26,7 @@
 // handleFreePlay flips `session` from null — the same "Load on demand,
 // only when/if the condition is met" pattern shown in that doc's own
 // `{showMore && <ComponentB />}` example.
-import { useState, type CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { dailySeed, randomSeed, utcDateString } from "@/lib/dailySeed";
@@ -108,6 +108,23 @@ function buttonStyle(variant: "primary" | "secondary"): CSSProperties {
 
 export default function PlayGate() {
   const [session, setSession] = useState<Session | null>(null);
+  // This route is statically prerendered, so a value computed at RENDER
+  // time (server AND the first client render, before hydration) would
+  // bake the build's own date into the HTML — stale after the next
+  // deploy, and a hydration mismatch the moment the real clock disagrees
+  // (e.g. a visitor loading the page just after UTC midnight, after this
+  // page was prerendered the day before). Computing it inside an effect
+  // instead means the server and the FIRST client render both show the
+  // neutral no-date label (`today === null`), and only a POST-hydration
+  // client-only update fills in the real date — never a text mismatch
+  // React has to complain about. The gameplay seed (`dailySeed()`,
+  // called fresh at click time in the button handlers below) never had
+  // this problem — only this display label did.
+  const [today, setToday] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToday(utcDateString());
+  }, []);
 
   if (session) {
     return (
@@ -116,8 +133,6 @@ export default function PlayGate() {
       </div>
     );
   }
-
-  const today = utcDateString();
 
   return (
     <div style={{ background: "rgba(15,15,21,0.9)", border: "1px solid #1F1F2E", borderRadius: 12, minHeight: 360, display: "flex", alignItems: "center" }}>
@@ -147,7 +162,7 @@ export default function PlayGate() {
             onClick={() => setSession({ seed: dailySeed(), mode: "daily" })}
             style={buttonStyle("primary")}
           >
-            Play today&rsquo;s run — {today}
+            Play today&rsquo;s run{today ? ` — ${today}` : ""}
           </button>
           <button
             type="button"
