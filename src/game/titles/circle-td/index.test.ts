@@ -23,7 +23,7 @@ describe("Circle TD sim assembly", () => {
     const bank0 = sim.state.bank;
     // advance one wave interval
     for (let i = 0; i < 601; i++) sim.tick();
-    expect(sim.state.bank).toBeGreaterThan(bank0); // 5% of 125 on wave 1
+    expect(sim.state.bank).toBeGreaterThan(bank0); // 5% of START_BANK on wave 1
   });
 
   it("snapshot returns a RenderSnapshot with matching array lengths and finite coordinates", () => {

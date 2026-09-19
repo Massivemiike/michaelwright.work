@@ -47,7 +47,7 @@ export const TOWERS: readonly TowerDef[] = [
 
 export const WAVE_SIZE = 30;             // SOURCED (15 per entrance × 2)
 export const WAVE_INTERVAL_TICKS = 600;  // 20 s × 30 Hz  (interval SOURCED)
-export const START_BANK = 125;           // SOURCED
+export const START_BANK = 250;           // INVENTED — tuned by §5.4 sweep 2026-09-18 (was 125 SOURCED; see task-13b-report.md)
 export const ALIVE_CAP_NORMAL = 100;     // SOURCED
 export const SELL_REFUND_PCT = 75;       // SOURCED
 

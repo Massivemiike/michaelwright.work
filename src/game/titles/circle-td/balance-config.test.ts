@@ -31,10 +31,16 @@ describe("balance overrides (SimConfig.balance)", () => {
   });
 
   it("a smaller gamma raises bounty for the same wave", () => {
+    // Compares two explicit gamma values rather than the module default vs
+    // a hardcoded override — the default itself is a tuned INVENTED value
+    // (see balance.ts) that can be retuned again, and pinning this test to
+    // "bigger than whatever GAMMA currently is" would silently invert
+    // (bounty(wave, 50) was a smaller gamma than the old default 400, but
+    // is now LARGER than the tuned default 20 — exactly what broke here
+    // when §5.4's sweep changed GAMMA). Testing bounty()'s own monotonic
+    // relationship directly is what should never need re-tuning.
     const wave = 20;
-    const defaultBounty = bounty(wave);
-    const overriddenBounty = bounty(wave, 50);
-    expect(overriddenBounty).toBeGreaterThan(defaultBounty);
+    expect(bounty(wave, 10)).toBeGreaterThan(bounty(wave, 100));
   });
 
   it("a smaller alphaBp lowers the interest cap for the same bank/wave", () => {

@@ -2,8 +2,8 @@ import { nextRange, type Rng } from "@/game/sim/math/rng";
 import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
 import { WAVE_SIZE } from "./content";
 
-export const ALPHA_BP = 200; // INVENTED: interest-cap coefficient in basis points (200 = 2% = 0.02). Tuned in Task 12.
-export const GAMMA = 400; // INVENTED
+export const ALPHA_BP = 200; // INVENTED — interest-cap coefficient in basis points (200 = 2% = 0.02). Re-confirmed unchanged by the §5.4 sweep 2026-09-18 (see task-13b-report.md): varying alphaBp alone did not move the outcome once startBank/gamma escaped the wave-5 trap.
+export const GAMMA = 20; // INVENTED — tuned by §5.4 sweep 2026-09-18 (was 400; see task-13b-report.md)
 export const INTEREST_RATE_PCT = 5; // SOURCED
 
 export const hp = (wave: number): number =>
