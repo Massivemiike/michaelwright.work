@@ -44,6 +44,16 @@ export interface Renderer {
   // whatever dpr it's given).
   resize(cssW: number, cssH: number, dpr: number): void;
   frame(prev: RenderSnapshot, curr: RenderSnapshot, alpha: number, hits: HitEvent[]): void;
+  // Inverse of the world->screen fit transform resize()/frame() establish:
+  // maps a pointer/mouse event's viewport-space clientX/clientY back to the
+  // same world-space (stage-px) coordinates RenderSnapshot's *XY arrays and
+  // content.ts's geometry already live in. Task 6's input layer (
+  // src/game/runtime/input/pointer.ts) feeds the result straight into
+  // tileAtWorld for pointer -> tile hit-testing. `canvas` is passed
+  // explicitly rather than assumed to be whatever element `init()` saw, so
+  // this stays a pure function of its arguments plus whatever transform
+  // state the last resize() call computed.
+  screenToWorld(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number };
   destroy(): void;
   readonly caps: RendererCaps;
 }

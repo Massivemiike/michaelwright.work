@@ -163,6 +163,15 @@ export class Canvas2DRenderer implements Renderer {
   // interface. `null` (the default) draws no range ring at all.
   private highlightTowerIndex: number | null = null;
 
+  // Task 6: the hovered/targeted build tile (or -1) and which tower type
+  // would be placed there (or -1 when nothing is armed, or when an
+  // existing tower is selected instead — see highlightTowerIndex above for
+  // that case, which takes priority in practice since GameClient only sets
+  // one of the two at a time). Drawn as a translucent ghost + range ring in
+  // drawHighlight below.
+  private highlightTile: number = -1;
+  private highlightTowerType: number = -1;
+
   async init(canvas: HTMLCanvasElement): Promise<void> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas2DRenderer: 2D canvas context unavailable");
@@ -201,6 +210,35 @@ export class Canvas2DRenderer implements Renderer {
     this.highlightTowerIndex = index;
   }
 
+  // Task 6's other extra: the placement ghost/range-preview at a hovered or
+  // targeted (not-yet-built) tile. `tile: -1` clears it; `towerType: -1`
+  // draws just a plain tile marker (hovering with nothing armed to place).
+  // Kept off the shared Renderer interface for the same reason as
+  // setHighlightTower above.
+  setHighlight(tile: number, towerType: number): void {
+    this.highlightTile = tile;
+    this.highlightTowerType = towerType;
+  }
+
+  // Inverse of resize()'s world->device-px transform. rect.* is CSS px;
+  // canvas.width/height is the device-pixel backing store resize() sized —
+  // dividing by rect.width/height and multiplying by clientX/Y's
+  // canvas-relative offset undoes both the dpr scale-up AND any CSS
+  // stretching of the element beyond its backing store, exactly reversing
+  // the two steps frame()'s ctx.setTransform(scale, 0, 0, scale, offsetX,
+  // offsetY) plus the browser's own canvas-to-CSS-box stretch apply when
+  // going the other direction.
+  screenToWorld(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    const { scale, offsetX, offsetY } = this.transform;
+    if (scale <= 0 || rect.width <= 0 || rect.height <= 0) {
+      return { x: 0, y: 0 };
+    }
+    const deviceX = (clientX - rect.left) * (canvas.width / rect.width);
+    const deviceY = (clientY - rect.top) * (canvas.height / rect.height);
+    return { x: (deviceX - offsetX) / scale, y: (deviceY - offsetY) / scale };
+  }
+
   frame(prev: RenderSnapshot, curr: RenderSnapshot, alpha: number, hits: HitEvent[]): void {
     const ctx = this.ctx;
     const canvas = this.canvas;
@@ -223,6 +261,7 @@ export class Canvas2DRenderer implements Renderer {
     this.drawTrack(ctx);
     this.drawTiles(ctx);
     this.drawTowers(ctx, curr);
+    this.drawHighlight(ctx);
     this.drawCreeps(ctx, prev, curr, alpha);
     this.drawHits(ctx);
 
@@ -331,6 +370,33 @@ export class Canvas2DRenderer implements Renderer {
     }
   }
 
+  // --- placement ghost / hover marker (Task 6) ---
+
+  private drawHighlight(ctx: CanvasRenderingContext2D): void {
+    const tile = this.highlightTile;
+    if (tile < 0 || tile * 2 + 1 >= this.tilesPx.length) return;
+    const x = this.tilesPx[tile * 2];
+    const y = this.tilesPx[tile * 2 + 1];
+    const type = this.highlightTowerType;
+    if (type < 0) {
+      // Hovered/targeted tile with no tower armed — a plain marker square,
+      // no ghost shape or range preview to draw.
+      const half = TILE_SIZE * 0.42;
+      ctx.strokeStyle = rgbaOf(this.palette.accentRgb, 0.5);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+      return;
+    }
+    // A would-be-placed tower always previews at level 0 (nothing to place
+    // above L0), reusing the exact shape/range-ring drawing an actually
+    // placed L0 tower would get, just translucent.
+    this.drawRangeRing(ctx, x, y, type, 0);
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    this.drawTowerShape(ctx, x, y, type, 0);
+    ctx.restore();
+  }
+
   // --- creeps ---
 
   private drawCreeps(ctx: CanvasRenderingContext2D, prev: RenderSnapshot, curr: RenderSnapshot, alpha: number): void {
@@ -379,11 +445,13 @@ export class Canvas2DRenderer implements Renderer {
 
   // --- hit flashes ---
   //
-  // `hits` arrives fresh each frame() call (the sim's hit feed — Task 6 —
-  // reports only newly-occurred hits, it does not replay old ones), so this
+  // `hits` arrives fresh each frame() call (a future sim hit feed — still
+  // unbuilt; Task 6 turned out to be pointer input/recording, not this —
+  // would report only newly-occurred hits, not replay old ones), so this
   // renderer keeps its own short-lived list and ages it by real elapsed
   // wall-clock time between frame() calls. That's a rendering-only concern
-  // (how a burst fades), not gameplay state.
+  // (how a burst fades), not gameplay state. GameClient still passes
+  // NO_HITS every frame (Task 5) — nothing produces a real HitEvent yet.
 
   private advanceHits(incoming: HitEvent[]): void {
     const now = nowMs();
