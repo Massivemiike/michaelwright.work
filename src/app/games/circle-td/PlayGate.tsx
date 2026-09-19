@@ -75,7 +75,14 @@ function frameStyle(): CSSProperties {
     borderRadius: 12,
     overflow: "hidden",
     border: "1px solid #1F1F2E",
-    background: "#08080C",
+    // Draw-only visual polish pass (2026-09-19): a subtle radial lift plus
+    // an inset accent hairline and outer drop shadow so the canvas's own
+    // "lit stage" backdrop (Canvas2DRenderer.drawBackdrop) reads as sitting
+    // inside a housing rather than a flat void even before the game's
+    // canvas paints its first frame (the loading/gate states above use
+    // this same frame). Still dark-brand: no new hue, just depth.
+    background: "radial-gradient(120% 120% at 50% 32%, #16161F 0%, #0F0F15 45%, #08080C 100%)",
+    boxShadow: "inset 0 0 0 1px rgba(255,59,47,0.05), 0 30px 80px -40px rgba(0,0,0,0.85)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
