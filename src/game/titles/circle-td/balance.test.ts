@@ -3,6 +3,7 @@ import {
   hp,
   interest,
   bounty,
+  BOUNTY_CAP,
   waveFlags,
   deriveOffsets,
   type Offsets,
@@ -39,11 +40,22 @@ describe("balance", () => {
     const capped = interest(1_000_000_000, 150, O);
     expect(capped).toBeLessThan(1_000_000_000 * 0.05);
   });
-  it("bounty scales with the killed creep's own maxHp (Task 3: not the current wave)", () => {
+  it("bounty scales with the killed creep's own maxHp (Task 3), flattened by BOUNTY_CAP", () => {
     expect(bounty(10)).toBeGreaterThanOrEqual(1);
     expect(bounty(200)).toBeGreaterThan(bounty(10));
-    // A Hard creep (2x maxHp) pays ~2x a Normal one from the same maxHp base.
-    expect(bounty(200)).toBeGreaterThanOrEqual(2 * bounty(100) - 1);
-    expect(bounty(200)).toBeLessThanOrEqual(2 * bounty(100) + 1);
+    // In the UNCAPPED region (small maxHp, floor(maxHp/5) below BOUNTY_CAP),
+    // the by-maxHp property still holds: a creep with 2x maxHp pays ~2x — a
+    // Hard creep is worth ~2x a Normal from the same wave.
+    expect(bounty(50)).toBe(10); // floor(50/5), well under the cap
+    expect(bounty(100)).toBe(20); // floor(100/5), still under the cap
+    expect(bounty(100)).toBeGreaterThanOrEqual(2 * bounty(50) - 1);
+    expect(bounty(100)).toBeLessThanOrEqual(2 * bounty(50) + 1);
+    // The per-kill cap (BOUNTY_CAP) flattens the LATE game: a huge-maxHp
+    // creep never pays more than the cap — this is what kills the old glut
+    // (an uncapped late kill paid floor(~18000/5)=3600). The cap is still a
+    // pure function of the killed creep's OWN maxHp, so the late-kill
+    // arbitrage the by-maxHp bounty fixed stays fixed.
+    expect(bounty(1_000_000)).toBe(BOUNTY_CAP);
+    expect(bounty(5 * BOUNTY_CAP)).toBe(BOUNTY_CAP); // exactly at the knee
   });
 });

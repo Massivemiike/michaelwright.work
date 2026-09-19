@@ -141,7 +141,7 @@ export const fireTowers = (s: SimState): TowerHit[] => {
     let killed = false;
     for (let k = 0; k < c.count;) {
       if (c.hp[k] <= 0) {
-        s.bank += bounty(c.maxHp[k], s.gamma); // by the killed creep's own strength (Task 3)
+        s.bank += bounty(c.maxHp[k], s.gamma, s.bountyCap); // by the killed creep's own strength (Task 3), capped (BOUNTY_CAP)
         s.score += 2; // SOURCED: 2 points per kill
         if (c.id[k] === primaryId) killed = true;
         removeCreep(c, k);

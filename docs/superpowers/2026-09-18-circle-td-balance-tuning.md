@@ -1,19 +1,17 @@
-# Circle TD — balance-constant tuning (§5.4 sweep, 2026-09-18; re-tuned 2026-09-19; re-measured 2026-09-19 for the nested-loop geometry fix)
+# Circle TD — balance-constant tuning (§5.4 sweep, 2026-09-18; re-tuned 2026-09-19; re-measured for nested loops; hard-economy re-tune 2026-09-19)
 
-**Status: current.** The constants (`START_BANK=125`, `GAMMA=5`,
-`ALPHA_BP=200`) are UNCHANGED by the final-review #4/#5 geometry fix — see
-"Nested-loop re-geometry" at the very end for that fix's honest re-measurement
-(only `balance.sweep.test.ts`'s FULL-block thresholds moved). The constants
-themselves are tuned against Plan 2's REAL spiral track/tile geometry
-(`src/game/titles/circle-td/content.ts`) and the Task 3 by-maxHp bounty fix —
-see "Real-geometry re-tune" further down for that full story. The sections
-immediately below (through "Fast/slow test split") are kept as-is for
-history: they document the ORIGINAL 2026-09-18 sweep against Plan 1's now-
-replaced placeholder/INVENTED geometry (a square spiral with a uniform 24px
-tile grid, explicitly disclaimed at the time as not matching the original's
-visual layout). That sweep's own constants (`START_BANK=250`, `GAMMA=20`) no
-longer apply — they broke on the real geometry (see below) and have been
-superseded in `content.ts`/`balance.ts`.
+**Status: current — see "Open-area grid + hard-economy re-tune (2026-09-19)"
+at the very end for the CURRENT constants and the reasoning behind them.**
+Current constants: `START_BANK=125` (SOURCED), `GAMMA=5`, **`BOUNTY_CAP=25`
+(NEW)**, `ALPHA_BP=200`. The `BOUNTY_CAP` is the material change: it caps the
+per-kill bounty so the maxHp-proportional payout can't run to millions late
+(the 3.19M-bank glut users reported), while leaving the early game — and
+`START_BANK`/`GAMMA` — untouched. Everything below "Open-area grid" is
+retained as dated history: the original 2026-09-18 placeholder-geometry sweep
+(`START_BANK=250`/`GAMMA=20`, superseded), the Plan-2 real-geometry re-tune
+(restored `START_BANK=125`/`GAMMA=5`), and the nested-loop re-measurement.
+Those constants and tile counts (223/216, flanking strips) are historical;
+the board is now a 186-tile open-area grid (see content.ts).
 
 This document is the committed home for the sweep method and results that
 several code comments point at. It replaces references to
@@ -385,6 +383,110 @@ re-run (no flag) to pin:
 - **score:** 1526 (> 0 ✓)
 - **wave:** 29 (≥ 20 ✓)
 - **maxTowerLevel:** 9 (> 0 ✓)
+
+## Open-area grid + hard-economy re-tune (2026-09-19)
+
+Two user-reported problems drove this pass: (1) the build/attack surface was
+invisible and felt absent ("proper map block/tiles"), and (2) "the money +
+interest math extrapolates too quickly, you get far too much money … nowhere
+nearly as difficult as the original" — a screenshot showed **bank 3,191,361
+at wave 91**.
+
+### Board change (context, tuned against)
+
+`content.ts`'s buildable tiles changed from thin flanking strips to a
+deterministic **open-area grid**: cells on a 32px lattice covering every open
+region (inner-loop interior, inter-loop gap, outer margins), clearance-tested
+so none overlaps the painted track band. **`TILE_COUNT` 216 → 186**, all 186
+within a Damage tower's range of some track point. (Renderer visibility was
+fixed in the same board change; that's a rendering fix, not a balance one.)
+
+### Root cause of the glut (measured)
+
+The glut is **bounty**, not interest (the interest cap works). Bounty was
+`floor(maxHp / GAMMA)` with `GAMMA=5` → ~20% of each creep's maxHp per kill.
+Because `maxHp` spans ~8 (wave 1) to ~18,000 (late Hard), **no single GAMMA
+can be both survivable early and non-glut late**: a GAMMA stingy enough to
+avoid the late glut starves the early game into a wave-5 death, and a GAMMA
+generous enough to survive early (like 5) pays thousands per kill late.
+Measured on the 186-tile board, full strong play (place+upgrade):
+
+| GAMMA / cap | full-play death wave | peak bank |
+|---|---|---|
+| `GAMMA=5`, uncapped (old) | 90+ (never dies by 90) | **3,152,803** (matches the user's 3.19M) |
+| `GAMMA≥20`, uncapped | wave 4–5 (can't fund a 3rd tower) | — |
+
+Tuning `GAMMA` alone is a cliff with no usable middle.
+
+### Fix: a per-kill BOUNTY_CAP
+
+`bounty(maxHp) = clamp(floor(maxHp / GAMMA), 1, BOUNTY_CAP)` — keep `GAMMA=5`
+(early payout, `floor(maxHp/5)`, is unchanged until `maxHp>125`, ~wave 6, so
+no new early trap) and cap the LATE per-kill payout. Still a pure function of
+the **killed creep's own maxHp**, so the by-maxHp anti-arbitrage property
+(re-killing an old weak creep can't pay a big current-wave bonus) is
+preserved. Cap sweep (`GAMMA=5`, `START_BANK=125`, full strong play, wave cap
+90):
+
+| BOUNTY_CAP | full-play wave | peak bank |
+|---|---|---|
+| 15 | ~17 (too stingy — can't upgrade) | 125 |
+| **25 (chosen)** | 90+ (climbs), maxLvl 9 | **~8,200** |
+| 40 | 90+ | 125,415 |
+| 60 | 90+ | 319,182 |
+| ∞ (old) | 90+ | 3,152,803 |
+
+`cap=25` is the sweet spot: money binds the whole game, no glut, still
+winnable with strong play; `cap=15` is too stingy, `cap≥40` still gluts.
+
+### Chosen constants
+
+| Constant | Old | New | File |
+|---|---|---|---|
+| `START_BANK` | 125 (SOURCED) | **125 — unchanged (faithful)** | `content.ts` |
+| `GAMMA` | 5 | **5 — unchanged** | `balance.ts` |
+| `BOUNTY_CAP` | — (uncapped) | **25 (INVENTED, NEW)** | `balance.ts` |
+| `ALPHA_BP` | 200 | **200 — unchanged** | `balance.ts` |
+
+Only `BOUNTY_CAP` is new. `START_BANK` stays the SOURCED 125 — the better
+board coverage means the faithful bank is winnable-but-hard without a bump.
+Threaded through `SimState.bountyCap` (state.ts) / `SimConfig.balance.bountyCap`
+(index.ts) so it stays overridable for sweeps, same as `gamma`/`alphaBp`.
+
+### Confirmation (default constants, no overrides, all seeds)
+
+| seed | full place+upgrade (realistic) | peak bank | place-only 186 | place-only capped 40 | banking |
+|---|---|---|---|---|---|
+| 20260918 | wave 154 | 1,732 | 49 | 23 | 4 |
+| 1 | 150 | 154 | 49 | 20 | 4 |
+| 2 | 159 | 6,674 | 49 | 23 | 4 |
+| 3 | 155 | 2,552 | 48 | 24 | 4 |
+| 4 | 159 | 6,883 | 50 | 23 | 4 |
+
+Full strong play now **dies at wave ~150–159** (terminates via the population
+cap — winnable-but-not-infinite), with **peak bank only in the low thousands**
+— money binds the entire game, the glut is gone. `balance.sweep.test.ts` is a
+place-only harness whose survival floor (48–50 full / 20–24 capped) is
+largely unaffected by the cap (a place-only run never banks enough for the cap
+to bite), so its thresholds (FULL floor 45, FAST target 15 / floor 10) were
+re-checked and still hold — no threshold change, only comment updates.
+
+### Golden fixture regeneration
+
+`determinism.test.ts` was refactored so its command log is now GENERATED by a
+deterministic in-file strategy (`buildGoldenReplay`) instead of a hand-listed
+tick script — the hand-ticks had been regenerated by hand three times already
+and were the suite's most fragile part. The generator drives a fixed
+strong-play strategy (place up to 40 core tiles + one throwaway place/sell +
+lowest-level-first upgrades) through wave 30, recording only effective
+commands; `runReplay` continues to gameOver. Regenerated via `UPDATE_GOLDEN=1`
+and re-run to pin:
+
+- **hash:** `1f8de6fe`
+- **score:** 3628 (> 0 ✓)
+- **wave:** 64 (≥ 20 ✓)
+- **maxTowerLevel:** 9 (> 0 ✓)
+- **commands:** 355
 
 ## References
 

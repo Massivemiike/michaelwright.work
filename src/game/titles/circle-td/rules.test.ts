@@ -11,7 +11,7 @@ import {
   WAVE_SIZE, START_BANK, ALIVE_CAP_NORMAL, TRACK, trackLength,
   TOWERS, TILES, TILE_COUNT, posAt,
 } from "./content";
-import { deriveOffsets, bounty, GAMMA, ALPHA_BP } from "./balance";
+import { deriveOffsets, bounty, GAMMA, ALPHA_BP, BOUNTY_CAP } from "./balance";
 
 // Scans TILES for the first index within rSq (squared range, Fx) of point p.
 // Returns -1 if none found — callers assert a match was found rather than
@@ -35,7 +35,7 @@ function makeTestState(seed = 1): SimState {
     tick: 0, rng, bank: START_BANK, score: 0, wave: 0,
     aliveCap: ALIVE_CAP_NORMAL, gameOver: false, nextId: 1,
     offsetFast: o.offFast, offsetAir: o.offAir, offsetHard: o.offHard,
-    gamma: GAMMA, alphaBp: ALPHA_BP,
+    gamma: GAMMA, alphaBp: ALPHA_BP, bountyCap: BOUNTY_CAP,
     creeps: makeCreeps(), towers: makeTowers(),
   };
 }
@@ -129,7 +129,7 @@ describe("targeting, damage, hitscan fire", () => {
     expect(s.score).toBe(scoreBefore + 2);
   });
 
-  it("bounty pays the same for a kill regardless of the current wave, and ~2x for a Hard (2x maxHp) creep", () => {
+  it("bounty is wave-independent, ~2x for a Hard creep in the uncapped range, and flattened by BOUNTY_CAP", () => {
     const s1 = makeTestState(10);
     s1.wave = 1;
     const p1 = posAt(TRACK.outer, 0);
@@ -153,7 +153,23 @@ describe("targeting, damage, hitscan fire", () => {
     expect(gained2).toBe(gained1);
     expect(gained1).toBe(bounty(100));
 
-    // A Hard creep (2x maxHp of an otherwise-identical Normal one) pays ~2x.
+    // In the UNCAPPED range (floor(maxHp/5) below BOUNTY_CAP), a Hard creep
+    // (2x the maxHp of an otherwise-identical Normal) pays ~2x. gained1 above
+    // is a maxHp=100 kill (bounty 20, still under the cap); a maxHp=50 kill
+    // pays bounty 10 — half of it.
+    const sHalf = makeTestState(10);
+    addCreep(sHalf.creeps, { id: 1, dist: 0, hp: 50, maxHp: 50, speed: fromInt(1), flags: 0, entrance: 0 });
+    addTower(sHalf.towers, { type: 4, tile: findInRangeTile(posAt(TRACK.outer, 0), towerRangeSq(4, 0)), level: 9 });
+    const halfBefore = sHalf.bank;
+    fireTowers(sHalf);
+    const gainedHalf = sHalf.bank - halfBefore;
+    expect(gainedHalf).toBe(bounty(50)); // 10
+    expect(gained1).toBeCloseTo(gainedHalf * 2, -1); // 20 ≈ 2×10, both uncapped
+
+    // The per-kill cap flattens the LATE game: a maxHp=200 creep pays the cap
+    // (BOUNTY_CAP=25), NOT floor(200/5)=40 — so it is deliberately LESS than
+    // 2× the maxHp=100 payout. This is the anti-glut behavior, still keyed to
+    // the killed creep's own maxHp.
     const s3 = makeTestState(10);
     const p3 = posAt(TRACK.outer, 0);
     addCreep(s3.creeps, { id: 1, dist: 0, hp: 200, maxHp: 200, speed: fromInt(1), flags: 0, entrance: 0 });
@@ -163,7 +179,8 @@ describe("targeting, damage, hitscan fire", () => {
     fireTowers(s3);
     const gained3 = s3.bank - bank3Before;
     expect(gained3).toBe(bounty(200));
-    expect(gained3).toBeCloseTo(gained1 * 2, -1);
+    expect(gained3).toBe(BOUNTY_CAP); // capped
+    expect(gained3).toBeLessThan(gained1 * 2); // 25 < 40: the cap bit
   });
 
   it("does not one-shot a high-hp creep, and damages it by exactly towerDamage()", () => {

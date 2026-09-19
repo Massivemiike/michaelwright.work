@@ -6,6 +6,21 @@
 // inRangeTiles() instead of hardcoding specific tile indices, so this file
 // survives geometry changes without hand-updating tile numbers.
 //
+// CURRENT (2026-09-19, open-area grid + BOUNTY_CAP hard-economy re-tune):
+// TILE_COUNT = 186 (open-area grid, replacing the flanking strips — see
+// content.ts). Economy is now START_BANK=125 / GAMMA=5 / BOUNTY_CAP=25 /
+// ALPHA_BP=200: the per-kill bounty cap (balance.ts) kills the old late-game
+// glut (uncapped, full strong play banked ~3.15M and never died; capped, it
+// peaks at only a few thousand and dies ~wave 155). This is a PLACE-ONLY
+// harness (never upgrades), so its own survival floor is largely unaffected
+// by the cap (place-only never accumulates a bank for the cap to bite): it
+// still reaches wave 48-50 (FULL, all 186 tiles) / 20-24 (capped 40). The
+// hard-economy win shows up under place+UPGRADE play, measured separately —
+// see docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Open-area grid
+// + hard-economy re-tune". The thresholds below (FULL floor 45, FAST
+// target 15 / floor 10) were re-checked against these numbers and still hold.
+// The dated historical notes that follow are kept for provenance.
+//
 // Plan-1 tuning (§5.4, 2026-09-18): a headless grid sweep on Plan 1's
 // placeholder geometry found START_BANK=250/GAMMA=20/ALPHA_BP=200 winnable
 // (reaching wave 78-81), documented in
@@ -100,7 +115,7 @@ const AFFORD_ORDER: ReadonlyArray<{ type: number; cost: number }> = [
 
 // All tile indices within a Damage(L0) tower's range of some sampled point
 // on either track polyline. Sampling every ~8px along both loops is dense
-// enough relative to the tile grid (24px spacing, content.ts) and the
+// enough relative to the tile grid (32px lattice, content.ts) and the
 // Damage tower's range (125px, content.ts) that no in-range tile is missed.
 function inRangeTiles(): number[] {
   const rSq = towerRangeSq(DAMAGE_TOWER, 0);
@@ -240,15 +255,15 @@ function playPureBanking(seed: number): BankingResult {
 // --- FAST per-commit guard constants (empirical calibration, see
 // docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Real-geometry
 // re-tune") ---
-// 40 towers is a realistic partial defense (vs. 216 in-range tiles, which
+// 40 towers is a realistic partial defense (vs. 186 in-range tiles, which
 // only a play-to-gameOver run ever fully occupies) — cheap enough per tick
 // that even playing several of these to completion takes well under a
-// second. Re-measured on the nested-loop geometry (final-review findings
-// #4/#5, 2026-09-19) with START_BANK=125/GAMMA=5: this cap's bot played to
-// death naturally dies at wave 19 for both of the guard's own seeds (was
-// 19-21 on the previous interleaved-spiral geometry, 21-23 on Plan 1's
-// placeholder before that — close enough each time that the existing
-// targetWave/floor below didn't need to change).
+// second. Re-measured on the open-area grid board + BOUNTY_CAP=25
+// (2026-09-19) with START_BANK=125/GAMMA=5: this place-only cap's bot played
+// to natural death dies at wave 20-24 across the guard's own two seeds
+// (20260918, 1) — the cap doesn't lower this (a place-only bot never banks
+// enough for the per-kill cap to bite), so it's in line with the prior
+// geometries' 19-23. The existing targetWave/floor below still hold.
 // targetWave=15 stays comfortably below that natural death wave, so a
 // healthy run stops via "reached the target" every time, not "ran out of
 // luck at the ceiling". FLOOR=10 leaves margin below the target itself (not
@@ -265,18 +280,15 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     const tiles = inRangeTiles();
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] inRangeTiles(): ${tiles.length} of ${TILE_COUNT} tiles in range`);
-    // OBSERVED on the nested-loop geometry (final-review findings #4/#5):
-    // all 216 tiles come back in range of the Damage tower (125px) from
-    // SOME point on the track. This is expected and correct-by-construction
-    // now, not a geometry-fidelity artifact the way it was on Plan 1's
-    // placeholder grid: every tile in
-    // content.ts's TILES is generated as a cell flanking some path segment
-    // at a fixed ~1 tile-width offset, which is always well inside 125px —
-    // so "in range of the path somewhere" is true by definition. What the
-    // real geometry actually bounds (unlike the placeholder) is whether a
-    // single tower can reach MULTIPLE distant sections of the track at
-    // once, which this particular sanity check doesn't measure — see
-    // content.test.ts's flanking/clearance tests for that property instead.
+    // OBSERVED on the open-area grid board (2026-09-19): all 186 tiles come
+    // back in range of the Damage tower (125px) from SOME point on the track.
+    // Expected and correct-by-construction: the grid only places cells in the
+    // open regions between/around the two loops (inner-loop interior, the
+    // inter-loop gap, the outer margins), all of which are within ~125px of
+    // some track point (the board's open areas are never more than a tower's
+    // reach from a lane). What "in range of the path somewhere" does NOT
+    // measure is whether one tower can reach MULTIPLE distant lanes at once —
+    // see content.test.ts's clearance/coverage tests for the layout property.
     expect(tiles.length).toBeGreaterThan(0);
   });
 
@@ -343,20 +355,19 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     const minWave = Math.min(...results.map((r) => r.wave));
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] min wave across seeds: ${minWave}`);
-    // RE-MEASURED 2026-09-19 on the nested-loop geometry (final-review
-    // findings #4/#5 fix — content.ts's interleaved multi-ring spiral
-    // replaced by two genuinely nested single rings, 216 tiles instead of
-    // 223) with the SAME START_BANK=125/GAMMA=5/ALPHA_BP=200: all five
-    // seeds (including the previously-concerning seed=4) reach wave 49-56
-    // (all 216 in-range tiles eventually filled), a few waves below the
-    // prior interleaved geometry's 54-58 — expected, since 216 tiles is a
-    // slightly smaller, differently-shaped in-range set than the old
-    // (overlapping-rings) 223, not a balance regression: hitCeiling is
-    // still false for every seed, and active defense still vastly outlasts
-    // pure banking (see below). No GAMMA change was needed; only this
-    // threshold moved, to stay honest about the new floor. Pinned to 45
-    // (below the measured minimum of 49), not padded up to it — same
-    // methodology as the previous floor (50, below a measured 54).
+    // RE-MEASURED 2026-09-19 on the open-area grid board (186 tiles) + the
+    // BOUNTY_CAP=25 hard-economy re-tune, START_BANK=125/GAMMA=5/ALPHA_BP=200:
+    // this place-only bot (all 186 in-range tiles eventually filled, never
+    // upgrades) reaches wave 48-50 across all five seeds — essentially
+    // unchanged from the prior geometry's 49-56, because the per-kill cap
+    // that flattens the LATE economy doesn't touch a place-only run (it never
+    // banks enough for the cap to bite). hitCeiling is still false for every
+    // seed, and active defense still vastly outlasts pure banking (see
+    // below). The real hard-economy effect (money binds, no glut, dies
+    // ~wave 155) shows up under place+UPGRADE play, measured in the tuning
+    // doc, not by this place-only floor. Floor pinned to 45 (below the
+    // measured minimum of 48), not padded up to it — same methodology as
+    // before.
     expect(minWave).toBeGreaterThanOrEqual(45);
     // Five full runs to wave ~49-56 each comfortably exceed vitest's
     // 5000ms default.
@@ -370,10 +381,10 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     // only looked at the un-multiplied hp(wave)). Task 3 changed bounty to
     // pay by the killed creep's own maxHp (which DOES include typeMul), and
     // that alone fixed seed=4: it's now folded into the main "meaningful
-    // wave" test above and behaves like every other seed (wave 52 on the
-    // nested-loop geometry as of the 2026-09-19 re-measurement, no longer a
-    // documented non-asserting outlier). This test exists only to record
-    // that the old concern is gone, not to re-litigate the mechanism.
+    // wave" test above and behaves like every other seed (place-only wave 50
+    // on the open-area grid board as of the 2026-09-19 re-measurement, no
+    // longer a documented non-asserting outlier). This test exists only to
+    // record that the old concern is gone, not to re-litigate the mechanism.
     const r = playActiveDefense(4);
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] seed=4 (formerly KNOWN CONCERN): wave=${r.wave} tilesUsed=${r.tilesUsed}`);
@@ -387,13 +398,13 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   }, 120_000);
 
   slowIt("FULL: active defense outlasts pure banking", () => {
-    // Re-measured 2026-09-19 on the nested-loop geometry: active defense
-    // reaches wave ~49-56 (score ~2700-3150, all 216 in-range tiles
+    // Re-measured 2026-09-19 on the open-area grid board + BOUNTY_CAP re-tune:
+    // active place-only defense reaches wave ~48-50 (all 186 in-range tiles
     // eventually filled — see the "meaningful wave" test above) vs. wave 4
     // for pure banking (which buys nothing and kills nothing, so
     // population-cap timing is unaffected by geometry or the economy
-    // constants — same wave 4 as the prior geometry). A ~12x margin at the
-    // worst seed, not a marginal one — see
+    // constants — same wave 4). A ~12x margin at the worst seed, not a
+    // marginal one — see
     // docs/superpowers/2026-09-18-circle-td-balance-tuning.md.
     const seed = 20260918;
     const active = playActiveDefense(seed);
