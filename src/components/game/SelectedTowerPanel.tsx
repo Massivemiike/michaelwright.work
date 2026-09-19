@@ -57,6 +57,12 @@ export default function SelectedTowerPanel({ tile, type, level, bank, inputModel
   useEffect(() => {
     if (tile === -1) return;
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Final-review finding #8: Ctrl+S is the browser's own "save page"
+      // shortcut (and Cmd+S on macOS) — without this guard, a player
+      // trying to save the page would instead sell their selected tower.
+      // Alt is guarded too for the same class of OS/browser reservation
+      // (e.g. Alt+letter menu mnemonics on Windows).
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       switch (e.key.toLowerCase()) {
         case "u":
           doUpgrade();

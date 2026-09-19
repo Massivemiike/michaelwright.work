@@ -11,7 +11,7 @@ import { toFloat } from "@/game/sim/math/fixed";
 import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
 import { START_BANK, ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS, TRACK, posAt, TILES } from "./content";
 import { deriveOffsets, interest, GAMMA, ALPHA_BP } from "./balance";
-import { spawnWave, moveCreeps, fireTowers } from "./rules";
+import { spawnWave, moveCreeps, fireTowers, type TowerHit } from "./rules";
 
 export interface SimConfig {
   seed: number;
@@ -21,7 +21,14 @@ export interface SimConfig {
 
 export interface CircleTdSim {
   state: SimState;
-  tick(): void;
+  // Final-review finding #6: returns whatever TowerHits fireTowers()
+  // produced THIS tick (empty when the game is already over, or when no
+  // tower found a target) — previously discarded entirely, which meant
+  // towers fired and killed creeps with zero on-screen indication. Callers
+  // that don't care (every existing test, runReplay) simply ignore the
+  // return value; GameClient.tsx is the one consumer that collects it and
+  // forwards a mapped version into Renderer.frame's hits argument.
+  tick(): TowerHit[];
   snapshot(): RenderSnapshot;
 }
 
@@ -56,8 +63,8 @@ export const makeSimState = (config: SimConfig): SimState => {
 //   4. fireTowers
 //   5. population-cap lose check
 //   6. advance tick counter
-const tickOnce = (s: SimState): void => {
-  if (s.gameOver) return;
+const tickOnce = (s: SimState): TowerHit[] => {
+  if (s.gameOver) return [];
 
   if (s.tick % WAVE_INTERVAL_TICKS === 0) {
     const o = { offFast: s.offsetFast, offAir: s.offsetAir, offHard: s.offsetHard };
@@ -66,11 +73,13 @@ const tickOnce = (s: SimState): void => {
   }
 
   moveCreeps(s);
-  fireTowers(s);
+  const hits = fireTowers(s);
 
   if (s.creeps.count >= s.aliveCap) s.gameOver = true;
 
   s.tick += 1;
+
+  return hits;
 };
 
 const packSnapshot = (s: SimState): RenderSnapshot => {
@@ -87,13 +96,17 @@ const packSnapshot = (s: SimState): RenderSnapshot => {
     if (c.dist[i] >= 0) onTrackCount++;
   }
 
-  const snap = makeRenderSnapshot(onTrackCount, t.count);
+  const snap = makeRenderSnapshot(onTrackCount, t.count, c.count);
   snap.tick = s.tick;
   snap.bank = s.bank;
   snap.score = s.score;
   snap.wave = s.wave;
   snap.gameOver = s.gameOver;
   snap.creepCount = onTrackCount;
+  // Final-review finding #3: the full live population (on-track + staged),
+  // i.e. exactly what the population-cap lose check in tickOnce compares
+  // against s.aliveCap — see RenderSnapshot.creepAlive's own comment.
+  snap.creepAlive = c.count;
 
   let j = 0;
   for (let i = 0; i < c.count; i++) {
@@ -128,3 +141,4 @@ export const makeSim = (config: SimConfig): CircleTdSim => {
     snapshot: () => packSnapshot(state),
   };
 };
+

@@ -56,6 +56,26 @@ export interface Renderer {
   screenToWorld(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number };
   destroy(): void;
   readonly caps: RendererCaps;
+
+  // Final-review finding #7: promoted onto the shared interface from a
+  // Canvas2D-only pair GameClient.tsx used to reach via `instanceof
+  // Canvas2DRenderer`. That leak meant a future WebGPU backend (Plan 3)
+  // would silently lose range rings/placement ghosts the moment it dropped
+  // in behind this interface, since the instanceof check would simply fail
+  // and skip both calls. Now any Renderer implementation gets them by
+  // construction.
+
+  /** Range-ring highlight for a PLACED tower, by its RenderSnapshot index — `null` clears it. */
+  setHighlightTower(index: number | null): void;
+
+  // Placement ghost / hover marker for a NOT-yet-placed tower. `tile: -1`
+  // clears it; `towerType: -1` draws just a plain hover marker (nothing
+  // armed to place). `affordable` (final-review finding #2) tells the
+  // implementation whether `towerType` costs more than the player's
+  // current bank, so the ghost can render visibly dimmer rather than
+  // looking placeable when it isn't — GameClient computes this from live
+  // SimState.bank, never the renderer's own concern.
+  setHighlight(tile: number, towerType: number, affordable: boolean): void;
 }
 
 // One creep's drawable state for a single rendered frame, keyed by the

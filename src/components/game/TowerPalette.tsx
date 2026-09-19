@@ -48,6 +48,12 @@ export default function TowerPalette({ bank, selectedType, inputModel }: TowerPa
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
+      // Final-review finding #8: a bare digit key is ALSO a browser/OS
+      // shortcut when a modifier rides along (Ctrl+1..9 switches browser
+      // tabs in Chrome/Firefox, Cmd+1..9 does the same in Safari) — without
+      // this guard, arming a tower would fire as an unwanted side effect
+      // of the player just trying to switch tabs.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key >= "1" && e.key <= "5") {
         select(Number(e.key) - 1); // '1'..'5' -> tower index 0..4
       }

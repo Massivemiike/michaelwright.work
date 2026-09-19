@@ -75,6 +75,33 @@ describe("TowerPalette", () => {
     expect(selectTower).toHaveBeenCalledWith(0);
   });
 
+  it("ignores '1' when Ctrl is held (final-review finding #8 — don't fight Ctrl+1 tab switching)", () => {
+    const selectTower = vi.fn();
+    renderPalette(1000, 4, selectTower);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", ctrlKey: true }));
+    });
+    expect(selectTower).not.toHaveBeenCalled();
+  });
+
+  it("ignores '1' when Meta (Cmd) is held", () => {
+    const selectTower = vi.fn();
+    renderPalette(1000, 4, selectTower);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", metaKey: true }));
+    });
+    expect(selectTower).not.toHaveBeenCalled();
+  });
+
+  it("ignores '1' when Alt is held", () => {
+    const selectTower = vi.fn();
+    renderPalette(1000, 4, selectTower);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", altKey: true }));
+    });
+    expect(selectTower).not.toHaveBeenCalled();
+  });
+
   it("does not call selectTower via keyboard for an unaffordable tower", () => {
     const selectTower = vi.fn();
     renderPalette(100, 4, selectTower);

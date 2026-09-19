@@ -55,7 +55,15 @@ export const moveCreeps = (s: SimState): void => {
 // Non-authoritative render feed — the sim's own state (hp, bank, score,
 // creep removal) is the source of truth; this is only for the renderer to
 // draw a beam/flash without re-deriving what happened.
-export interface HitEvent { towerType: number; tile: number; creepId: number; killed: boolean }
+//
+// Named `TowerHit` (final-review finding #6) — NOT `HitEvent` — to avoid
+// colliding with the unrelated `HitEvent` already declared in
+// src/game/runtime/render/Renderer.ts (a world-space x/y/kind struct the
+// Canvas2D renderer consumes). The two are deliberately different shapes:
+// this one is sim-space (tile index, tower type, creep id — everything a
+// consumer needs to look up world position itself); GameClient.tsx is the
+// one place that maps a TowerHit into a render-side HitEvent.
+export interface TowerHit { towerType: number; tile: number; creepId: number; killed: boolean }
 
 export const SLOW_DURATION_TICKS = 30; // INVENTED (1s at 30Hz)
 
@@ -78,8 +86,8 @@ const inTargetSet = (flags: number, targets: number): boolean => {
   return (targets & TARGET_LAND) !== 0;
 };
 
-export const fireTowers = (s: SimState): HitEvent[] => {
-  const events: HitEvent[] = [];
+export const fireTowers = (s: SimState): TowerHit[] => {
+  const events: TowerHit[] = [];
   const c = s.creeps, t = s.towers;
 
   for (let ti = 0; ti < t.count; ti++) {

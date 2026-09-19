@@ -36,13 +36,15 @@
 // drive a re-render.
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { makeSim, type CircleTdSim, type SimConfig } from "@/game/titles/circle-td";
+import type { TowerHit } from "@/game/titles/circle-td/rules";
 import { Canvas2DRenderer } from "@/game/runtime/render/canvas2d/Canvas2DRenderer";
 import type { Renderer, HitEvent } from "@/game/runtime/render/Renderer";
 import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
 import { makeLoop, type GameLoop } from "@/game/runtime/loop";
 import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "@/game/runtime/input/pointer";
 import { createSnapshotStore } from "@/game/runtime/hud/snapshotStore";
-import { ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS } from "@/game/titles/circle-td/content";
+import { toFloat } from "@/game/sim/math/fixed";
+import { ALIVE_CAP_NORMAL, TILES, TOWERS, WAVE_INTERVAL_TICKS } from "@/game/titles/circle-td/content";
 import { useNodeNetwork } from "@/components/context/NodeNetworkContext";
 import Hud from "@/components/game/Hud";
 import TowerPalette, { type TowerPaletteInputModel } from "@/components/game/TowerPalette";
@@ -57,11 +59,26 @@ import GameOver from "@/components/game/GameOver";
 const DEFAULT_SEED = 1;
 const DEFAULT_MODE: SimConfig["mode"] = "free";
 
-// No sim hit feed exists yet (Task 6 turned out to be pointer input, not
-// this — see Canvas2DRenderer's advanceHits comment). One shared empty
-// array avoids allocating (and handing the renderer a
-// new-identity-but-still-empty list) every single frame in the meantime.
+// Shared empty array for a frame with no new hits (the overwhelmingly
+// common case) — avoids allocating a new-identity-but-still-empty list on
+// every single render() call.
 const NO_HITS: HitEvent[] = [];
+
+// Final-review finding #6: maps the sim's tile-indexed TowerHits (rules.ts)
+// into the renderer's world-space HitEvents (Renderer.ts) — the one place
+// those two deliberately-differently-named types (see rules.ts's TowerHit
+// comment) meet. Pure and DOM-free (module-scope constants only), so it's
+// unit-testable with no canvas/React involved — see GameClient.test.tsx.
+// `kind` carries the firing tower's type through so a future renderer can
+// vary the flash by tower (e.g. a bigger burst for Splash) without this
+// mapping needing to change.
+export function mapTowerHitsToRenderHits(hits: readonly TowerHit[]): HitEvent[] {
+  return hits.map((h) => ({
+    x: toFloat(TILES[h.tile * 2]),
+    y: toFloat(TILES[h.tile * 2 + 1]),
+    kind: h.towerType,
+  }));
+}
 
 // Task 7: a wave is "imminent" once we're within this many ticks of the
 // next WAVE_INTERVAL_TICKS boundary — 90 ticks = 3s at loop.ts's 30Hz
@@ -167,9 +184,10 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
   // recreated every effect run. Defaults to no-ops so calling a wrapper
   // before setup() has run (or after unmount) is inert rather than a
   // null-deref.
-  const syncRef = useRef<{ ui: () => void; highlight: () => void }>({
+  const syncRef = useRef<{ ui: () => void; highlight: () => void; snapshot: () => void }>({
     ui: () => {},
     highlight: () => {},
+    snapshot: () => {},
   });
 
   // Throttled (~10Hz, see snapshotStore.ts) RenderSnapshot for the HUD's
@@ -226,14 +244,25 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       syncRef.current.ui();
     },
   }));
+  // Final-review finding #1: upgrade/sell both mutate SimState (bank,
+  // tower level/count) synchronously via applyCommand, regardless of
+  // whether the loop is currently paused — but the CANVAS only redraws
+  // from snapshotsRef, which tick() alone advances. During the pre-round
+  // build phase (or any manual mid-game pause) tick() never runs, so
+  // without an explicit re-snapshot here a sell/upgrade would change the
+  // HUD's numbers (throttled snapshotStore.push reads live sim.state) while
+  // the canvas kept showing the stale tower. `syncRef.current.snapshot()`
+  // forces snapshotsRef.curr/prev to the freshly-mutated state immediately.
   const [panelInputModel] = useState<SelectedTowerPanelInputModel>(() => ({
     upgrade: (tile) => {
       inputModelRef.current?.upgrade(tile);
+      syncRef.current.snapshot();
       syncRef.current.highlight();
       syncRef.current.ui();
     },
     sell: (tile) => {
       inputModelRef.current?.sell(tile);
+      syncRef.current.snapshot();
       syncRef.current.highlight();
       syncRef.current.ui();
     },
@@ -274,10 +303,19 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     // Typed as the Renderer interface, not the concrete class, even though
     // Canvas2D is the only backend today — Plan 3's WebGPU renderer drops
     // in here unchanged (see src/game/runtime/render/Renderer.ts). The
-    // pointer handlers below narrow to Canvas2DRenderer via `instanceof`
-    // only where they need its Task-6 extras (setHighlight/
-    // setHighlightTower), which aren't part of the shared interface.
+    // highlight/ghost calls below (final-review finding #7) go straight
+    // through the shared interface now — no `instanceof Canvas2DRenderer`
+    // narrowing, so a future backend gets them for free.
     const renderer: Renderer = new Canvas2DRenderer();
+
+    // Final-review finding #6: TowerHits produced by tick()'s call(s) to
+    // fireTowers, accumulated across however many sim ticks happen to run
+    // in a single animation frame (loop.ts's `tick` can fire 0+ times
+    // before the once-per-frame `render`) and drained by render() below —
+    // exactly the same "buffer between 0+ producer calls and one consumer
+    // call" shape hudStore.push already uses, just simpler since every hit
+    // is unconditionally forwarded rather than throttled.
+    let pendingHits: TowerHit[] = [];
 
     async function setup(): Promise<void> {
       try {
@@ -312,13 +350,21 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
             const snapshots = snapshotsRef.current;
             if (!snapshots) return;
             snapshots.prev = snapshots.curr;
-            sim.tick();
+            // Final-review finding #6: capture whatever TowerHits this
+            // tick's fireTowers() call produced — previously discarded
+            // entirely (`sim.tick();`), so a tower could kill a creep with
+            // no on-screen indication at all. Buffered in pendingHits since
+            // 0+ ticks can run before the next render() drains it.
+            const hits = sim.tick();
+            if (hits.length > 0) pendingHits.push(...hits);
             snapshots.curr = sim.snapshot();
           },
           render(alpha) {
             const snapshots = snapshotsRef.current;
             if (!snapshots) return;
-            renderer.frame(snapshots.prev, snapshots.curr, alpha, NO_HITS);
+            const renderHits = pendingHits.length > 0 ? mapTowerHitsToRenderHits(pendingHits) : NO_HITS;
+            renderer.frame(snapshots.prev, snapshots.curr, alpha, renderHits);
+            pendingHits = [];
             // Task 7: offer the HUD store a fresh snapshot every frame —
             // hudStore.push internally throttles this to ~10Hz (see
             // snapshotStore.ts) and only actually calls sim.snapshot()
@@ -369,17 +415,47 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     // (titles/circle-td/index.ts) never filters/reorders towers the way it
     // does creeps, so SimState.towers' index i is always RenderSnapshot's
     // tower index i too.
+    //
+    // Final-review finding #7: goes through the shared Renderer interface
+    // directly now (setHighlight/setHighlightTower are part of it) — no
+    // more `instanceof Canvas2DRenderer` narrowing.
     const syncRendererHighlight = (): void => {
       const r = rendererRef.current;
-      if (!(r instanceof Canvas2DRenderer)) return;
+      if (!r) return;
       if (inputModel.selectedTile !== -1) {
         const idx = towerIndexAtTile(sim.state, inputModel.selectedTile);
         r.setHighlightTower(idx === -1 ? null : idx);
-        r.setHighlight(-1, -1);
+        r.setHighlight(-1, -1, true);
       } else {
         r.setHighlightTower(null);
-        r.setHighlight(hoveredTileRef.current, inputModel.selectedTowerType);
+        const type = inputModel.selectedTowerType;
+        // Final-review finding #2: the ghost must dim when the armed type
+        // costs more than the CURRENT bank, not just at mount — read live
+        // sim.state.bank (not a throttled RenderSnapshot) so this tracks
+        // every place/upgrade/sell instantly, same as the HUD's own
+        // bank-driven affordability checks (TowerPalette's disabled state).
+        const affordable = type >= 0 && type < TOWERS.length ? sim.state.bank >= TOWERS[type].cost : true;
+        r.setHighlight(hoveredTileRef.current, type, affordable);
       }
+    };
+
+    // Final-review finding #1: forces snapshotsRef to a freshly-packed
+    // snapshot of the CURRENT sim.state, immediately — the only way a
+    // place/upgrade/sell shows up on the canvas while the loop is paused
+    // (tick() is what normally advances snapshotsRef, and tick() never
+    // runs while paused, which is exactly the pre-round build phase's
+    // entire premise). Setting prev = curr too (not just curr) means this
+    // frame draws the new state with no interpolation artifact, at the
+    // cost of a one-frame "snap" instead of a smooth lerp for whatever
+    // creep motion happened to be mid-flight — an acceptable trade for an
+    // event that, during the build phase, happens while creeps aren't even
+    // moving yet.
+    const refreshSnapshot = (): void => {
+      const snapshots = snapshotsRef.current;
+      if (!snapshots) return;
+      const fresh = sim.snapshot();
+      snapshots.prev = fresh;
+      snapshots.curr = fresh;
     };
 
     // Task 7: mirrors InputModel's UI-only fields into the `uiState` React
@@ -406,7 +482,7 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     // wrapper objects (created once via useState, in the component body)
     // into THIS effect invocation's sync functions — see the `syncRef`
     // declaration's comment above for why this indirection exists.
-    syncRef.current = { ui: syncUiState, highlight: syncRendererHighlight };
+    syncRef.current = { ui: syncUiState, highlight: syncRendererHighlight, snapshot: refreshSnapshot };
 
     const tileFromPointerEvent = (e: PointerEvent): number => {
       const r = rendererRef.current;
@@ -435,7 +511,13 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       if (towerIndexAtTile(sim.state, tile) !== -1) {
         inputModel.selectTile(tile);
       } else {
+        // Final-review finding #1: place() mutates sim.state synchronously
+        // regardless of pause state, but only a real tick() normally
+        // refreshes snapshotsRef — refreshSnapshot() is what makes a
+        // pre-round (or mid-game paused) placement actually appear on the
+        // canvas instead of silently succeeding in SimState alone.
         inputModel.place(tile);
+        refreshSnapshot();
       }
       syncRendererHighlight();
       syncUiState();
@@ -494,7 +576,7 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       // (already guarded by inputModelRef being null above, via `?.`) never
       // reaches a closure over a `sim`/`inputModel` this cleanup just
       // discarded.
-      syncRef.current = { ui: () => {}, highlight: () => {} };
+      syncRef.current = { ui: () => {}, highlight: () => {}, snapshot: () => {} };
       loopRef.current?.stop();
       loopRef.current = null;
       resizeObserver?.disconnect();
@@ -532,6 +614,7 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
             bank={snapshot.bank}
             score={snapshot.score}
             wave={snapshot.wave}
+            creepAlive={snapshot.creepAlive}
             creepCount={snapshot.creepCount}
             creepCap={ALIVE_CAP_NORMAL}
             waveImminent={waveImminent}

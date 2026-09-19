@@ -5,9 +5,9 @@
 // RED step: it's written against pointer.ts before that module exists.
 import { describe, it, expect } from "vitest";
 import { makeSim } from "@/game/titles/circle-td";
-import { TOWERS, TRACK, TILES, TILE_COUNT } from "@/game/titles/circle-td/content";
+import { TOWERS, TRACK, TILES, TILE_COUNT, START_BANK } from "@/game/titles/circle-td/content";
 import { toFloat } from "@/game/sim/math/fixed";
-import { InputModel, tileAtWorld, towerIndexAtTile } from "./pointer";
+import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "./pointer";
 
 describe("tileAtWorld", () => {
   it("returns the tile index for a point at a known tile's centre", () => {
@@ -36,6 +36,69 @@ describe("tileAtWorld", () => {
 
 describe("InputModel", () => {
   const TILE = 10; // arbitrary valid, empty tile (mirrors replay.test.ts's usage)
+
+  // Final-review finding #2: the default armed tower must be affordable at
+  // the sim's real starting bank — a default the player can never actually
+  // place on their very first click is a broken build phase regardless of
+  // what the palette UI itself shows.
+  it("DEFAULT_TOWER_TYPE is affordable against START_BANK", () => {
+    expect(TOWERS[DEFAULT_TOWER_TYPE].cost).toBeLessThanOrEqual(START_BANK);
+  });
+
+  it("a fresh InputModel arms DEFAULT_TOWER_TYPE and can place it immediately on a fresh sim", () => {
+    const sim = makeSim({ seed: 1, mode: "free" });
+    const model = new InputModel({ getState: () => sim.state });
+    expect(model.selectedTowerType).toBe(DEFAULT_TOWER_TYPE);
+
+    model.place(TILE);
+
+    expect(sim.state.towers.count).toBe(1);
+    expect(sim.state.towers.type[0]).toBe(DEFAULT_TOWER_TYPE);
+  });
+
+  // Final-review finding #8: once the game is over, place/upgrade/sell must
+  // be silent no-ops that never touch inputLog — a replay's script should
+  // end where the run actually ended.
+  describe("no-ops once the game is over", () => {
+    function makeGameOverSim(seed: number) {
+      const sim = makeSim({ seed, mode: "free" });
+      sim.state.gameOver = true;
+      return sim;
+    }
+
+    it("place does nothing and does not log", () => {
+      const sim = makeGameOverSim(1);
+      const model = new InputModel({ getState: () => sim.state });
+      model.place(TILE);
+      expect(sim.state.towers.count).toBe(0);
+      expect(model.inputLog).toEqual([]);
+    });
+
+    it("upgrade does nothing and does not log, even on an already-placed tower", () => {
+      const sim = makeSim({ seed: 2, mode: "free" });
+      const model = new InputModel({ getState: () => sim.state });
+      model.place(TILE); // place while the game is still live
+      sim.state.bank += 1000;
+      sim.state.gameOver = true; // then end the game
+
+      model.upgrade(TILE);
+
+      expect(sim.state.towers.level[0]).toBe(0); // unchanged
+      expect(model.inputLog).toEqual([{ tick: 0, type: "place", tower: DEFAULT_TOWER_TYPE, tile: TILE }]);
+    });
+
+    it("sell does nothing and does not log, even on an already-placed tower", () => {
+      const sim = makeSim({ seed: 3, mode: "free" });
+      const model = new InputModel({ getState: () => sim.state });
+      model.place(TILE);
+      sim.state.gameOver = true;
+
+      model.sell(TILE);
+
+      expect(sim.state.towers.count).toBe(1); // still there — sell was a no-op
+      expect(model.inputLog).toEqual([{ tick: 0, type: "place", tower: DEFAULT_TOWER_TYPE, tile: TILE }]);
+    });
+  });
 
   it("place on a valid empty tile with enough bank adds a tower AND logs the command", () => {
     const sim = makeSim({ seed: 1, mode: "free" });

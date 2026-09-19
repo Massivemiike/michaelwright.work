@@ -70,6 +70,11 @@ export default function SpeedControls({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key !== " ") return;
+      // Final-review finding #8: a modified Space (e.g. Ctrl+Space is an
+      // IME/input-source toggle on several platforms) is a different
+      // shortcut entirely — pass it through rather than also toggling
+      // pause AND swallowing the keystroke via preventDefault below.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       e.preventDefault(); // don't let Space also scroll the page
       if (!started) return; // pre-round: GO is the only way to start, not Space
       const next = !paused;

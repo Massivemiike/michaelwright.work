@@ -23,8 +23,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import GameClient from "./GameClient";
+import GameClient, { mapTowerHitsToRenderHits } from "./GameClient";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
+import { TILES } from "@/game/titles/circle-td/content";
+import { toFloat } from "@/game/sim/math/fixed";
+import type { TowerHit } from "@/game/titles/circle-td/rules";
 
 // jsdom implements neither — GameClient's ResizeObserver is created only
 // after a successful renderer.init() (which fails in jsdom, see above), so
@@ -36,6 +39,44 @@ class StubResizeObserver {
   unobserve(): void {}
   disconnect(): void {}
 }
+
+// Final-review finding #6: mapTowerHitsToRenderHits is a pure function
+// (module-scope constants only, no DOM/canvas), so this describe block
+// doesn't need any of the mount/unmount jsdom machinery below — it's here
+// rather than in its own file because the function itself lives in
+// GameClient.tsx (the one place a sim-space TowerHit needs to become a
+// render-space HitEvent), not in a shared, title-agnostic module.
+describe("mapTowerHitsToRenderHits", () => {
+  it("maps a TowerHit's tile to that tile's world xy, and its towerType to kind", () => {
+    const tile = 3;
+    const hit: TowerHit = { towerType: 4, tile, creepId: 42, killed: true };
+
+    const [rendered] = mapTowerHitsToRenderHits([hit]);
+
+    expect(rendered.x).toBeCloseTo(toFloat(TILES[tile * 2]));
+    expect(rendered.y).toBeCloseTo(toFloat(TILES[tile * 2 + 1]));
+    expect(rendered.kind).toBe(4);
+  });
+
+  it("maps an empty hit list to an empty render list", () => {
+    expect(mapTowerHitsToRenderHits([])).toEqual([]);
+  });
+
+  it("maps several hits in order, independently of tile", () => {
+    const hits: TowerHit[] = [
+      { towerType: 0, tile: 1, creepId: 1, killed: false },
+      { towerType: 2, tile: 5, creepId: 2, killed: true },
+    ];
+
+    const rendered = mapTowerHitsToRenderHits(hits);
+
+    expect(rendered).toHaveLength(2);
+    expect(rendered[0].kind).toBe(0);
+    expect(rendered[1].kind).toBe(2);
+    expect(rendered[0].x).toBeCloseTo(toFloat(TILES[1 * 2]));
+    expect(rendered[1].x).toBeCloseTo(toFloat(TILES[5 * 2]));
+  });
+});
 
 describe("GameClient", () => {
   let container: HTMLDivElement;

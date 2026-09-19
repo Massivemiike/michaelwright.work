@@ -11,10 +11,15 @@
 // downloaded by every visitor, not just players. This is a static
 // source-text scan, same shape as src/game/sim/purity.test.ts.
 //
-// src/app/games/** and src/game/** are deliberately NOT scanned here —
-// that's the boundary being exercised (GameClient.tsx, PlayGate.tsx's
-// own dynamic import, and every file under src/game/** itself are
-// SUPPOSED to reference @/game/**), not a hole in the guard.
+// src/app/games/**, src/game/**, and (final-review finding #9)
+// src/components/game/** are deliberately NOT scanned here — that's the
+// boundary being exercised (GameClient.tsx, PlayGate.tsx's own dynamic
+// import, every file under src/game/** itself, and the game's own HUD
+// components are all SUPPOSED to reference @/game/**), not a hole in the
+// guard. Everything else reachable from the marketing site — the root
+// layout, every marketing/blog/project/gallery/contact/resume page, and
+// (finding #9) the REST of src/components/**, plus src/lib, src/data, and
+// src/types — is guarded below.
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname, resolve, sep } from "node:path";
@@ -71,6 +76,21 @@ function walk(path: string): string[] {
   return out;
 }
 
+// Final-review finding #9: src/components/game/** is the game's OWN HUD
+// layer (TowerPalette/SelectedTowerPanel/Hud/etc.) — it's SUPPOSED to
+// import @/game/** (content.ts's TOWERS, rules.ts's towerDamage, and so
+// on), and it only ever reaches the browser via GameClient's dynamic
+// import chain, same as src/app/games/** and src/game/** themselves
+// (deliberately excluded from GUARDED_ROOTS below for the same reason).
+// Excluding it here is the boundary being exercised, not a hole in the
+// guard.
+const EXCLUDED_PREFIX = "src/components/game";
+
+function isExcluded(file: string): boolean {
+  const normalized = file.split(sep).join("/");
+  return normalized === EXCLUDED_PREFIX || normalized.startsWith(`${EXCLUDED_PREFIX}/`);
+}
+
 function collectFiles(roots: string[]): string[] {
   return roots
     .flatMap((root) => {
@@ -87,16 +107,24 @@ function collectFiles(roots: string[]): string[] {
       (f) =>
         (f.endsWith(".ts") || f.endsWith(".tsx")) &&
         !f.endsWith(".test.ts") &&
-        !f.endsWith(".test.tsx")
+        !f.endsWith(".test.tsx") &&
+        !isExcluded(f)
     );
 }
 
 // Every surface that must never import @/game/**: the root layout and
 // the other global App Router special files (error/not-found/loading —
-// rendered site-wide the same way layout.tsx is), the shared layout
-// chrome (Nav/Footer/PageWrapper — imported BY layout.tsx, so this is
-// the set that actually protects everything else), the homepage, and
-// every marketing/blog/project/gallery/contact/resume page.
+// rendered site-wide the same way layout.tsx is), the homepage, every
+// marketing/blog/project/gallery/contact/resume page, and — final-review
+// finding #9 — ALL marketing-reachable shared code: every component under
+// src/components/** (except src/components/game itself, excluded above),
+// plus src/lib, src/data, and src/types. The original version of this list
+// only guarded src/components/layout (Nav/Footer/PageWrapper, imported BY
+// layout.tsx) — real, unguarded surfaces sitting right next to it
+// (src/components/hero, src/components/background, src/lib, src/data...)
+// could have picked up a @/game/** import with nothing here to catch it,
+// since none of them are reachable only through the lazy /games/circle-td
+// route.
 const GUARDED_ROOTS = [
   "src/app/layout.tsx",
   "src/app/error.tsx",
@@ -108,7 +136,10 @@ const GUARDED_ROOTS = [
   "src/app/gallery",
   "src/app/projects",
   "src/app/resume",
-  "src/components/layout",
+  "src/components",
+  "src/lib",
+  "src/data",
+  "src/types",
 ];
 
 describe("lazy boundary: src/game/** never leaks into marketing chrome", () => {
@@ -160,6 +191,41 @@ describe("lazy boundary: src/game/** never leaks into marketing chrome", () => {
       `import { helper } from "../../lib/utils";`, // relative, but resolves outside src/game/
     ].join("\n");
     expect(findGameImports(ok, fromFile)).toEqual([]);
+  });
+
+  // Final-review finding #9's own self-checks: prove the widened
+  // GUARDED_ROOTS (src/components/**, src/lib, src/data, src/types) would
+  // actually catch a leak, and that src/components/game stays excluded on
+  // purpose rather than by accident.
+  it("catches a synthetic @/game import from each newly-guarded root (src/lib, src/data, src/types, src/components/** outside game)", () => {
+    const staticImport = `import { makeSim } from "@/game/titles/circle-td";`;
+    for (const fromFile of [
+      "src/lib/someHelper.ts",
+      "src/data/someList.data.ts",
+      "src/types/someType.ts",
+      "src/components/hero/HeroSlide.tsx",
+      "src/components/background/NodeNetworkCanvas.tsx",
+    ]) {
+      expect(findGameImports(staticImport, fromFile)).toEqual(["@/game/titles/circle-td"]);
+    }
+  });
+
+  it("excludes src/components/game/** from the scan (the game's own HUD layer, which IS supposed to import @/game/**)", () => {
+    expect(isExcluded("src/components/game/TowerPalette.tsx")).toBe(true);
+    expect(isExcluded("src/components/game")).toBe(true);
+    // A sibling directory that merely starts with the same prefix string
+    // must NOT be excluded by a sloppy startsWith("src/components/game")
+    // check — "src/components/gameplay" is a different, hypothetical
+    // directory that would still need guarding.
+    expect(isExcluded("src/components/gameplay/Foo.tsx")).toBe(false);
+    expect(isExcluded("src/components/layout/Nav.tsx")).toBe(false);
+  });
+
+  it("collectFiles actually omits src/components/game files from a real scan of the repo", () => {
+    const scanned = collectFiles(["src/components"]);
+    expect(scanned.some((f) => f.split(sep).join("/").includes("/src/components/game/"))).toBe(false);
+    // Sanity: the scan isn't accidentally empty — real, non-game components exist and are included.
+    expect(scanned.length).toBeGreaterThan(0);
   });
 });
 

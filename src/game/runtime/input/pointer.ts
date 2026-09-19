@@ -67,10 +67,15 @@ export function towerIndexAtTile(state: SimState, tile: number): number {
 }
 
 // Default palette selection until Task 7's palette UI sets a real one from
-// player input — Damage (index 4), per the brief. Any out-of-range value
+// player input — Fast (index 0, cost 50), affordable against START_BANK
+// (125; see content.ts) so the very first click of a fresh run can place
+// something. Final-review finding #2: the brief's original choice, Damage
+// (index 4, cost 260), is UNaffordable at START_BANK — arming it by
+// default left the player unable to place anything until they noticed the
+// palette and picked a cheaper tower themselves. Any out-of-range value
 // passed to the constructor falls back to this rather than leaving
 // selectedTowerType pointing at a nonexistent tower definition.
-export const DEFAULT_TOWER_TYPE = 4;
+export const DEFAULT_TOWER_TYPE = 0;
 
 const isValidTowerType = (type: number): boolean =>
   Number.isInteger(type) && type >= 0 && type < TOWERS.length;
@@ -107,8 +112,17 @@ export class InputModel {
   // Effective iff the tower count went up — true precisely when applyCommand
   // actually added one (occupied/unaffordable/invalid all leave count
   // unchanged, whether or not a tower already happened to sit there).
+  //
+  // Final-review finding #8: once the game is over, place/upgrade/sell are
+  // silent no-ops — never recorded to inputLog — rather than continuing to
+  // accept clicks/keystrokes that reach the DOM after GameOver.tsx renders
+  // (its overlay covers the canvas but keyboard shortcuts owned by other
+  // HUD components aren't blocked by it). A replay's log should end where
+  // the run actually ended, not keep collecting commands the sim would
+  // silently ignore anyway.
   place(tile: number): void {
     const state = this.getState();
+    if (state.gameOver) return;
     const countBefore = state.towers.count;
     const cmd: Command = { tick: state.tick, type: "place", tower: this.selectedTowerType, tile };
     applyCommand(state, cmd);
@@ -122,6 +136,7 @@ export class InputModel {
   // against an already-max-level or unaffordable tower.
   upgrade(tile: number): void {
     const state = this.getState();
+    if (state.gameOver) return;
     const before = towerIndexAtTile(state, tile);
     const levelBefore = before === -1 ? -1 : state.towers.level[before];
     const cmd: Command = { tick: state.tick, type: "upgrade", tile };
@@ -137,6 +152,7 @@ export class InputModel {
   // upgrade/sell controls for.
   sell(tile: number): void {
     const state = this.getState();
+    if (state.gameOver) return;
     const countBefore = state.towers.count;
     const cmd: Command = { tick: state.tick, type: "sell", tile };
     applyCommand(state, cmd);

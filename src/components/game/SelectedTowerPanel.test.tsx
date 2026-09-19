@@ -91,4 +91,21 @@ describe("SelectedTowerPanel", () => {
     });
     expect(sell).toHaveBeenCalledWith(TILE);
   });
+
+  it("ignores Ctrl+S (final-review finding #8 — don't fight the browser's Save Page shortcut)", () => {
+    const { sell } = renderPanel(0, 1000);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
+    });
+    expect(sell).not.toHaveBeenCalled();
+  });
+
+  it("ignores Meta+U and Alt+U", () => {
+    const { upgrade } = renderPanel(0, 1000);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "u", metaKey: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "u", altKey: true }));
+    });
+    expect(upgrade).not.toHaveBeenCalled();
+  });
 });

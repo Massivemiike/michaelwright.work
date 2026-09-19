@@ -13,19 +13,28 @@
 // isn't part of RenderSnapshot — ALIVE_CAP_NORMAL (content.ts) never
 // changes mid-run (see titles/circle-td/index.ts's makeSimState), so
 // GameClient passes that constant straight through.
-import { formatCreeps, formatGold, formatScore, formatWave } from "@/game/runtime/hud/format";
+import { formatCreeps, formatGold, formatInt, formatScore, formatWave } from "@/game/runtime/hud/format";
 
 export interface HudProps {
   bank: number;
   score: number;
   wave: number;
+  // Final-review finding #3: the primary creep-meter figure is now the
+  // FULL live population (on-track + still-staged) — RenderSnapshot's
+  // `creepAlive`, which matches SimState.creeps.count, the number the
+  // population-cap lose condition actually compares against `creepCap`.
+  // `creepCount` (on-track only, RenderSnapshot's original field) is kept
+  // as a secondary parenthetical — previously it was ALSO the primary
+  // figure, which undercounted the meter (sometimes badly, right after a
+  // wave spawns and most of it is still staged off-track).
+  creepAlive: number;
   creepCount: number;
   creepCap: number;
   /** True when a wave is due soon — drives the small pulsing "imminent" dot. Optional per the brief. */
   waveImminent?: boolean;
 }
 
-export default function Hud({ bank, score, wave, creepCount, creepCap, waveImminent = false }: HudProps) {
+export default function Hud({ bank, score, wave, creepAlive, creepCount, creepCap, waveImminent = false }: HudProps) {
   return (
     <div
       style={{
@@ -45,7 +54,7 @@ export default function Hud({ bank, score, wave, creepCount, creepCap, waveImmin
       <Stat label="Bank" value={formatGold(bank)} />
       <Stat label="Score" value={formatScore(score)} />
       <Stat label="Wave" value={formatWave(wave)} accent={waveImminent} />
-      <Stat label="Creeps" value={formatCreeps(creepCount, creepCap)} />
+      <Stat label="Creeps" value={formatCreeps(creepAlive, creepCap)} sub={`${formatInt(creepCount)} on track`} />
       {waveImminent && (
         <span
           aria-label="Wave imminent"
@@ -71,7 +80,18 @@ export default function Hud({ bank, score, wave, creepCount, creepCap, waveImmin
   );
 }
 
-function Stat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function Stat({
+  label,
+  value,
+  accent = false,
+  sub,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  /** Optional smaller secondary line under the main value — e.g. Creeps' on-track figure alongside its live-population primary (finding #3). */
+  sub?: string;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 56 }}>
       <span
@@ -96,6 +116,18 @@ function Stat({ label, value, accent = false }: { label: string; value: string; 
       >
         {value}
       </span>
+      {sub && (
+        <span
+          style={{
+            fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace",
+            fontSize: "0.5625rem",
+            color: "#3C3F52",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {sub}
+        </span>
+      )}
     </div>
   );
 }

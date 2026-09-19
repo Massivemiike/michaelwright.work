@@ -173,6 +173,12 @@ export class Canvas2DRenderer implements Renderer {
   // drawHighlight below.
   private highlightTile: number = -1;
   private highlightTowerType: number = -1;
+  // Final-review finding #2: whether the armed tower type is affordable
+  // against the player's CURRENT bank — set alongside highlightTowerType by
+  // setHighlight below. Defaults `true` so a hover before the first
+  // setHighlight call (there shouldn't be one, but nothing depends on it)
+  // never draws spuriously dimmed.
+  private highlightAffordable: boolean = true;
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     const ctx = canvas.getContext("2d");
@@ -204,22 +210,23 @@ export class Canvas2DRenderer implements Renderer {
     this.transform = { scale, offsetX, offsetY };
   }
 
-  // Renderer-specific extra, not part of the shared Renderer interface (see
-  // Renderer.ts's comment on RendererCaps/Renderer — WebGPU would need its
-  // own equivalent, not necessarily this exact method). Task 6 wires real
-  // hover/selection input to this.
+  // Part of the shared Renderer interface as of final-review finding #7 —
+  // see Renderer.ts's comment on the interface declaration. Task 6 wires
+  // real hover/selection input to this.
   setHighlightTower(index: number | null): void {
     this.highlightTowerIndex = index;
   }
 
-  // Task 6's other extra: the placement ghost/range-preview at a hovered or
-  // targeted (not-yet-built) tile. `tile: -1` clears it; `towerType: -1`
-  // draws just a plain tile marker (hovering with nothing armed to place).
-  // Kept off the shared Renderer interface for the same reason as
-  // setHighlightTower above.
-  setHighlight(tile: number, towerType: number): void {
+  // The placement ghost/range-preview at a hovered or targeted (not-yet-
+  // built) tile. `tile: -1` clears it; `towerType: -1` draws just a plain
+  // tile marker (hovering with nothing armed to place); `affordable`
+  // (finding #2) dims the ghost when the armed type costs more than the
+  // player's current bank — see drawHighlight below and
+  // highlightAffordable's own comment.
+  setHighlight(tile: number, towerType: number, affordable: boolean): void {
     this.highlightTile = tile;
     this.highlightTowerType = towerType;
+    this.highlightAffordable = affordable;
   }
 
   // Inverse of resize()'s world->device-px transform. rect.* is CSS px;
@@ -391,10 +398,16 @@ export class Canvas2DRenderer implements Renderer {
     }
     // A would-be-placed tower always previews at level 0 (nothing to place
     // above L0), reusing the exact shape/range-ring drawing an actually
-    // placed L0 tower would get, just translucent.
-    this.drawRangeRing(ctx, x, y, type, 0);
+    // placed L0 tower would get, just translucent. Final-review finding #2:
+    // when the armed type is UNaffordable against the current bank, the
+    // ghost draws noticeably dimmer (0.16 vs. the normal 0.45) and skips
+    // the range ring entirely — "this doesn't cost that much" was
+    // ambiguous; "you can't place this yet" needed to read as visibly
+    // different, not just a hair fainter.
+    const affordable = this.highlightAffordable;
+    if (affordable) this.drawRangeRing(ctx, x, y, type, 0);
     ctx.save();
-    ctx.globalAlpha = 0.45;
+    ctx.globalAlpha = affordable ? 0.45 : 0.16;
     this.drawTowerShape(ctx, x, y, type, 0);
     ctx.restore();
   }

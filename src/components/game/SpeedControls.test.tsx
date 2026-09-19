@@ -91,4 +91,21 @@ describe("SpeedControls", () => {
     });
     expect(setPaused).not.toHaveBeenCalled();
   });
+
+  it("ignores a modified Space (final-review finding #8 — e.g. Ctrl+Space is an IME toggle on some platforms)", () => {
+    const { setPaused } = renderControls(true, false);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", ctrlKey: true }));
+    });
+    expect(setPaused).not.toHaveBeenCalled();
+  });
+
+  it("ignores Meta+Space and Alt+Space", () => {
+    const { setPaused } = renderControls(true, false);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", metaKey: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", altKey: true }));
+    });
+    expect(setPaused).not.toHaveBeenCalled();
+  });
 });
