@@ -13,9 +13,25 @@
 // sweep described in task-13b-report.md retuned the defaults (START_BANK
 // 125->250 in content.ts; GAMMA 400->20 in balance.ts; ALPHA_BP unchanged
 // at 200) so this strategy is actually winnable-and-climbing instead of
-// dying at wave 5. The thresholds below were re-measured against those new
-// defaults — see that report for the full sweep landscape and the seed=4
-// finding noted below "meaningful wave".
+// dying at wave 5.
+//
+// Task 13c (2026-09-18, this file's second revision): playing the tuned
+// game to wave 78-81 with all 450 in-range tiles filled is real O(towers x
+// creeps)-per-tick compute — it made the DEFAULT `npm test` take several
+// minutes, which is CI-flakiness risk for no per-commit benefit. Split:
+//
+//   - FAST (always on, part of `npm test`): a capped bot (40 towers, a
+//     realistic partial defense rather than every in-range tile) that
+//     STOPS as soon as it reaches a modest target wave rather than playing
+//     to gameOver. This is the per-commit regression guard: it proves
+//     "the game is winnable, not dying at wave 5" in a couple hundred
+//     milliseconds.
+//   - FULL (opt-in via `BALANCE_SWEEP=1 npm test`): the original uncapped,
+//     play-to-gameOver measurements across the sweep's full seed set,
+//     including the wave 78-81 floor and the seed=4 known-concern finding.
+//     This is the "scheduled CI job" the original Task 12 comment referred
+//     to for the grid sweep itself — same idea, applied to the expensive
+//     acceptance measurements this file also grew.
 import { describe, it, expect } from "vitest";
 import { makeSim } from "@/game/titles/circle-td";
 import { applyCommand } from "@/game/sim/replay";
@@ -24,6 +40,9 @@ import {
 } from "@/game/titles/circle-td/content";
 import { towerRangeSq } from "@/game/titles/circle-td/rules";
 import { mul, fromInt } from "@/game/sim/math/fixed";
+
+const FULL = process.env.BALANCE_SWEEP === "1";
+const slowIt = FULL ? it : it.skip;
 
 // Hard ceiling matching the brief — a strategy that can't finish (bug, or a
 // genuinely unwinnable/unlosable balance state) must not hang the suite.
@@ -72,6 +91,10 @@ function inRangeTiles(): number[] {
   }
   return out;
 }
+// Computed once at module load and reused by every strategy below — it's
+// pure geometry (no seed/balance dependence), so recomputing it per call
+// would just be wasted work on every one of the (many) runs in this file.
+const TILES_CACHE = inRangeTiles();
 
 interface ActiveDefenseResult {
   wave: number;
@@ -89,9 +112,16 @@ interface ActiveDefenseResult {
 // anything because 260 is unreachable before the population cap; buying the
 // best affordable tower lets a cheap opening (Splash/Fast/Air/Slow) start
 // killing on wave 1, which is what actually funds the climb to Damage.
+//
+// Plays all the way to gameOver (or the tick ceiling) with every in-range
+// tile available — this is the FULL, expensive measurement (all 450 tiles
+// eventually filled, ~45s per run once the economy escapes the wave-5
+// trap; see task-13b-report.md's "Performance note"). Used only by the
+// slowIt-gated tests below; the always-on fast guard uses
+// playCappedDefense instead.
 function playActiveDefense(seed: number): ActiveDefenseResult {
   const sim = makeSim({ seed, mode: "daily" });
-  const tiles = inRangeTiles();
+  const tiles = TILES_CACHE;
   let next = 0;
   while (!sim.state.gameOver && sim.state.tick < TICK_CEILING) {
     if (next < tiles.length) {
@@ -112,6 +142,53 @@ function playActiveDefense(seed: number): ActiveDefenseResult {
   };
 }
 
+interface CappedDefenseResult {
+  wave: number;
+  score: number;
+  tilesUsed: number;
+  gameOver: boolean;
+}
+
+// FAST per-commit guard's strategy: same best-affordable buy order, but
+// (a) capped at `maxTowers` placements — a realistic partial defense, not
+// every one of the 450 in-range tiles — and (b) stops the instant `wave`
+// reaches `targetWave`, rather than playing to gameOver. Calibrated
+// (task-13c-report.md): with `maxTowers=40`, this strategy played to death
+// naturally dies at wave 21-23 across all four of the sweep's seeds, so a
+// `targetWave` at or below that would-be-death-wave lets the loop exit via
+// "reached the target, still alive" instead of "died before getting
+// there" — which is the actual thing being asserted (not literally "did
+// wave counter hit N", but "is 40 towers already meaningfully more
+// survivable than the pre-tuning wave-5 trap").
+function playCappedDefense(
+  seed: number,
+  maxTowers: number,
+  targetWave: number,
+  tickCeiling: number
+): CappedDefenseResult {
+  const sim = makeSim({ seed, mode: "daily" });
+  const tiles = TILES_CACHE;
+  const cap = Math.min(tiles.length, maxTowers);
+  let next = 0;
+  while (!sim.state.gameOver && sim.state.wave < targetWave && sim.state.tick < tickCeiling) {
+    if (next < cap) {
+      const pick = AFFORD_ORDER.find((t) => sim.state.bank >= t.cost);
+      if (pick) {
+        const before = sim.state.towers.count;
+        applyCommand(sim.state, { tick: sim.state.tick, type: "place", tower: pick.type, tile: tiles[next] });
+        if (sim.state.towers.count > before) next++;
+      }
+    }
+    sim.tick();
+  }
+  return {
+    wave: sim.state.wave,
+    score: sim.state.score,
+    tilesUsed: next,
+    gameOver: sim.state.gameOver,
+  };
+}
+
 interface BankingResult {
   wave: number;
   hitCeiling: boolean;
@@ -128,6 +205,21 @@ function playPureBanking(seed: number): BankingResult {
   return { wave: sim.state.wave, hitCeiling: sim.state.tick >= TICK_CEILING };
 }
 
+// --- FAST per-commit guard constants (task-13c calibration) ---
+// 40 towers is a realistic partial defense (vs. 450 in-range tiles, which
+// only a play-to-gameOver run ever fully occupies) — cheap enough per tick
+// that even playing several of these to completion takes well under a
+// second. targetWave=15 is comfortably below the measured 21-23 natural
+// death wave for all four sweep seeds at this tower cap, so a healthy run
+// stops via "reached the target" every time, not "ran out of luck at the
+// ceiling". FLOOR=10 leaves margin below the target itself (not just below
+// the natural-death wave) so a run that's a little slower to snowball
+// still passes without the assertion being fragile to minor changes.
+const FAST_MAX_TOWERS = 40;
+const FAST_TARGET_WAVE = 15;
+const FAST_TICK_CEILING = 50_000; // safety valve; actual runs finish by tick ~8,400
+const FAST_WAVE_FLOOR = 10;
+
 describe("balance acceptance / sweep harness (spec §5.4)", () => {
   it("computes a non-empty set of Damage-tower-in-range tiles (placeholder geometry sanity)", () => {
     const tiles = inRangeTiles();
@@ -143,17 +235,51 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     expect(tiles.length).toBeGreaterThan(0);
   });
 
-  it("active defense is deterministic for a fixed seed", () => {
+  it("FAST per-commit guard: a capped defense (40 towers) reaches a meaningful wave without dying", () => {
+    // Proves "the game is winnable, not dying at wave 5" on every commit,
+    // in milliseconds — see the FAST_* constants' comment above for how
+    // targetWave/floor were calibrated. Keeps to 2 seeds per the brief;
+    // the full 4-seed uncapped measurement lives in the gated block below.
+    const seeds = [20260918, 1];
+    for (const seed of seeds) {
+      const r = playCappedDefense(seed, FAST_MAX_TOWERS, FAST_TARGET_WAVE, FAST_TICK_CEILING);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[balance.sweep] FAST capped(${FAST_MAX_TOWERS}) seed=${seed}: wave=${r.wave} ` +
+        `score=${r.score} tilesUsed=${r.tilesUsed} gameOver=${r.gameOver}`
+      );
+      // Must not have died before reaching the target wave — dying early
+      // is exactly the pre-tuning wave-5 failure mode this guard exists
+      // to catch.
+      expect(r.gameOver).toBe(false);
+      expect(r.wave).toBeGreaterThanOrEqual(FAST_WAVE_FLOOR);
+    }
+  });
+
+  it("FAST: capped defense is deterministic for a fixed seed", () => {
+    const a = playCappedDefense(20260918, FAST_MAX_TOWERS, FAST_TARGET_WAVE, FAST_TICK_CEILING);
+    const b = playCappedDefense(20260918, FAST_MAX_TOWERS, FAST_TARGET_WAVE, FAST_TICK_CEILING);
+    expect(b.wave).toBe(a.wave);
+    expect(b.score).toBe(a.score);
+  });
+
+  // --- FULL sweep-measurement block, opt-in only: `BALANCE_SWEEP=1 npm test` ---
+  // These reproduce the actual §5.4 sweep acceptance numbers (task-13b-report.md)
+  // but each one plays a full, uncapped (all 450 in-range tiles) game to
+  // gameOver, which is real O(towers x creeps)-per-tick compute — several
+  // minutes combined. Not part of the default per-commit suite; run on
+  // demand or wire into a scheduled CI job (mirrors the original Task 12
+  // comment's note that the full grid sweep itself belongs in scheduled
+  // CI, not per-commit).
+
+  slowIt("FULL: active defense is deterministic for a fixed seed (uncapped, play to gameOver)", () => {
     const a = playActiveDefense(20260918);
     const b = playActiveDefense(20260918);
     expect(b.wave).toBe(a.wave);
     expect(b.score).toBe(a.score);
-    // Two full runs to wave ~81 (each ~45s once the economy escapes the
-    // wave-5 trap — see task-13b-report.md's "Performance note") comfortably
-    // exceed vitest's 5000ms default; this is real compute, not a hang.
   }, 180_000);
 
-  it("active defense reaches a meaningful wave (measured floor across seeds, see task-13b-report.md)", () => {
+  slowIt("FULL: active defense reaches a meaningful wave (measured floor across seeds, see task-13b-report.md)", () => {
     // Seeds match the §5.4 sweep's own tested set exactly (task-13b-report.md
     // step 1), so this assertion is pinned to numbers the sweep actually
     // produced, not a superset invented after the fact.
@@ -179,7 +305,7 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     // escapes the wave-5 trap) comfortably exceed vitest's 5000ms default.
   }, 300_000);
 
-  it("KNOWN CONCERN: seed=4 does not escape under these defaults (see task-13b-report.md)", () => {
+  slowIt("FULL: KNOWN CONCERN: seed=4 does not escape under these defaults (see task-13b-report.md)", () => {
     // Not part of the §5.4 sweep's own seed set (only seeds
     // [20260918,1,2,3] were swept per the task brief) — logged as an
     // explicit, non-blocking observation rather than silently omitted.
@@ -202,14 +328,14 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
     // eslint-disable-next-line no-console
     console.log(`[balance.sweep] KNOWN CONCERN seed=4: wave=${r.wave} tilesUsed=${r.tilesUsed}`);
     expect(r.hitCeiling).toBe(false); // still terminates; just early
-  });
+  }, 60_000);
 
-  it("does not allow trivial infinite survival (terminates by gameOver, not the tick ceiling)", () => {
+  slowIt("FULL: does not allow trivial infinite survival (terminates by gameOver, not the tick ceiling)", () => {
     const r = playActiveDefense(20260918);
     expect(r.hitCeiling).toBe(false);
   }, 120_000);
 
-  it("active defense outlasts pure banking", () => {
+  slowIt("FULL: active defense outlasts pure banking", () => {
     // Measured with the tuned defaults: active defense reaches wave 81
     // (score ~4600, all 450 in-range tiles eventually filled — see the
     // "meaningful wave" test above) vs. wave 4 for pure banking (which buys
