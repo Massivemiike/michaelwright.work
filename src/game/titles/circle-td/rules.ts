@@ -7,7 +7,7 @@ import type { Fx } from "@/game/sim/types";
 import { fromFloat, fromInt, mul } from "@/game/sim/math/fixed";
 import type { SimState } from "@/game/sim/state";
 import { addCreep, CREEP_FAST } from "@/game/sim/state";
-import { WAVE_SIZE } from "./content";
+import { TRACK, trackLength, WAVE_SIZE } from "./content";
 import { hp, waveFlags, typeMul } from "./balance";
 
 export const CREEP_SPEED: Fx = fromFloat(1.2); // px/tick, INVENTED
@@ -34,12 +34,18 @@ export const spawnWave = (s: SimState): void => {
 
 export const moveCreeps = (s: SimState): void => {
   const c = s.creeps;
+  const outerLen = trackLength(TRACK.outer);
+  const innerLen = trackLength(TRACK.inner);
   for (let i = 0; i < c.count; i++) {
     let sp = (c.flags[i] & CREEP_FAST) ? mul(c.speed[i], FAST_MULT) : c.speed[i];
     if (c.slowTicks[i] > 0) {
       sp = Math.trunc(sp * (100 - c.slowPct[i]) / 100);
       c.slowTicks[i] -= 1;
     }
-    c.dist[i] += sp;
+    // Wrap dist modulo the creep's track length each tick so it never
+    // overflows Int32 over a long-lived run (controller ruling R10).
+    // posAt() already mods by total length, so this is behavior-preserving
+    // for position; it just keeps the stored value bounded forever.
+    c.dist[i] = (c.dist[i] + sp) % (c.entrance[i] === 0 ? outerLen : innerLen);
   }
 };
