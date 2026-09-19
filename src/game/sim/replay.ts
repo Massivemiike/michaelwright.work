@@ -29,7 +29,14 @@ export interface Replay {
 // (20 + level) / 20, computed as Math.floor(cost * (20 + level) / 20) — a
 // float 0.05 multiplier would drift across JS engines and break the
 // cross-engine determinism the golden gate exists to catch.
-const upgradeCost = (baseCost: number, level: number): number =>
+//
+// Exported (Task 7, Plan 2) so SelectedTowerPanel.tsx can show the exact
+// next-upgrade cost on the Upgrade button before the player clicks it,
+// without keeping a second, driftable copy of an R11-governed formula —
+// the actual mutation still goes through applyCommand's "upgrade" branch
+// below, so this export only ever affects what's DISPLAYED, never what's
+// charged.
+export const upgradeCost = (baseCost: number, level: number): number =>
   Math.floor((baseCost * (20 + level)) / 20);
 
 // base cost + the floor-summed cost of every upgrade step 0..level-1.

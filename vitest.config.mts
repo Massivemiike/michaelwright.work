@@ -9,6 +9,14 @@ export default defineConfig({
     // opts into jsdom per-file via a `// @vitest-environment jsdom`
     // pragma comment instead of flipping this globally.
     environment: "node",
-    include: ["src/game/**/*.test.ts", "src/app/games/**/*.test.tsx"],
+    // Task 7 adds src/components/game/**/*.test.tsx (the HUD's React
+    // components) — same jsdom-via-pragma opt-in as
+    // src/app/games/**/*.test.tsx already uses; the global default stays
+    // "node" for the sim/logic tests, which are still the vast majority.
+    include: [
+      "src/game/**/*.test.ts",
+      "src/app/games/**/*.test.tsx",
+      "src/components/game/**/*.test.tsx",
+    ],
   },
 });

@@ -13,9 +13,14 @@
 // InputModel (src/game/runtime/input/pointer.ts) that turns player intent
 // into Commands run through applyCommand — the SAME path Plan 3's
 // leaderboard replay verifier uses, so what the player does here and what
-// gets verified later are identical by construction. Task 7's HUD reads
-// the refs set up below (inputModelRef in particular) rather than
-// introducing its own. Task 8 is what actually routes to this component
+// gets verified later are identical by construction. Task 7 adds the DOM
+// HUD (components/game/*) composed at the bottom of this file's JSX,
+// reading a throttled RenderSnapshot (src/game/runtime/hud/snapshotStore.ts)
+// and dispatching back into the SAME `inputModelRef`/`loopRef` this file
+// already owns, via the stable wrapper objects declared in the component
+// body (paletteInputModel/panelInputModel/loopControls) — no separate
+// InputModel/GameLoop instance of its own. Task 8 is what actually routes
+// to this component
 // (dynamic, ssr:false, behind a click-to-play gate) and picks a real seed;
 // until then this always free-plays a fixed seed so there's something
 // deterministic to look at (Task 9's browser check) the moment it mounts.
@@ -29,13 +34,20 @@
 // renderer. reactCompiler is on, so the sim/renderer/loop/snapshots all
 // live in refs, never React state — they change at 30-60Hz and must not
 // drive a re-render.
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { makeSim, type CircleTdSim, type SimConfig } from "@/game/titles/circle-td";
 import { Canvas2DRenderer } from "@/game/runtime/render/canvas2d/Canvas2DRenderer";
 import type { Renderer, HitEvent } from "@/game/runtime/render/Renderer";
-import type { RenderSnapshot } from "@/game/sim/engine";
+import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
 import { makeLoop, type GameLoop } from "@/game/runtime/loop";
-import { InputModel, tileAtWorld, towerIndexAtTile } from "@/game/runtime/input/pointer";
+import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "@/game/runtime/input/pointer";
+import { createSnapshotStore } from "@/game/runtime/hud/snapshotStore";
+import { ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS } from "@/game/titles/circle-td/content";
+import Hud from "@/components/game/Hud";
+import TowerPalette, { type TowerPaletteInputModel } from "@/components/game/TowerPalette";
+import SelectedTowerPanel, { type SelectedTowerPanelInputModel } from "@/components/game/SelectedTowerPanel";
+import SpeedControls, { type SpeedControlsLoop, type Speed } from "@/components/game/SpeedControls";
+import GameOver from "@/components/game/GameOver";
 
 // Free-play default until Task 8 derives a real daily seed and gates the
 // mount behind a click. A fixed constant (not e.g. Date.now()) keeps this
@@ -50,6 +62,13 @@ const DEFAULT_MODE: SimConfig["mode"] = "free";
 // new-identity-but-still-empty list) every single frame in the meantime.
 const NO_HITS: HitEvent[] = [];
 
+// Task 7: a wave is "imminent" once we're within this many ticks of the
+// next WAVE_INTERVAL_TICKS boundary — 90 ticks = 3s at loop.ts's 30Hz
+// SIM_HZ. This threshold (and the whole "imminent dot" idea) is a
+// judgment call, not sourced from the spec — the brief lists it as
+// optional HUD chrome, not a gameplay-affecting figure.
+const WAVE_IMMINENT_TICKS = 90;
+
 export interface GameClientProps {
   seed?: number;
   mode?: SimConfig["mode"];
@@ -58,6 +77,9 @@ export interface GameClientProps {
 const containerStyle: CSSProperties = {
   width: "100%",
   height: "100%",
+  // Anchors the Task 7 HUD overlay below, which is absolutely positioned
+  // against this container rather than the viewport.
+  position: "relative",
 };
 
 const canvasStyle: CSSProperties = {
@@ -69,6 +91,37 @@ const canvasStyle: CSSProperties = {
   // scroll/zoom gesture before pointer events ever reach the handlers
   // below.
   touchAction: "none",
+};
+
+// Task 7: the DOM HUD overlaid on top of the canvas. `pointerEvents: "none"`
+// on the outer wrapper lets clicks/drags fall through to the canvas
+// everywhere EXCEPT where an actual HUD panel re-enables
+// `pointerEvents: "auto"` on itself (every component in components/game
+// does this on its own root) — so the palette/panel/speed controls are
+// clickable without the invisible rest of the overlay ever blocking a
+// tower placement click.
+const hudOverlayStyle: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
+const hudTopLeftStyle: CSSProperties = { position: "absolute", top: "1rem", left: "1rem" };
+const hudTopRightStyle: CSSProperties = {
+  position: "absolute",
+  top: "1rem",
+  right: "1rem",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: "0.75rem",
+  // 70vw (not a fixed px cap alone) so this has more room to breathe at the
+  // 360-414px widths the brief calls out before SpeedControls' own
+  // flexWrap has to kick in.
+  maxWidth: "min(320px, 70vw)",
+};
+const hudBottomStyle: CSSProperties = {
+  position: "absolute",
+  bottom: "1rem",
+  left: "1rem",
+  right: "1rem",
+  display: "flex",
+  justifyContent: "center",
 };
 
 export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }: GameClientProps) {
@@ -91,7 +144,93 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
   // own concept — see loop.ts's setPaused).
   const inputModelRef = useRef<InputModel | null>(null);
   const hoveredTileRef = useRef<number>(-1);
-  const pausedRef = useRef<boolean>(false);
+  // Task 7: starts `true` (not `false`) — the pre-round BUILD PHASE now
+  // starts the loop paused so the player can place towers at tick 0 before
+  // wave 1 spawns; GO (SpeedControls) is what flips this. See setup()
+  // below and the brief's "GO/pause model" section.
+  const pausedRef = useRef<boolean>(true);
+
+  // --- Task 7: HUD wiring ---
+  //
+  // `syncRef` is how the stable, always-safe-to-call wrapper objects below
+  // (paletteInputModel/panelInputModel/loopControls, all created once via
+  // useState so their identity never changes across renders) reach INTO
+  // the current effect invocation's `syncUiState`/`syncRendererHighlight`
+  // closures, which don't exist yet at component-body eval time and are
+  // recreated every effect run. Defaults to no-ops so calling a wrapper
+  // before setup() has run (or after unmount) is inert rather than a
+  // null-deref.
+  const syncRef = useRef<{ ui: () => void; highlight: () => void }>({
+    ui: () => {},
+    highlight: () => {},
+  });
+
+  // Throttled (~10Hz, see snapshotStore.ts) RenderSnapshot for the HUD's
+  // numbers — reactCompiler is on and the sim/renderer/loop live in refs
+  // specifically so they DON'T drive a re-render at 30-60Hz; this is the
+  // one deliberate, rate-limited bridge from that ref world into React
+  // state. Seeded with an all-zero placeholder (bank/score/wave all 0,
+  // gameOver false) until the mount effect's first frame pushes the real
+  // sim.snapshot() — same "brief 0-1 frame flash" already disclosed for
+  // the canvas itself in Task 5.
+  const [hudStore] = useState(() => createSnapshotStore(makeRenderSnapshot(0, 0)));
+  const snapshot = useSyncExternalStore(hudStore.subscribe, hudStore.getSnapshot);
+
+  // Mirrors InputModel's UI-only fields (armed palette type; selected
+  // placed tower's tile/type/level) into React state, since InputModel
+  // itself is a plain mutable object in a ref (mutated far more often, by
+  // pointer/keyboard events, than a render should be triggered) — but
+  // unlike the snapshot above, THESE change only on a user action, not
+  // every frame, so mirroring them as ordinary (untraced) state is cheap
+  // and doesn't need throttling. type/level come from sim.state.towers
+  // directly (via towerIndexAtTile), not RenderSnapshot, because
+  // RenderSnapshot has no per-tower tile field to map a selected TILE back
+  // to a tower array index.
+  const [uiState, setUiState] = useState<{
+    towerType: number;
+    tile: number;
+    tileType: number;
+    tileLevel: number;
+  }>({ towerType: DEFAULT_TOWER_TYPE, tile: -1, tileType: -1, tileLevel: -1 });
+
+  // paused/speed have no ground-truth getter on GameLoop (setPaused/
+  // setSpeed are write-only — see loop.ts) — SpeedControls reports changes
+  // up via onPauseChange/onSpeedChange, and THIS state is what GameClient
+  // (and pausedRef, for the visibilitychange handler below) treats as the
+  // current value.
+  const [uiPaused, setUiPaused] = useState(true);
+  const [uiSpeed, setUiSpeed] = useState<Speed>(1);
+
+  // Stable (created once, never recreated) wrapper objects handed to the
+  // HUD components as their `loop`/`inputModel` props. Each one forwards
+  // to whatever's CURRENTLY in loopRef/inputModelRef (null until setup()
+  // resolves, always safe via `?.`) and then resyncs the canvas highlight
+  // + the uiState mirror above via syncRef — so a click/keypress in the
+  // HUD has the exact same downstream effect as the equivalent canvas
+  // pointer/keyboard interaction from Task 6.
+  const [loopControls] = useState<SpeedControlsLoop>(() => ({
+    setPaused: (p) => loopRef.current?.setPaused(p),
+    setSpeed: (s) => loopRef.current?.setSpeed(s),
+  }));
+  const [paletteInputModel] = useState<TowerPaletteInputModel>(() => ({
+    selectTower: (type) => {
+      inputModelRef.current?.selectTower(type);
+      syncRef.current.highlight();
+      syncRef.current.ui();
+    },
+  }));
+  const [panelInputModel] = useState<SelectedTowerPanelInputModel>(() => ({
+    upgrade: (tile) => {
+      inputModelRef.current?.upgrade(tile);
+      syncRef.current.highlight();
+      syncRef.current.ui();
+    },
+    sell: (tile) => {
+      inputModelRef.current?.sell(tile);
+      syncRef.current.highlight();
+      syncRef.current.ui();
+    },
+  }));
 
   useEffect(() => {
     const container = containerRef.current;
@@ -114,7 +253,9 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     const inputModel = new InputModel({ getState: () => sim.state });
     inputModelRef.current = inputModel;
     hoveredTileRef.current = -1;
-    pausedRef.current = false;
+    // Task 7: BUILD PHASE starts paused; GO (SpeedControls) unpauses — see
+    // setup() below, which calls loop.setPaused(true) right after start().
+    pausedRef.current = true;
 
     // Typed as the Renderer interface, not the concrete class, even though
     // Canvas2D is the only backend today — Plan 3's WebGPU renderer drops
@@ -164,6 +305,16 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
             const snapshots = snapshotsRef.current;
             if (!snapshots) return;
             renderer.frame(snapshots.prev, snapshots.curr, alpha, NO_HITS);
+            // Task 7: offer the HUD store a fresh snapshot every frame —
+            // hudStore.push internally throttles this to ~10Hz (see
+            // snapshotStore.ts) and only actually calls sim.snapshot()
+            // (which allocates) when it accepts. Reading LIVE sim.state
+            // here (not snapshots.curr, which only advances on a real
+            // tick() call) is what lets the HUD reflect a bank change from
+            // placing/upgrading/selling a tower immediately even while the
+            // loop is paused during the pre-round build phase, when tick()
+            // never runs at all.
+            hudStore.push(() => sim.snapshot(), performance.now());
           },
         },
         {
@@ -176,10 +327,16 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
 
       resizeObserver = observeResize(container!, renderer);
       loop.start();
+      // Task 7: pre-round BUILD PHASE — the loop starts paused so the
+      // player can place towers at tick 0 (applyCommand mutates sim.state
+      // synchronously regardless of pause state) before wave 1 spawns.
+      // GO (SpeedControls, via loopControls.setPaused) is what flips this.
+      loop.setPaused(true);
       // Reflect the default armed tower type (and any hover that already
       // happened before init() resolved) the moment the renderer exists,
       // rather than waiting for the next pointer event to paint it.
       syncRendererHighlight();
+      syncUiState();
     }
 
     // --- Task 6: pointer + keyboard input ---
@@ -211,6 +368,32 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       }
     };
 
+    // Task 7: mirrors InputModel's UI-only fields into the `uiState` React
+    // state the HUD renders from (see the component-body comment above).
+    // type/level are looked up via towerIndexAtTile against LIVE sim.state
+    // — the same lookup syncRendererHighlight uses above — since
+    // RenderSnapshot has no tile-indexed field to invert "which tile is
+    // selected" back into "which tower array slot is that."
+    const syncUiState = (): void => {
+      const tile = inputModel.selectedTile;
+      let tileType = -1;
+      let tileLevel = -1;
+      if (tile !== -1) {
+        const idx = towerIndexAtTile(sim.state, tile);
+        if (idx !== -1) {
+          tileType = sim.state.towers.type[idx];
+          tileLevel = sim.state.towers.level[idx];
+        }
+      }
+      setUiState({ towerType: inputModel.selectedTowerType, tile, tileType, tileLevel });
+    };
+
+    // Bridges the stable paletteInputModel/panelInputModel/loopControls
+    // wrapper objects (created once via useState, in the component body)
+    // into THIS effect invocation's sync functions — see the `syncRef`
+    // declaration's comment above for why this indirection exists.
+    syncRef.current = { ui: syncUiState, highlight: syncRendererHighlight };
+
     const tileFromPointerEvent = (e: PointerEvent): number => {
       const r = rendererRef.current;
       if (!r) return -1;
@@ -241,34 +424,25 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
         inputModel.place(tile);
       }
       syncRendererHighlight();
+      syncUiState();
     };
 
+    // Task 7: "1"-"5" (arm a tower), "U"/"S" (upgrade/sell the selected
+    // tower), and " " (pause toggle) moved OUT of this canvas-level
+    // listener and into the HUD components that now own those shortcuts
+    // (TowerPalette, SelectedTowerPanel, SpeedControls respectively — each
+    // attaches its own window keydown listener, calling through the
+    // paletteInputModel/panelInputModel/loopControls wrappers declared in
+    // the component body, which resync this effect's
+    // syncRendererHighlight/syncUiState via `syncRef` after every
+    // mutation). Handling the same key in two places would double-fire a
+    // mutating action (e.g. two upgrades for one keypress) — Escape is the
+    // only shortcut with no HUD-component owner, so it stays here.
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key >= "1" && e.key <= "5") {
-        inputModel.selectTower(Number(e.key) - 1); // '1'..'5' -> tower index 0..4
+      if (e.key.toLowerCase() === "escape") {
+        inputModel.cancel();
         syncRendererHighlight();
-        return;
-      }
-      switch (e.key.toLowerCase()) {
-        case "u":
-          if (inputModel.selectedTile !== -1) inputModel.upgrade(inputModel.selectedTile);
-          syncRendererHighlight();
-          return;
-        case "s":
-          if (inputModel.selectedTile !== -1) inputModel.sell(inputModel.selectedTile);
-          syncRendererHighlight();
-          return;
-        case "escape":
-          inputModel.cancel();
-          syncRendererHighlight();
-          return;
-        case " ":
-          e.preventDefault(); // don't let Space also scroll the page
-          pausedRef.current = !pausedRef.current;
-          loopRef.current?.setPaused(pausedRef.current);
-          return;
-        default:
-          return;
+        syncUiState();
       }
     };
 
@@ -281,7 +455,12 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     window.addEventListener("keydown", onKeyDown);
 
     function onVisibilityChange(): void {
-      loopRef.current?.setPaused(document.hidden);
+      // Task 7: OR with pausedRef so refocusing a backgrounded tab doesn't
+      // unconditionally unpause a run the player had manually paused
+      // themselves before it was backgrounded — hidden always forces a
+      // pause; becoming visible again only resumes if the player hadn't
+      // already paused it.
+      loopRef.current?.setPaused(document.hidden || pausedRef.current);
     }
     document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -296,6 +475,12 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       window.removeEventListener("keydown", onKeyDown);
       inputModelRef.current = null;
       hoveredTileRef.current = -1;
+      // Task 7: revert to the no-op defaults so a stray call into
+      // paletteInputModel/panelInputModel after this effect has torn down
+      // (already guarded by inputModelRef being null above, via `?.`) never
+      // reaches a closure over a `sim`/`inputModel` this cleanup just
+      // discarded.
+      syncRef.current = { ui: () => {}, highlight: () => {} };
       loopRef.current?.stop();
       loopRef.current = null;
       resizeObserver?.disconnect();
@@ -309,9 +494,59 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     // the full teardown+setup if they ever did change is still correct.
   }, [seed, mode]);
 
+  // Task 7: a wave is imminent once we're within WAVE_IMMINENT_TICKS of the
+  // next spawn boundary — never true pre-round (wave 0) or after game over,
+  // since neither state has a "next wave" worth flagging.
+  const waveImminent =
+    snapshot.wave > 0 &&
+    !snapshot.gameOver &&
+    WAVE_INTERVAL_TICKS - (snapshot.tick % WAVE_INTERVAL_TICKS) <= WAVE_IMMINENT_TICKS;
+
   return (
     <div ref={containerRef} style={containerStyle}>
       <canvas ref={canvasRef} style={canvasStyle} />
+      {/* Task 7: DOM HUD overlaid on the canvas — see hudOverlayStyle's
+          comment for the pointer-events-passthrough trick. */}
+      <div style={hudOverlayStyle}>
+        <div style={hudTopLeftStyle}>
+          <Hud
+            bank={snapshot.bank}
+            score={snapshot.score}
+            wave={snapshot.wave}
+            creepCount={snapshot.creepCount}
+            creepCap={ALIVE_CAP_NORMAL}
+            waveImminent={waveImminent}
+          />
+        </div>
+        <div style={hudTopRightStyle}>
+          <SpeedControls
+            loop={loopControls}
+            started={snapshot.wave > 0}
+            paused={uiPaused}
+            speed={uiSpeed}
+            onPauseChange={(p) => {
+              pausedRef.current = p;
+              setUiPaused(p);
+            }}
+            onSpeedChange={setUiSpeed}
+          />
+          {uiState.tile !== -1 && (
+            <SelectedTowerPanel
+              tile={uiState.tile}
+              type={uiState.tileType}
+              level={uiState.tileLevel}
+              bank={snapshot.bank}
+              inputModel={panelInputModel}
+            />
+          )}
+        </div>
+        <div style={hudBottomStyle}>
+          <TowerPalette bank={snapshot.bank} selectedType={uiState.towerType} inputModel={paletteInputModel} />
+        </div>
+        {snapshot.gameOver && (
+          <GameOver score={snapshot.score} wave={snapshot.wave} onPlayAgain={() => window.location.reload()} />
+        )}
+      </div>
     </div>
   );
 }
