@@ -2,9 +2,9 @@
 import { describe, it, expect } from "vitest";
 import {
   TOWERS, TARGET_AIR, TARGET_LAND, TARGET_BOTH, trackLength, posAt, TRACK,
-  TILES, TILE_COUNT, TILE_SIZE, TRACK_WIDTH,
+  TILES, TILE_COUNT, TILE_SIZE, TRACK_WIDTH, MIN_CLEARANCE,
 } from "./content";
-import { fromInt, toFloat } from "@/game/sim/math/fixed";
+import { fromInt, toFloat, toInt } from "@/game/sim/math/fixed";
 
 describe("Circle TD content", () => {
   it("has five towers with sourced costs", () => {
@@ -58,7 +58,7 @@ describe("Circle TD content", () => {
     expect(mid.y).toBe((y0 + y1) / 2);
   });
 
-  // --- Task 2: real spiral geometry + flanking tiles ---
+  // --- Task 2: real spiral geometry (track loops) ---
 
   it("inner track loops too: posAt wraps past the end", () => {
     const len = trackLength(TRACK.inner);
@@ -83,9 +83,24 @@ describe("Circle TD content", () => {
     }
   });
 
-  it("tile count is in a sane range (flanking cells, not an all-board grid)", () => {
-    expect(TILE_COUNT).toBeGreaterThanOrEqual(120);
-    expect(TILE_COUNT).toBeLessThanOrEqual(400);
+  // --- Map fix (2026-09-19): open-area tile grid replaces flanking strips ---
+
+  it("tile count is in a sane range (open-area grid, not a thin flanking strip)", () => {
+    expect(TILE_COUNT).toBeGreaterThan(0);
+    expect(TILE_COUNT).toBeGreaterThan(150);
+    expect(TILE_COUNT).toBeLessThan(600);
+  });
+
+  it("every tile centre sits on the 32px lattice", () => {
+    // Lattice centres are (16 + TILE_SIZE*i, 16 + TILE_SIZE*j) — converting
+    // back from Fx with toInt is exact since every stored value is an
+    // integer stage-px coordinate scaled by SCALE.
+    for (let ti = 0; ti < TILE_COUNT; ti++) {
+      const x = toInt(TILES[ti * 2]);
+      const y = toInt(TILES[ti * 2 + 1]);
+      expect((x - 16) % TILE_SIZE).toBe(0);
+      expect((y - 16) % TILE_SIZE).toBe(0);
+    }
   });
 
   // Axis-aligned point-to-segment distance (float px) — every track segment
@@ -105,10 +120,7 @@ describe("Circle TD content", () => {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  it("no tile sits ON the path (either track)", () => {
-    // A tile "on" the path means within less than half a tile of some
-    // segment's centreline — well under the generator's own flank offset.
-    const minOnPathDist = TILE_SIZE / 2;
+  it("no tile sits on or under the painted track band (every tile clears MIN_CLEARANCE from both loops)", () => {
     for (const poly of [TRACK.outer, TRACK.inner]) {
       const n = poly.length / 2;
       for (let ti = 0; ti < TILE_COUNT; ti++) {
@@ -119,28 +131,31 @@ describe("Circle TD content", () => {
           const x1 = poly[j * 2], y1 = poly[j * 2 + 1];
           if (x0 === x1 && y0 === y1) continue; // zero-length wrap edge
           const d = pointSegDist(tx, ty, toFloat(x0), toFloat(y0), toFloat(x1), toFloat(y1));
-          expect(d).toBeGreaterThanOrEqual(minOnPathDist);
+          expect(d).toBeGreaterThanOrEqual(MIN_CLEARANCE);
         }
       }
     }
   });
 
-  it("every tile flanks the track: within ~1.5*TILE_SIZE of some point on some path segment", () => {
-    const maxFlankDist = TILE_SIZE * 1.5;
-    const step = fromInt(8);
+  it("coverage: at least one tile in the inner-loop interior and one in the left lane", () => {
+    // The two regions the old flanking-strip model left entirely empty.
+    let innerInterior = 0;
+    let leftLane = 0;
     for (let ti = 0; ti < TILE_COUNT; ti++) {
-      const tx = TILES[ti * 2], ty = TILES[ti * 2 + 1];
-      let best = Infinity;
-      for (const poly of [TRACK.outer, TRACK.inner]) {
-        const total = trackLength(poly);
-        for (let d = 0; d <= total; d += step) {
-          const p = posAt(poly, d);
-          const dx = toFloat(p.x - tx), dy = toFloat(p.y - ty);
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < best) best = dist;
-        }
-      }
-      expect(best).toBeLessThanOrEqual(maxFlankDist);
+      const x = toFloat(TILES[ti * 2]), y = toFloat(TILES[ti * 2 + 1]);
+      if (x > 242 && x < 598 && y > 242 && y < 418) innerInterior++;
+      if (x < 190) leftLane++;
+    }
+    expect(innerInterior).toBeGreaterThan(0);
+    expect(leftLane).toBeGreaterThan(0);
+  });
+
+  it("no two tiles share a centre (grid uniqueness)", () => {
+    const seen = new Set<string>();
+    for (let ti = 0; ti < TILE_COUNT; ti++) {
+      const key = `${TILES[ti * 2]},${TILES[ti * 2 + 1]}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
     }
   });
 
@@ -232,41 +247,5 @@ describe("Circle TD content", () => {
         expect(segsIntersect(a, b)).toBe(false);
       }
     }
-  });
-
-  it("finding #4: no two tiles are closer than ~0.75*TILE_SIZE (minimum pairwise centre spacing)", () => {
-    const minSpacing = TILE_SIZE * 0.75;
-    let minDist = Infinity;
-    for (let i = 0; i < TILE_COUNT; i++) {
-      for (let j = i + 1; j < TILE_COUNT; j++) {
-        const dx = toFloat(TILES[i * 2] - TILES[j * 2]);
-        const dy = toFloat(TILES[i * 2 + 1] - TILES[j * 2 + 1]);
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < minDist) minDist = dist;
-      }
-    }
-    expect(minDist).toBeGreaterThanOrEqual(minSpacing);
-  });
-
-  it("finding #5: build tiles exist in the board's centre region (inside INNER's ring)", () => {
-    // A tile "in the centre region" is one that falls inside INNER's own
-    // bounding box — i.e. flanking INNER's ring from the interior, the
-    // region the old interleaved geometry painted over entirely.
-    const bbox = (poly: Int32Array) => {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (let i = 0; i < poly.length; i += 2) {
-        const x = toFloat(poly[i]), y = toFloat(poly[i + 1]);
-        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-      }
-      return { minX, maxX, minY, maxY };
-    };
-    const inner = bbox(TRACK.inner);
-    let centreTiles = 0;
-    for (let ti = 0; ti < TILE_COUNT; ti++) {
-      const tx = toFloat(TILES[ti * 2]), ty = toFloat(TILES[ti * 2 + 1]);
-      if (tx > inner.minX && tx < inner.maxX && ty > inner.minY && ty < inner.maxY) centreTiles++;
-    }
-    expect(centreTiles).toBeGreaterThan(0);
   });
 });

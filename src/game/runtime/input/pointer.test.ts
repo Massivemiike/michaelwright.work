@@ -23,11 +23,11 @@ describe("tileAtWorld", () => {
     expect(tileAtWorld(-5000, -5000)).toBe(-1);
   });
 
-  it("returns -1 for a point on the path (tile centres sit a full flank offset away)", () => {
+  it("returns -1 for a point on the path (tile centres keep MIN_CLEARANCE away)", () => {
     // TRACK.outer's first vertex is a point ON the path's centreline —
     // content.ts's own tile generator keeps every tile centre at least
-    // TILE_SIZE (the flank offset) away from any segment, well outside
-    // tileAtWorld's TILE_SIZE/2 search radius.
+    // MIN_CLEARANCE (48px) away from any segment, well outside
+    // tileAtWorld's TILE_SIZE/2 (16px) search radius.
     const px = toFloat(TRACK.outer[0]);
     const py = toFloat(TRACK.outer[1]);
     expect(tileAtWorld(px, py)).toBe(-1);

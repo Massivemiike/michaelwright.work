@@ -45,6 +45,7 @@ interface Palette {
   bgBase: string;
   bgBaseRgb: RGB;
   bgSurface: string;
+  bgSurfaceRgb: RGB;
   bgElevated: string;
   bgElevatedRgb: RGB;
   borderSubtle: string;
@@ -186,6 +187,7 @@ function readPalette(): Palette {
     bgBase,
     bgBaseRgb: hexToRgb(bgBase),
     bgSurface,
+    bgSurfaceRgb: hexToRgb(bgSurface),
     bgElevated,
     bgElevatedRgb: hexToRgb(bgElevated),
     borderSubtle,
@@ -212,6 +214,7 @@ function fallbackPalette(): Palette {
     bgBase: f.bgBase,
     bgBaseRgb: hexToRgb(f.bgBase),
     bgSurface: f.bgSurface,
+    bgSurfaceRgb: hexToRgb(f.bgSurface),
     bgElevated: f.bgElevated,
     bgElevatedRgb: hexToRgb(f.bgElevated),
     borderSubtle: f.borderSubtle,
@@ -455,7 +458,13 @@ export class Canvas2DRenderer implements Renderer {
     const cy = STAGE_H / 2;
     const r = Math.hypot(cx, cy);
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    g.addColorStop(0, this.palette.bgElevated);
+    // Map fix (2026-09-19): stop 0 used to be pure bg-elevated, the exact
+    // tone drawTiles' old fill sat on top of — ~1.0 contrast at the board
+    // centre, which is why tiles were invisible there until hover. Lifting
+    // the centre only halfway toward bg-surface keeps "a lit stage" while
+    // leaving headroom for the tile grid (drawTiles) to be the brightest
+    // thing drawn on open ground, at centre AND edge alike.
+    g.addColorStop(0, rgbaOf(mixRgb(this.palette.bgElevatedRgb, this.palette.bgSurfaceRgb, 0.5), 1));
     g.addColorStop(0.5, this.palette.bgSurface);
     g.addColorStop(1, this.palette.bgBase);
     return g;
@@ -479,21 +488,13 @@ export class Canvas2DRenderer implements Renderer {
     ctx.fillStyle = this.backdropGradient ?? this.palette.bgSurface;
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
 
-    // Faint structural grid — a depth/scale cue meant to sit below
-    // conscious notice, not a texture of its own.
-    const pitch = TILE_SIZE * 2;
-    ctx.beginPath();
-    for (let x = pitch; x < STAGE_W; x += pitch) {
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, STAGE_H);
-    }
-    for (let y = pitch; y < STAGE_H; y += pitch) {
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(STAGE_W, y + 0.5);
-    }
-    ctx.strokeStyle = rgbaOf(this.palette.borderSubtleRgb, 0.4);
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // Map fix (2026-09-19): the old faint structural grid (pitch
+    // TILE_SIZE*2, borderSubtle@0.4) was drawn here as a depth/scale cue
+    // for an otherwise-empty board. Now that drawTiles paints a real,
+    // clearly-visible TILE_SIZE grid over every open area, a second grid
+    // underneath it only doubles up (its 64px pitch is a multiple of the
+    // tiles' own 32px lattice) and competes for attention — dropped so the
+    // real buildable-tile grid is the only grid the board reads.
 
     if (this.vignetteGradient) {
       ctx.fillStyle = this.vignetteGradient;
@@ -556,10 +557,27 @@ export class Canvas2DRenderer implements Renderer {
     }
   }
 
+  // Map fix (2026-09-19): the old fill (bg-elevated@0.6, half=TILE_SIZE*0.32)
+  // sat at ~1.0 luminance contrast against the backdrop's own bg-elevated
+  // centre stop (see makeBackdropGradient) — invisible until hover — and was
+  // drawn well inside its ~32px clickable footprint. Both are fixed here:
+  // half is bumped to TILE_SIZE*0.44 (~28px square, a ~4px gutter between
+  // 32px-spaced cells so they still read as a grid) and the fill/border are
+  // a neutral tint mixed toward text-secondary (never the accent hue — the
+  // brand's one-accent rule reserves that for the hovered tile/live things),
+  // tuned to measure >=3:1 WCAG contrast against the backdrop at BOTH the
+  // board centre and the edge (see fix1-map-report.md for the numbers).
   private drawTiles(ctx: CanvasRenderingContext2D): void {
-    const half = TILE_SIZE * 0.32;
-    ctx.fillStyle = rgbaOf(this.palette.bgElevatedRgb, 0.6);
-    ctx.strokeStyle = this.palette.borderMuted;
+    const half = TILE_SIZE * 0.44;
+    // Affordability signal: when a tower type is armed and unaffordable at
+    // the current bank, every tile dims to read "you can't build right now"
+    // — reusing state the renderer already tracks for the hover ghost
+    // (setHighlight), no interface change needed.
+    const armedUnaffordable = this.highlightTowerType >= 0 && !this.highlightAffordable;
+    const dim = armedUnaffordable ? 0.6 : 1;
+    const fillRgb = mixRgb(this.palette.bgElevatedRgb, this.palette.textSecondaryRgb, 0.9);
+    ctx.fillStyle = rgbaOf(fillRgb, 0.82 * dim);
+    ctx.strokeStyle = rgbaOf(this.palette.textSecondaryRgb, 0.85 * dim);
     ctx.lineWidth = 1;
     for (let i = 0; i < this.tilesPx.length; i += 2) {
       const x = this.tilesPx[i];
@@ -699,7 +717,9 @@ export class Canvas2DRenderer implements Renderer {
     const y = this.tilesPx[tile * 2 + 1];
     const type = this.highlightTowerType;
     const affordable = this.highlightAffordable;
-    const half = TILE_SIZE * 0.42;
+    // Matches drawTiles' half (TILE_SIZE * 0.44) so the hover ring aligns
+    // exactly with the drawn tile block underneath it.
+    const half = TILE_SIZE * 0.44;
 
     // Bright accent outline on the hovered/targeted tile — always drawn
     // (even with nothing armed), so hover itself is unmistakable; dims
