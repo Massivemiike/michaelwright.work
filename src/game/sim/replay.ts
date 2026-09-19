@@ -8,7 +8,7 @@
 // RNG only — no non-deterministic time/randomness sources, no host globals,
 // no filesystem access.
 import { makeSim } from "@/game/titles/circle-td";
-import { TOWERS, SELL_REFUND_PCT } from "@/game/titles/circle-td/content";
+import { TOWERS, SELL_REFUND_PCT, TILE_COUNT } from "@/game/titles/circle-td/content";
 import { addTower, removeTower, type SimState, type Towers } from "./state";
 
 export interface Command {
@@ -47,11 +47,23 @@ const findTowerByTile = (t: Towers, tile: number): number => {
   return -1;
 };
 
+// A bad tile index (negative, >= TILE_COUNT, fractional, huge/Infinity/NaN)
+// must never reach TILES[tile*2] — that lookup returns undefined, which
+// then propagates NaN into targeting math and the render snapshot. Every
+// tile-bearing command validates through this first.
+const isValidTile = (tile: number): boolean =>
+  Number.isInteger(tile) && tile >= 0 && tile < TILE_COUNT;
+
+const isValidTowerType = (type: number): boolean =>
+  Number.isInteger(type) && type >= 0 && type < TOWERS.length;
+
 // Every invalid action is a silent no-op — never throw. A replay is a
 // scripted log of player intent; a command that no longer makes sense
 // against the current state (occupied tile, unaffordable, missing tower)
 // simply does nothing, the same way it would if a human clicked a disabled
-// button.
+// button. Out-of-range/non-integer tile or tower values are treated the
+// same way — a malformed command is just another kind of "no longer makes
+// sense", not a crash.
 export const applyCommand = (s: SimState, cmd: Command): void => {
   switch (cmd.type) {
     case "start":
@@ -62,8 +74,8 @@ export const applyCommand = (s: SimState, cmd: Command): void => {
       const type = cmd.tower;
       const tile = cmd.tile;
       if (type === undefined || tile === undefined) return;
+      if (!isValidTowerType(type) || !isValidTile(tile)) return;
       const def = TOWERS[type];
-      if (!def) return;
       if (findTowerByTile(s.towers, tile) !== -1) return; // occupied
       const cost = def.cost;
       if (s.bank < cost) return;
@@ -75,6 +87,7 @@ export const applyCommand = (s: SimState, cmd: Command): void => {
     case "upgrade": {
       const tile = cmd.tile;
       if (tile === undefined) return;
+      if (!isValidTile(tile)) return;
       const i = findTowerByTile(s.towers, tile);
       if (i === -1) return;
       const level = s.towers.level[i];
@@ -90,6 +103,7 @@ export const applyCommand = (s: SimState, cmd: Command): void => {
     case "sell": {
       const tile = cmd.tile;
       if (tile === undefined) return;
+      if (!isValidTile(tile)) return;
       const i = findTowerByTile(s.towers, tile);
       if (i === -1) return;
       const refund = Math.floor(
@@ -116,7 +130,19 @@ const groupByTick = (commands: readonly Command[]): Map<number, Command[]> => {
 // spin forever.
 const CEILING = 5_000_000;
 
-export const runReplay = (replay: Replay): { score: number; wave: number; hash: string } => {
+export interface ReplayResult {
+  score: number;
+  wave: number;
+  hash: string;
+  // Cheap "did this replay actually do anything" signal alongside score —
+  // the highest tower level reached by the end of the run (0 if every
+  // tower, if any, is still unupgraded). Exists so a golden-fixture test
+  // can assert an upgrade command actually took effect, not just that some
+  // command with type "upgrade" was present in the script.
+  maxTowerLevel: number;
+}
+
+export const runReplay = (replay: Replay): ReplayResult => {
   const sim = makeSim({ seed: replay.seed, mode: replay.mode });
   const byTick = groupByTick(replay.commands);
 
@@ -126,7 +152,11 @@ export const runReplay = (replay: Replay): { score: number; wave: number; hash: 
     sim.tick();
   }
 
-  return { score: sim.state.score, wave: sim.state.wave, hash: hashState(sim.state) };
+  const t = sim.state.towers;
+  let maxTowerLevel = 0;
+  for (let i = 0; i < t.count; i++) if (t.level[i] > maxTowerLevel) maxTowerLevel = t.level[i];
+
+  return { score: sim.state.score, wave: sim.state.wave, hash: hashState(sim.state), maxTowerLevel };
 };
 
 // FNV-1a (32-bit), folded 8 bits at a time over each field's little-endian

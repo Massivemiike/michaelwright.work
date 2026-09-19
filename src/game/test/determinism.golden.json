@@ -7,29 +7,171 @@
       {
         "tick": 0,
         "type": "place",
-        "tower": 4,
+        "tower": 3,
         "tile": 12
       },
       {
-        "tick": 60,
+        "tick": 0,
         "type": "place",
-        "tower": 1,
+        "tower": 3,
         "tile": 40
       },
       {
-        "tick": 600,
+        "tick": 822,
+        "type": "place",
+        "tower": 0,
+        "tile": 100
+      },
+      {
+        "tick": 822,
+        "type": "sell",
+        "tile": 100
+      },
+      {
+        "tick": 1748,
         "type": "upgrade",
         "tile": 12
       },
       {
-        "tick": 1200,
+        "tick": 2669,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 3202,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 3636,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 3859,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 4417,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 4589,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 4758,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 4983,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 5085,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 5192,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 5474,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 5657,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 5726,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 5843,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 6183,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 6307,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 6378,
+        "type": "upgrade",
+        "tile": 40
+      },
+      {
+        "tick": 6719,
         "type": "place",
         "tower": 4,
+        "tile": 55
+      },
+      {
+        "tick": 6843,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 7284,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 7439,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 7558,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 8546,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 8767,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 9001,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 9208,
+        "type": "upgrade",
+        "tile": 55
+      },
+      {
+        "tick": 9301,
+        "type": "upgrade",
         "tile": 55
       }
     ]
   },
-  "score": 0,
-  "wave": 4,
-  "hash": "b43bd363"
+  "score": 1082,
+  "wave": 22,
+  "hash": "cbc08093",
+  "maxTowerLevel": 9
 }

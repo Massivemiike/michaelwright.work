@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { runReplay, applyCommand, hashState, type Replay } from "./replay";
 import { makeSim } from "@/game/titles/circle-td";
-import { TOWERS } from "@/game/titles/circle-td/content";
+import { TOWERS, TILE_COUNT } from "@/game/titles/circle-td/content";
 
 describe("replay + hash", () => {
   it("same replay → identical hash and score", () => {
@@ -48,5 +48,44 @@ describe("replay + hash", () => {
     expect(sim.state.towers.count).toBe(0);
     const expectedRefund = Math.floor((TOWERS[0].cost * 75) / 100);
     expect(sim.state.bank).toBe(bankAfterPlace + expectedRefund);
+  });
+
+  it("out-of-range/malformed tile or tower values are silent no-ops, never a throw or NaN", () => {
+    const sim = makeSim({ seed: 3, mode: "free" });
+    const bankBefore = sim.state.bank;
+
+    const badTiles = [-1, TILE_COUNT, TILE_COUNT + 1000, 1.5, NaN, Infinity, -Infinity];
+    for (const tile of badTiles) {
+      expect(() => applyCommand(sim.state, { tick: 0, type: "place", tower: 0, tile })).not.toThrow();
+    }
+    expect(sim.state.towers.count).toBe(0);
+    expect(sim.state.bank).toBe(bankBefore);
+
+    const badTowers = [-1, TOWERS.length, TOWERS.length + 10, 1.5, NaN];
+    for (const tower of badTowers) {
+      expect(() => applyCommand(sim.state, { tick: 0, type: "place", tower, tile: 10 })).not.toThrow();
+    }
+    expect(sim.state.towers.count).toBe(0);
+    expect(sim.state.bank).toBe(bankBefore);
+
+    // A legitimate tower to probe upgrade/sell against.
+    applyCommand(sim.state, { tick: 0, type: "place", tower: 0, tile: 10 });
+    expect(sim.state.towers.count).toBe(1);
+    const bankAfterPlace = sim.state.bank;
+
+    for (const tile of badTiles) {
+      expect(() => applyCommand(sim.state, { tick: 0, type: "upgrade", tile })).not.toThrow();
+      expect(() => applyCommand(sim.state, { tick: 0, type: "sell", tile })).not.toThrow();
+    }
+    // Neither an out-of-range upgrade nor an out-of-range sell touched the
+    // real tower on tile 10 or the bank.
+    expect(sim.state.towers.count).toBe(1);
+    expect(sim.state.towers.level[0]).toBe(0);
+    expect(sim.state.bank).toBe(bankAfterPlace);
+
+    // The sim still snapshots cleanly afterward — no NaN leaked into state.
+    const snap = sim.snapshot();
+    expect(Number.isFinite(snap.towerXY[0])).toBe(true);
+    expect(Number.isFinite(snap.towerXY[1])).toBe(true);
   });
 });

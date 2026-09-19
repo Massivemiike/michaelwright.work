@@ -10,6 +10,14 @@ const BANNED = [
   /\bnew Date\b/, /\bDate\.now\b/,
   /Math\.random/, /Math\.sin/, /Math\.cos/, /Math\.tan/,
   /Math\.atan2?/, /Math\.pow/,
+  /Math\.exp\b/, /Math\.expm1/, /Math\.log\b/, /Math\.log2/, /Math\.log10/,
+  /Math\.log1p/, /Math\.hypot/, /Math\.cbrt/, /Math\.asin/, /Math\.acos/,
+  /Math\.sinh/, /Math\.cosh/, /Math\.tanh/,
+  // The `**` exponent operator — banned for the same cross-engine-drift
+  // reason as Math.pow. Requires an operand-ish character (word char or
+  // closing bracket) before it so this doesn't match a `/**` JSDoc/comment
+  // opener (which has no such character immediately before the `*`s).
+  /[\w)\]]\s*\*\*\s*[\w(]/,
 ];
 // trig.ts legitimately builds its table from Math.sin at load; allow-list it.
 const ALLOW = new Set(["src/game/sim/math/trig.ts"]);
@@ -47,9 +55,20 @@ describe("simulation purity", () => {
   });
 
   it("actually detects violations (guard is not vacuous)", () => {
-    const bad = "window document navigator performance ; new Date() ; Date.now() ; Math.random() Math.sin() Math.cos() Math.tan() Math.atan2() Math.pow()";
+    const bad =
+      "window document navigator performance ; new Date() ; Date.now() ; " +
+      "Math.random() Math.sin() Math.cos() Math.tan() Math.atan2() Math.pow() " +
+      "Math.exp() Math.expm1() Math.log() Math.log2() Math.log10() Math.log1p() " +
+      "Math.hypot() Math.cbrt() Math.asin() Math.acos() Math.sinh() Math.cosh() Math.tanh() " +
+      "a ** b";
     const missed = BANNED.filter((re) => !re.test(bad));
     expect(missed).toEqual([]);
+  });
+
+  it("the `**` ban does not false-positive on a `/**` JSDoc comment opener", () => {
+    const ok = "/**\n * a JSDoc comment, not an exponent\n */\nconst x = 1;";
+    const exponentBan = BANNED.find((re) => re.source.includes("\\*\\*"))!;
+    expect(exponentBan.test(ok)).toBe(false);
   });
 
   it("trig runtime functions use no Math.* (only the table build may)", () => {
