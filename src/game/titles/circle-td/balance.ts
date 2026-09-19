@@ -40,11 +40,11 @@ export const typeMul = (wave: number, o: Offsets): number =>
 export const totalWaveHp = (wave: number, o: Offsets): number =>
   WAVE_SIZE * hp(wave) * typeMul(wave, o);
 
-export const interest = (bank: number, wave: number, o: Offsets): number => {
+export const interest = (bank: number, wave: number, o: Offsets, alphaBp: number = ALPHA_BP): number => {
   const uncapped = Math.floor((bank * INTEREST_RATE_PCT) / 100);
-  const cap = Math.floor((totalWaveHp(wave, o) * ALPHA_BP) / 10000); // spec §5.2: integer arithmetic, overflow-safe
+  const cap = Math.floor((totalWaveHp(wave, o) * alphaBp) / 10000); // spec §5.2: integer arithmetic, overflow-safe
   return Math.min(uncapped, cap);
 };
 
-export const bounty = (wave: number): number =>
-  Math.max(1, Math.floor(hp(wave) / GAMMA)); // spec §5.2, INVENTED γ
+export const bounty = (wave: number, gamma: number = GAMMA): number =>
+  Math.max(1, Math.floor(hp(wave) / gamma)); // spec §5.2, INVENTED γ

@@ -11,7 +11,7 @@ import {
   WAVE_SIZE, START_BANK, ALIVE_CAP_NORMAL, TRACK, trackLength,
   TOWERS, TILES, TILE_COUNT, posAt,
 } from "./content";
-import { deriveOffsets, bounty } from "./balance";
+import { deriveOffsets, bounty, GAMMA, ALPHA_BP } from "./balance";
 
 // Scans TILES for the first index within rSq (squared range, Fx) of point p.
 // Returns -1 if none found — callers assert a match was found rather than
@@ -35,6 +35,7 @@ function makeTestState(seed = 1): SimState {
     tick: 0, rng, bank: START_BANK, score: 0, wave: 0,
     aliveCap: ALIVE_CAP_NORMAL, gameOver: false, nextId: 1,
     offsetFast: o.offFast, offsetAir: o.offAir, offsetHard: o.offHard,
+    gamma: GAMMA, alphaBp: ALPHA_BP,
     creeps: makeCreeps(), towers: makeTowers(),
   };
 }

@@ -29,6 +29,7 @@ export interface SimState {
   aliveCap: number; gameOver: boolean;
   nextId: number;
   offsetFast: number; offsetAir: number; offsetHard: number;
+  gamma: number; alphaBp: number;
   creeps: Creeps; towers: Towers;
 }
 

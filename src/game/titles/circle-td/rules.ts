@@ -133,7 +133,7 @@ export const fireTowers = (s: SimState): HitEvent[] => {
     let killed = false;
     for (let k = 0; k < c.count;) {
       if (c.hp[k] <= 0) {
-        s.bank += bounty(s.wave);
+        s.bank += bounty(s.wave, s.gamma);
         s.score += 2; // SOURCED: 2 points per kill
         if (c.id[k] === primaryId) killed = true;
         removeCreep(c, k);

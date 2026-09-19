@@ -10,12 +10,13 @@ import { makeRng } from "@/game/sim/math/rng";
 import { toFloat } from "@/game/sim/math/fixed";
 import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
 import { START_BANK, ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS, TRACK, posAt, TILES } from "./content";
-import { deriveOffsets, interest } from "./balance";
+import { deriveOffsets, interest, GAMMA, ALPHA_BP } from "./balance";
 import { spawnWave, moveCreeps, fireTowers } from "./rules";
 
 export interface SimConfig {
   seed: number;
   mode: "daily" | "free";
+  balance?: { startBank?: number; gamma?: number; alphaBp?: number };
 }
 
 export interface CircleTdSim {
@@ -27,10 +28,11 @@ export interface CircleTdSim {
 export const makeSimState = (config: SimConfig): SimState => {
   const rng = makeRng(config.seed);
   const o = deriveOffsets(rng);
+  const b = config.balance ?? {};
   return {
     tick: 0,
     rng,
-    bank: START_BANK,
+    bank: b.startBank ?? START_BANK,
     score: 0,
     wave: 0,
     aliveCap: ALIVE_CAP_NORMAL,
@@ -39,6 +41,8 @@ export const makeSimState = (config: SimConfig): SimState => {
     offsetFast: o.offFast,
     offsetAir: o.offAir,
     offsetHard: o.offHard,
+    gamma: b.gamma ?? GAMMA,
+    alphaBp: b.alphaBp ?? ALPHA_BP,
     creeps: makeCreeps(),
     towers: makeTowers(),
   };
@@ -57,7 +61,7 @@ const tickOnce = (s: SimState): void => {
 
   if (s.tick % WAVE_INTERVAL_TICKS === 0) {
     const o = { offFast: s.offsetFast, offAir: s.offsetAir, offHard: s.offsetHard };
-    s.bank += interest(s.bank, s.wave + 1, o);
+    s.bank += interest(s.bank, s.wave + 1, o, s.alphaBp);
     spawnWave(s);
   }
 
