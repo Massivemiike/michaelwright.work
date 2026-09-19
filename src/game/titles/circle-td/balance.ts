@@ -1,17 +1,15 @@
-import type { Fx } from "@/game/sim/types";
-import { fromFloat, fromInt, mul, toInt } from "@/game/sim/math/fixed";
 import { nextRange, type Rng } from "@/game/sim/math/rng";
 import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
 import { WAVE_SIZE } from "./content";
 
-export const ALPHA: Fx = fromFloat(0.02); // INVENTED, tuned in Task 12
+export const ALPHA_BP = 200; // INVENTED: interest-cap coefficient in basis points (200 = 2% = 0.02). Tuned in Task 12.
 export const GAMMA = 400; // INVENTED
 export const INTEREST_RATE_PCT = 5; // SOURCED
 
 export const hp = (wave: number): number =>
   wave < 2 ? 8 : Math.floor(1.5 * wave * wave + 21.5 * wave - 16); // SOURCED
 
-interface Offsets {
+export interface Offsets {
   offFast: number;
   offAir: number;
   offHard: number;
@@ -37,14 +35,14 @@ export const waveFlags = (
 };
 
 export const typeMul = (wave: number, o: Offsets): number =>
-  waveFlags(wave, o.offFast, o.offAir, o.offHard) & CREEP_HARD ? 2 : 1; // SOURCED
+  (waveFlags(wave, o.offFast, o.offAir, o.offHard) & CREEP_HARD) ? 2 : 1; // SOURCED
 
 export const totalWaveHp = (wave: number, o: Offsets): number =>
   WAVE_SIZE * hp(wave) * typeMul(wave, o);
 
 export const interest = (bank: number, wave: number, o: Offsets): number => {
   const uncapped = Math.floor((bank * INTEREST_RATE_PCT) / 100);
-  const cap = toInt(mul(ALPHA, fromInt(totalWaveHp(wave, o)))); // spec §5.2
+  const cap = Math.floor((totalWaveHp(wave, o) * ALPHA_BP) / 10000); // spec §5.2: integer arithmetic, overflow-safe
   return Math.min(uncapped, cap);
 };
 
