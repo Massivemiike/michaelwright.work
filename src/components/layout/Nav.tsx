@@ -37,6 +37,7 @@ const INTERNAL_LINKS: NavLink[] = [
       { href: "/projects/rndrwork", label: "rndr.work", hint: "Cloud render farm" },
     ],
   },
+  { href: "/games", label: "Games" },
   { href: "/blog", label: "Blog" },
   { href: "/contact", label: "Contact" },
 ];

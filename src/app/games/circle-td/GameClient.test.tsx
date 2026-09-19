@@ -15,10 +15,16 @@
 // ResizeObserver) is exactly what makes that true even though the
 // "real" renderer path never runs here. Real visual/behavioral
 // verification happens in a real browser in Task 9.
+//
+// Task 8 wraps every render in NodeNetworkProvider: GameClient now calls
+// useNodeNetwork() (to suspend the background canvas for as long as it's
+// mounted — see NodeNetworkContext.tsx), which throws outside a
+// provider.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import GameClient from "./GameClient";
+import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
 
 // jsdom implements neither — GameClient's ResizeObserver is created only
 // after a successful renderer.init() (which fails in jsdom, see above), so
@@ -65,7 +71,9 @@ describe("GameClient", () => {
       root = createRoot(container);
       root.render(
         <StrictMode>
-          <GameClient seed={1} mode="free" />
+          <NodeNetworkProvider>
+            <GameClient seed={1} mode="free" />
+          </NodeNetworkProvider>
         </StrictMode>
       );
     });
@@ -82,7 +90,9 @@ describe("GameClient", () => {
       root = createRoot(container);
       root.render(
         <StrictMode>
-          <GameClient seed={1} mode="free" />
+          <NodeNetworkProvider>
+            <GameClient seed={1} mode="free" />
+          </NodeNetworkProvider>
         </StrictMode>
       );
     });

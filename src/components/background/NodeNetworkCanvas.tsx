@@ -29,7 +29,7 @@ function hexToRgb(h: string) {
 }
 
 export default function NodeNetworkCanvas() {
-  const { settings } = useNodeNetwork();
+  const { settings, suspended } = useNodeNetwork();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const settingsRef = useRef(settings);
   const stateRef = useRef({
@@ -39,6 +39,19 @@ export default function NodeNetworkCanvas() {
     lastTime: 0,
     rafId: 0,
   });
+  // Task 8: `suspended` (NodeNetworkContext's transient, non-persisted
+  // flag — see that file's comment) lets the game route pause this
+  // canvas's rAF loop entirely while a game is mounted, so the two
+  // canvases don't fight for GPU/pointer. Read via a ref, not the
+  // `suspended` value directly, because `animate` below is a closure
+  // created ONCE inside the mount effect and never recreated — this is
+  // how a later toggle reaches it without tearing down and rebuilding
+  // the whole node/pulse simulation (which would reset every node's
+  // position each time a game session starts or ends). `animateRef`
+  // lets the second effect below restart that SAME closure rather than
+  // a stale or wrong one.
+  const suspendedRef = useRef(suspended);
+  const animateRef = useRef<((ts: number) => void) | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -75,6 +88,16 @@ export default function NodeNetworkCanvas() {
     }
 
     function animate(ts: number) {
+      // Task 8: stop recursing entirely while suspended, rather than the
+      // cheaper "keep scheduling but skip drawing" shape the `!s.enabled`
+      // branch below uses — a real game route wants zero background rAF
+      // churn, not just zero background drawing, while it owns the GPU.
+      // The effect below restarts this exact closure (via `animateRef`)
+      // once `suspended` goes false again.
+      if (suspendedRef.current) {
+        state.rafId = 0;
+        return;
+      }
       state.rafId = requestAnimationFrame(animate);
       const s = settingsRef.current;
       const dt = Math.min(ts - (state.lastTime || ts), 50);
@@ -199,17 +222,42 @@ export default function NodeNetworkCanvas() {
       resizeTimer = setTimeout(resize, 120);
     }
 
+    // Task 8: lets the suspend/resume effect below restart THIS exact
+    // closure later without re-running this whole mount effect.
+    animateRef.current = animate;
+
     resize();
-    state.rafId = requestAnimationFrame(animate);
+    if (!suspendedRef.current) {
+      state.rafId = requestAnimationFrame(animate);
+    }
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("resize", onResize);
 
     return () => {
       cancelAnimationFrame(state.rafId);
+      state.rafId = 0;
+      animateRef.current = null;
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("resize", onResize);
     };
   }, []);
+
+  // Task 8: reacts to `suspended` toggling AFTER mount — the effect
+  // above only runs once (on mount), so this is what actually starts and
+  // stops the rAF loop when GameClient mounts/unmounts (see its own
+  // effect for the setSuspended(true)/false calls it makes).
+  useEffect(() => {
+    suspendedRef.current = suspended;
+    const state = stateRef.current;
+    if (suspended) {
+      if (state.rafId) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = 0;
+      }
+    } else if (!state.rafId && animateRef.current) {
+      state.rafId = requestAnimationFrame(animateRef.current);
+    }
+  }, [suspended]);
 
   return (
     <canvas

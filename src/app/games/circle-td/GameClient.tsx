@@ -43,6 +43,7 @@ import { makeLoop, type GameLoop } from "@/game/runtime/loop";
 import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "@/game/runtime/input/pointer";
 import { createSnapshotStore } from "@/game/runtime/hud/snapshotStore";
 import { ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS } from "@/game/titles/circle-td/content";
+import { useNodeNetwork } from "@/components/context/NodeNetworkContext";
 import Hud from "@/components/game/Hud";
 import TowerPalette, { type TowerPaletteInputModel } from "@/components/game/TowerPalette";
 import SelectedTowerPanel, { type SelectedTowerPanelInputModel } from "@/components/game/SelectedTowerPanel";
@@ -125,6 +126,12 @@ const hudBottomStyle: CSSProperties = {
 };
 
 export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }: GameClientProps) {
+  // Task 8: suspends the site-wide background canvas (NodeNetworkCanvas)
+  // for as long as this component is mounted — see the mount effect
+  // below for where this is actually called, and NodeNetworkContext.tsx
+  // for why `suspended` is a transient flag, never `settings.enabled`/
+  // localStorage.
+  const { setSuspended } = useNodeNetwork();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -236,6 +243,13 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
+
+    // Task 8: two live canvases (this one's Canvas2D drawing plus the
+    // background NodeNetworkCanvas's own rAF loop) would otherwise fight
+    // for GPU and, since both listen on `window`, pointer events. This
+    // is a transient, per-mount fact — never persisted, never touching
+    // the visitor's saved background-effect preference.
+    setSuspended(true);
 
     let alive = true;
     let resizeObserver: ResizeObserver | null = null;
@@ -488,11 +502,16 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       rendererRef.current = null;
       simRef.current = null;
       snapshotsRef.current = null;
+      // Task 8: resume the background canvas — NEVER touches
+      // settings.enabled/localStorage, only the transient flag.
+      setSuspended(false);
     };
     // seed/mode changing after mount isn't a flow anything exercises yet
     // (Task 8 picks the seed once, before this ever mounts) — re-running
     // the full teardown+setup if they ever did change is still correct.
-  }, [seed, mode]);
+    // `setSuspended` is a plain useState setter (stable identity across
+    // renders), so including it here never causes an extra re-run.
+  }, [seed, mode, setSuspended]);
 
   // Task 7: a wave is imminent once we're within WAVE_IMMINENT_TICKS of the
   // next spawn boundary — never true pre-round (wave 0) or after game over,

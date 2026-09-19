@@ -38,6 +38,18 @@ interface NodeNetworkContextValue {
   resetSettings: () => void;
   panelOpen: boolean;
   setPanelOpen: (open: boolean) => void;
+  // Task 8 (games/circle-td): a TRANSIENT suspend flag for
+  // NodeNetworkCanvas, deliberately separate from `settings.enabled` —
+  // `settings` persists to localStorage (it's the visitor's own saved
+  // background-effect preference), but suspending the background canvas
+  // while a game is mounted (so it isn't fighting the game's own canvas
+  // for GPU/pointer) is a per-session mechanical fact, not a preference.
+  // It must never be written to localStorage or restored on reload, and
+  // must reset the instant nothing needs it anymore (unmounting the game
+  // client resets it), which is exactly what plain `useState` (vs.
+  // `settings`'s localStorage-backed `updateSettings`) gives for free.
+  suspended: boolean;
+  setSuspended: (suspended: boolean) => void;
 }
 
 const NodeNetworkContext = createContext<NodeNetworkContextValue | null>(null);
@@ -45,6 +57,7 @@ const NodeNetworkContext = createContext<NodeNetworkContextValue | null>(null);
 export function NodeNetworkProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<NodeNetworkSettings>(DEFAULTS);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [suspended, setSuspended] = useState(false);
 
   useEffect(() => {
     try {
@@ -67,7 +80,9 @@ export function NodeNetworkProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <NodeNetworkContext.Provider value={{ settings, updateSettings, resetSettings, panelOpen, setPanelOpen }}>
+    <NodeNetworkContext.Provider
+      value={{ settings, updateSettings, resetSettings, panelOpen, setPanelOpen, suspended, setSuspended }}
+    >
       {children}
     </NodeNetworkContext.Provider>
   );
