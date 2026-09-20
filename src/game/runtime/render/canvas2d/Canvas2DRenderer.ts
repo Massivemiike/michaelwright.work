@@ -30,6 +30,7 @@
 // from a new hue.
 import type { Renderer, RendererCaps, HitEvent } from "../Renderer";
 import { interpolateById } from "../Renderer";
+import { computeFit, screenToWorld as sharedScreenToWorld, type Fit } from "../transform";
 import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
 import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
@@ -68,12 +69,6 @@ interface Palette {
   textSecondaryRgb: RGB;
 }
 
-interface Transform {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-}
-
 interface HitFlash {
   x: number;
   y: number;
@@ -95,7 +90,7 @@ const FALLBACK_PALETTE_HEX = {
   textSecondary: "#787F96",
 };
 
-const IDENTITY_TRANSFORM: Transform = { scale: 1, offsetX: 0, offsetY: 0 };
+const IDENTITY_TRANSFORM: Fit = { scale: 1, offsetX: 0, offsetY: 0 };
 
 // Pure white/black — used only as MIX TARGETS for tinting/shading the
 // brand's two real hues (accent, blue), never drawn as standalone colors
@@ -275,7 +270,7 @@ export class Canvas2DRenderer implements Renderer {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private palette: Palette = fallbackPalette();
-  private transform: Transform = IDENTITY_TRANSFORM;
+  private transform: Fit = IDENTITY_TRANSFORM;
 
   private trackOuterPx: Float64Array = new Float64Array(0);
   private trackInnerPx: Float64Array = new Float64Array(0);
@@ -354,16 +349,9 @@ export class Canvas2DRenderer implements Renderer {
     const pxH = Math.round(cssH * dpr);
     canvas.width = pxW;
     canvas.height = pxH;
-
-    // One matrix does both jobs at once: scaling world (stage-px) units up
-    // to device pixels, AND fitting the sim's fixed STAGE_W x STAGE_H box
-    // into whatever aspect ratio the canvas got, letterboxed and centered.
-    // Drawing code below works entirely in world-space stage px and never
-    // touches dpr directly.
-    const scale = pxW > 0 && pxH > 0 ? Math.min(pxW / STAGE_W, pxH / STAGE_H) : 1;
-    const offsetX = (pxW - STAGE_W * scale) / 2;
-    const offsetY = (pxH - STAGE_H * scale) / 2;
-    this.transform = { scale, offsetX, offsetY };
+    // Fit math now lives in the shared transform module (see
+    // ../transform.ts) so WebGpuRenderer computes the identical letterbox.
+    this.transform = computeFit(pxW, pxH);
   }
 
   // Part of the shared Renderer interface as of final-review finding #7 —
@@ -394,14 +382,7 @@ export class Canvas2DRenderer implements Renderer {
   // offsetY) plus the browser's own canvas-to-CSS-box stretch apply when
   // going the other direction.
   screenToWorld(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number } {
-    const rect = canvas.getBoundingClientRect();
-    const { scale, offsetX, offsetY } = this.transform;
-    if (scale <= 0 || rect.width <= 0 || rect.height <= 0) {
-      return { x: 0, y: 0 };
-    }
-    const deviceX = (clientX - rect.left) * (canvas.width / rect.width);
-    const deviceY = (clientY - rect.top) * (canvas.height / rect.height);
-    return { x: (deviceX - offsetX) / scale, y: (deviceY - offsetY) / scale };
+    return sharedScreenToWorld(clientX, clientY, canvas, this.transform);
   }
 
   frame(prev: RenderSnapshot, curr: RenderSnapshot, alpha: number, hits: HitEvent[]): void {
