@@ -18,12 +18,22 @@
 // device.lost => v1 no-op-until-reload (register handler, log, do NOT
 // auto-reinit): the sim is CPU-side, a lost device costs frames not a run,
 // and re-fallback is a later decision.
+//
+// Canvas-commitment ordering (spec D7/§9.2's "never a blank canvas"):
+// `init()` builds every buffer AND every pipeline, under a validation error
+// scope, before it ever calls `canvas.getContext('webgpu')`. That call
+// permanently sets a canvas element's context-mode — a later
+// `canvas.getContext('2d')` on the SAME element returns null forever — so if
+// it happened earlier and a pipeline then failed to validate (e.g. a
+// compat-mode adapter missing a vertex-stage storage buffer),
+// createRenderer.ts's Canvas2D fallback would be defeated on an
+// already-committed canvas. See GpuBundle's comment and this class's init()
+// for the mechanics.
 import type { Renderer, RendererCaps, HitEvent, InterpCreep } from "../Renderer";
 import { interpolateById } from "../Renderer";
 import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
-import { STAGE_W, STAGE_H, TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
+import { TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
 import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit } from "../transform";
 import { tessellateTrack } from "./tessellateTrack";
 import {
@@ -37,10 +47,16 @@ import { BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL, BLIT_WGSL, BLUR_WGSL, COMPOSITE
 // MUST stay in scripts/check-bundle-budget.mjs GAME_MARKERS.
 export const WEBGPU_BUNDLE_MARKER = "WebGpuRenderer: WebGPU pipeline build failed";
 
+// Deliberately does NOT include a GPUCanvasContext. canvas.getContext(
+// 'webgpu') permanently commits a canvas's context-mode (a later
+// canvas.getContext('2d') on the same element returns null forever), so it
+// must not happen until every realistically-failing WebGPU step (adapter
+// limits, device request, pipeline build) has already succeeded — seeing
+// this bundle through construction and init() up to that point never
+// touches the canvas at all. See createRenderer.ts and this class's init().
 export interface GpuBundle {
   adapter: GPUAdapter;
   device: GPUDevice;
-  context: GPUCanvasContext;
   format: GPUTextureFormat;
 }
 
@@ -117,12 +133,14 @@ export class WebGpuRenderer implements Renderer {
   readonly caps: RendererCaps = { kind: "webgpu", particles: true };
 
   private readonly device: GPUDevice;
-  private readonly context: GPUCanvasContext;
+  // Not readonly, not set by the constructor: acquired inside init(), only
+  // after pipeline validation succeeds (see init()'s comment) — the whole
+  // point of the fix is that this canvas-committing call happens as late as
+  // possible.
+  private context!: GPUCanvasContext;
   private readonly format: GPUTextureFormat;
   private canvas: HTMLCanvasElement | null = null;
   private fit: Fit = { scale: 1, offsetX: 0, offsetY: 0 };
-  private pxW = 0;
-  private pxH = 0;
   private deviceLost = false;
   private reducedMotion = false;
   private palette: GpuPalette = readGpuPaletteSafe();
@@ -172,12 +190,13 @@ export class WebGpuRenderer implements Renderer {
 
   constructor(gpu: GpuBundle) {
     this.device = gpu.device;
-    this.context = gpu.context;
     this.format = gpu.format;
   }
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
-    this.canvas = canvas;
+    // `canvas` is not touched/assigned yet — see the comment below, right
+    // before the first real use of it (canvas.getContext('webgpu')), for
+    // why that has to wait until after pipeline validation.
     this.palette = readGpuPaletteSafe();
     this.reducedMotion =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -222,11 +241,33 @@ export class WebGpuRenderer implements Renderer {
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
 
     // Build all pipelines under a validation error scope; on ANY error,
-    // throw the marker so the factory falls back to Canvas2D.
+    // throw the marker so the factory falls back to Canvas2D. Pipelines only
+    // need `device` + `this.format` (a string, from
+    // navigator.gpu.getPreferredCanvasFormat() — see createRenderer.ts),
+    // never the canvas itself, which is exactly what makes it possible to
+    // validate them before the next step below ever touches `canvas`.
     device.pushErrorScope("validation");
     this.buildPipelines();
     const err = await device.popErrorScope();
     if (err) throw new Error(`${WEBGPU_BUNDLE_MARKER}: ${err.message}`);
+
+    // Only NOW, with every pipeline already known-good, do we touch the
+    // canvas. canvas.getContext('webgpu') PERMANENTLY commits that canvas
+    // element's context-mode — a later canvas.getContext('2d') on the same
+    // element returns null forever, per the HTML spec. If this ran any
+    // earlier (e.g. before pipeline validation, as createRenderer.ts's
+    // acquireGpu used to do), a pipeline failure discovered afterward would
+    // strand createRenderer's Canvas2D fallback on a canvas that can no
+    // longer produce a "2d" context, defeating the fallback and leaving the
+    // player with a blank canvas (spec D7/§9.2 — never a blank canvas). By
+    // this point, adapter-limit and pipeline-validation failures — the
+    // realistic ways WebGPU init fails on real hardware — have already
+    // thrown, on a canvas that is still completely untouched.
+    const context = canvas.getContext("webgpu");
+    if (!context) throw new Error(`${WEBGPU_BUNDLE_MARKER}: getContext('webgpu') returned null`);
+    context.configure({ device, format: this.format, alphaMode: "opaque" });
+    this.context = context;
+    this.canvas = canvas;
 
     // Bind groups that never change (buffers are persistent).
     this.globalsBind = device.createBindGroup({ layout: this.trackPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.globalsBuf } }] });
@@ -322,8 +363,6 @@ export class WebGpuRenderer implements Renderer {
     const pxH = Math.max(1, Math.round(cssH * dpr));
     this.canvas.width = pxW;
     this.canvas.height = pxH;
-    this.pxW = pxW;
-    this.pxH = pxH;
     this.fit = computeFit(pxW, pxH);
     const m = worldToClip(this.fit, pxW, pxH);
     this.globalsData.set(m, 0);
