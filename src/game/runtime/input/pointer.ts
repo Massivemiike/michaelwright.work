@@ -19,14 +19,16 @@ import type { SimState } from "@/game/sim/state";
 import { toFloat } from "@/game/sim/math/fixed";
 import { TILE_COUNT, TILE_SIZE, TILES, TOWERS } from "@/game/titles/circle-td/content";
 
-// A candidate must fall within half a tile's width of a tile's own centre
-// to count as "on" that tile. Map fix (2026-09-19): content.ts's tiles now
-// sit on a fixed TILE_SIZE lattice, so any two tile centres are always
-// EXACTLY TILE_SIZE apart (axis-aligned) or further (diagonal) — never
-// closer — which means this HALF_TILE radius exactly tiles the plane with
-// no gaps and no overlaps: every point belongs to at most one tile's
-// search radius, so there is no same-tile-or-nearest-neighbour ambiguity
-// to resolve.
+// A point must fall within half a tile's width of a tile's own centre to
+// count as "on" that tile. Map fix (2026-09-19): content.ts's tiles now sit
+// on a fixed TILE_SIZE lattice, so any two tile centres are always at least
+// TILE_SIZE apart (exactly TILE_SIZE axis-aligned, further diagonally) —
+// never closer — so a HALF_TILE-radius disk around each centre never
+// overlaps a neighbour's: every point belongs to at most one tile, no
+// same-tile-or-nearest-neighbour ambiguity to resolve. The disks don't fully
+// cover the plane, though: the corner between four cells (up to ~0.71*
+// TILE_SIZE from any centre) lies outside every disk and correctly returns
+// -1 — "clicked empty space between tiles", the intended result, not a miss.
 const HALF_TILE = TILE_SIZE / 2;
 const RADIUS_SQ = HALF_TILE * HALF_TILE;
 
@@ -34,7 +36,7 @@ const RADIUS_SQ = HALF_TILE * HALF_TILE;
 // geometry already live in) point -> tile index, or -1 when the point
 // isn't within HALF_TILE of any tile's centre (off-board, on the path, or
 // simply in empty space between tiles). Pure: no DOM, no sim state. Linear
-// scan over TILE_COUNT (~223) is cheap enough to call on every pointermove.
+// scan over TILE_COUNT (~186) is cheap enough to call on every pointermove.
 export function tileAtWorld(wx: number, wy: number): number {
   let best = -1;
   let bestDistSq = RADIUS_SQ;

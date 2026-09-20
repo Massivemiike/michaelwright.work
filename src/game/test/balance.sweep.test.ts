@@ -160,7 +160,7 @@ interface ActiveDefenseResult {
 // killing on wave 1, which is what actually funds the climb to Damage.
 //
 // Plays all the way to gameOver (or the tick ceiling) with every in-range
-// tile available — this is the FULL, expensive measurement (all 216
+// tile available — this is the FULL, expensive measurement (all 186
 // in-range tiles eventually filled; see
 // docs/superpowers/2026-09-18-circle-td-balance-tuning.md). Used only by the
 // slowIt-gated tests below; the always-on fast guard uses
@@ -197,12 +197,13 @@ interface CappedDefenseResult {
 
 // FAST per-commit guard's strategy: same best-affordable buy order, but
 // (a) capped at `maxTowers` placements — a realistic partial defense, not
-// every one of the 450 in-range tiles — and (b) stops the instant `wave`
+// every one of the 186 in-range tiles — and (b) stops the instant `wave`
 // reaches `targetWave`, rather than playing to gameOver. Calibrated
 // empirically (see docs/superpowers/2026-09-18-circle-td-balance-tuning.md's
-// "Fast/slow test split" section): with `maxTowers=40`, this strategy played
-// to death naturally dies at wave 21-23 across all four of the sweep's seeds, so a
-// `targetWave` at or below that would-be-death-wave lets the loop exit via
+// "Fast/slow test split" and "Open-area grid + hard-economy re-tune"
+// sections): with `maxTowers=40`, this place-only strategy played to death
+// naturally dies at wave 20-24 across the guard's seeds, so a `targetWave`
+// at or below that would-be-death-wave lets the loop exit via
 // "reached the target, still alive" instead of "died before getting
 // there" — which is the actual thing being asserted (not literally "did
 // wave counter hit N", but "is 40 towers already meaningfully more
@@ -323,7 +324,7 @@ describe("balance acceptance / sweep harness (spec §5.4)", () => {
   // --- FULL sweep-measurement block, opt-in only: `BALANCE_SWEEP=1 npm test` ---
   // These reproduce the actual §5.4 sweep acceptance numbers
   // (docs/superpowers/2026-09-18-circle-td-balance-tuning.md) but each one
-  // plays a full, uncapped (all 216 in-range tiles) game to
+  // plays a full, uncapped (all 186 in-range tiles) game to
   // gameOver, which is real O(towers x creeps)-per-tick compute — several
   // minutes combined. Not part of the default per-commit suite; run on
   // demand or wire into a scheduled CI job (mirrors the original Task 12

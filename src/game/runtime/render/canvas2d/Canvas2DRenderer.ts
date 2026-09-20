@@ -505,15 +505,16 @@ export class Canvas2DRenderer implements Renderer {
   // --- static geometry ---
 
   // Path "width" for the stroked track polylines — imported from content.ts
-  // (final-review finding #5) rather than kept as a local copy: half of it
-  // (TILE_SIZE) matches content.ts's FLANK_OFFSET so a buildable tile's near
-  // edge sits right against the drawn track edge, AND content.ts's own
-  // OUTER/INNER ring-to-ring gap is sized directly off this same constant —
-  // two files agreeing by comment was how the previous geometry drifted out
-  // of sync in the first place. The edge-highlight stroke added below is
-  // wider than TRACK_WIDTH by a few px on each side — a cosmetic overshoot
-  // into the (already ~150px-wide, per content.ts) inter-loop gap, not a
-  // change to that agreement.
+  // rather than kept as a local copy so the value the renderer draws and the
+  // value the geometry reasons about can never drift apart (two files
+  // agreeing only by comment was how the previous geometry drifted out of
+  // sync). content.ts's MIN_CLEARANCE (= TRACK_WIDTH/2 + TILE_SIZE/2) is
+  // computed against this same TRACK_WIDTH, so every build tile's centre sits
+  // ~TILE_SIZE/2 CLEAR of this drawn band's edge (the open-area grid model —
+  // tiles no longer abut the path). The edge-highlight stroke added below is
+  // a few px wider than TRACK_WIDTH — a cosmetic overshoot into the (~150px)
+  // inter-loop gap; it visually abuts the nearest tiles but doesn't change
+  // the clearance the geometry guarantees.
   private drawTrack(ctx: CanvasRenderingContext2D): void {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
