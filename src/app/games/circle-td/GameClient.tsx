@@ -37,7 +37,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { makeSim, type CircleTdSim, type SimConfig } from "@/game/titles/circle-td";
 import type { TowerHit } from "@/game/titles/circle-td/rules";
-import { Canvas2DRenderer } from "@/game/runtime/render/canvas2d/Canvas2DRenderer";
+import { createRenderer } from "@/game/runtime/render/createRenderer";
 import type { Renderer, HitEvent } from "@/game/runtime/render/Renderer";
 import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
 import { makeLoop, type GameLoop } from "@/game/runtime/loop";
@@ -300,14 +300,6 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     // setup() below, which calls loop.setPaused(true) right after start().
     pausedRef.current = true;
 
-    // Typed as the Renderer interface, not the concrete class, even though
-    // Canvas2D is the only backend today — Plan 3's WebGPU renderer drops
-    // in here unchanged (see src/game/runtime/render/Renderer.ts). The
-    // highlight/ghost calls below (final-review finding #7) go straight
-    // through the shared interface now — no `instanceof Canvas2DRenderer`
-    // narrowing, so a future backend gets them for free.
-    const renderer: Renderer = new Canvas2DRenderer();
-
     // Final-review finding #6: TowerHits produced by tick()'s call(s) to
     // fireTowers, accumulated across however many sim ticks happen to run
     // in a single animation frame (loop.ts's `tick` can fire 0+ times
@@ -318,31 +310,38 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     let pendingHits: TowerHit[] = [];
 
     async function setup(): Promise<void> {
+      // Escape hatch: ?renderer=canvas2d forces the Canvas2D fallback even
+      // where WebGPU is available (debugging / cross-checking against the
+      // fallback path). Read from the live URL, client-only (this effect).
+      const preferWebgpu =
+        new URLSearchParams(window.location.search).get("renderer") !== "canvas2d";
+
+      let renderer: Renderer;
       try {
-        // Non-null: narrowed above, but TS doesn't carry that narrowing of
-        // a `const` into a hoisted function *declaration* like this one
-        // (only into arrow-function closures) — canvas/container are
-        // genuinely non-null here.
-        await renderer.init(canvas!);
+        // createRenderer probes WebGPU and returns an INITIALIZED backend,
+        // or an initialized Canvas2D fallback. It rejects only when even
+        // Canvas2D init fails (jsdom's stub canvas in tests) — the same
+        // failure the old `await renderer.init(canvas!)` produced, so the
+        // catch below (and GameClient.test.tsx's assertion on it) is intact.
+        renderer = await createRenderer(canvas!, { preferWebgpu });
       } catch (err) {
-        // A real <canvas> always yields a 2D context; this realistically
-        // only fires in a hostile/stubbed environment (a canvas-blocking
-        // privacy extension, or jsdom in tests). Log and bail rather than
-        // leave an unhandled promise rejection — there's nothing to
-        // recover into without a working canvas.
         console.error("GameClient: renderer failed to initialize", err);
         return;
       }
 
-      // The effect that started this setup() may already have been torn
-      // down (StrictMode's dev double-invoke, or a fast unmount) by the
-      // time the await above resolves — discard this pass's renderer
-      // instead of wiring up a loop/observer nothing will ever stop.
+      // StrictMode async-teardown guard (research 2.5): the effect that
+      // started this setup() may already be torn down by the time the await
+      // above resolves. With the factory there is no effect-scope `renderer`
+      // for cleanup to destroy, so destroy the just-created backend HERE, or
+      // a discarded first pass leaks a GPU device/context/canvas config.
       if (!alive) {
         renderer.destroy();
         return;
       }
       rendererRef.current = renderer;
+      // Observability hook (also used by the Playwright smokes): which
+      // backend actually engaged. Cheap, harmless, useful in prod debugging.
+      canvas!.dataset.renderer = renderer.caps.kind;
 
       const loop = makeLoop(
         {
@@ -580,7 +579,10 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
       loopRef.current?.stop();
       loopRef.current = null;
       resizeObserver?.disconnect();
-      renderer.destroy();
+      // `renderer` is now a setup()-local, invisible here — destroy via the
+      // ref (set only after the alive-guard passed). Null-safe: if setup()
+      // bailed (init failure or !alive), the ref was never set.
+      rendererRef.current?.destroy();
       rendererRef.current = null;
       simRef.current = null;
       snapshotsRef.current = null;
