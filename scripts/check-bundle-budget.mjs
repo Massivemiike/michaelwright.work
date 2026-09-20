@@ -57,10 +57,16 @@ const CHUNKS_DIR = join(NEXT_DIR, "static", "chunks");
 const APP_DIR = join(NEXT_DIR, "server", "app");
 
 // String literal(s) that only ever appear in compiled src/game/** output.
-// Sourced from src/game/runtime/render/canvas2d/Canvas2DRenderer.ts. If
-// this stops matching anything, the "no chunk contains any marker" check
-// below fails the script rather than letting it pass vacuously.
-const GAME_MARKERS = ["Canvas2DRenderer: 2D canvas context unavailable"];
+// Sourced from Canvas2DRenderer.ts (init throw) and WebGpuRenderer.ts
+// (WEBGPU_BUNDLE_MARKER — the pipeline-build failure throw). Two markers so
+// BOTH the always-loaded game chunk (Canvas2D) AND the separate
+// dynamically-imported WebGPU chunk are verified never to be referenced by a
+// prerendered marketing route's initial HTML. If NEITHER matches anything,
+// the "no chunk contains any marker" check below fails loudly (stale guard).
+const GAME_MARKERS = [
+  "Canvas2DRenderer: 2D canvas context unavailable",
+  "WebGpuRenderer: WebGPU pipeline build failed",
+];
 
 function walk(dir) {
   let out = [];
