@@ -73,7 +73,24 @@ async function acquireGpu(featureLevel?: "compatibility"): Promise<GpuBundle> {
       "createRenderer: adapter.limits.maxStorageBuffersInVertexStage < 1 (sprite pipeline needs a vertex-stage storage buffer)"
     );
   }
-  const device = await adapter.requestDevice();
+  // A device is created with the DEFAULT limits unless higher ones are
+  // required — and a compatibility-mode device's default
+  // maxStorageBuffersInVertexStage is 0, so even a compat adapter that CAN do
+  // it (the pre-flight check above passed) would otherwise hand back a device
+  // the sprite pipeline can't validate against, always dropping to Canvas2D.
+  // Requiring the single vertex-stage storage buffer the sprite pipeline
+  // actually needs lets a capable compat adapter yield a working WebGPU
+  // backend. Scoped to the compat retry on purpose: the default (non-compat)
+  // attempt doesn't even report this limit (see the pre-flight comment) and
+  // already defaults high enough, and requiring a limit some non-compat
+  // browser doesn't recognize could reject an otherwise-fine default device.
+  // requiredLimits is a plain string-keyed record, so the newer limit name
+  // needs no type surgery the way featureLevel above does.
+  const deviceDescriptor: GPUDeviceDescriptor = {};
+  if (featureLevel === "compatibility") {
+    deviceDescriptor.requiredLimits = { maxStorageBuffersInVertexStage: 1 };
+  }
+  const device = await adapter.requestDevice(deviceDescriptor);
   const format = gpu.getPreferredCanvasFormat();
   return { adapter, device, format };
 }

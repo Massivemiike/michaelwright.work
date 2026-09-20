@@ -373,14 +373,8 @@ export class Canvas2DRenderer implements Renderer {
     this.highlightAffordable = affordable;
   }
 
-  // Inverse of resize()'s world->device-px transform. rect.* is CSS px;
-  // canvas.width/height is the device-pixel backing store resize() sized —
-  // dividing by rect.width/height and multiplying by clientX/Y's
-  // canvas-relative offset undoes both the dpr scale-up AND any CSS
-  // stretching of the element beyond its backing store, exactly reversing
-  // the two steps frame()'s ctx.setTransform(scale, 0, 0, scale, offsetX,
-  // offsetY) plus the browser's own canvas-to-CSS-box stretch apply when
-  // going the other direction.
+  // Screen (client) px -> world (stage) px; the pixel math lives in
+  // ../transform.ts (shared with WebGpuRenderer).
   screenToWorld(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number } {
     return sharedScreenToWorld(clientX, clientY, canvas, this.transform);
   }

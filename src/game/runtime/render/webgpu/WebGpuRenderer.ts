@@ -20,15 +20,15 @@
 // and re-fallback is a later decision.
 //
 // Canvas-commitment ordering (spec D7/§9.2's "never a blank canvas"):
-// `init()` builds every buffer AND every pipeline, under a validation error
-// scope, before it ever calls `canvas.getContext('webgpu')`. That call
-// permanently sets a canvas element's context-mode — a later
-// `canvas.getContext('2d')` on the SAME element returns null forever — so if
-// it happened earlier and a pipeline then failed to validate (e.g. a
-// compat-mode adapter missing a vertex-stage storage buffer),
-// createRenderer.ts's Canvas2D fallback would be defeated on an
-// already-committed canvas. See GpuBundle's comment and this class's init()
-// for the mechanics.
+// `init()` builds every buffer, pipeline, bind group, AND the static render
+// bundle, under a validation error scope, before it ever calls
+// `canvas.getContext('webgpu')`. That call permanently sets a canvas
+// element's context-mode — a later `canvas.getContext('2d')` on the SAME
+// element returns null forever — so if it happened earlier and any of those
+// fallible GPU steps then failed to validate (e.g. a compat-mode adapter
+// missing a vertex-stage storage buffer), createRenderer.ts's Canvas2D
+// fallback would be defeated on an already-committed canvas. See GpuBundle's
+// comment and this class's init() for the mechanics.
 import type { Renderer, RendererCaps, HitEvent, InterpCreep } from "../Renderer";
 import { interpolateById } from "../Renderer";
 import type { RenderSnapshot } from "@/game/sim/engine";
@@ -37,7 +37,7 @@ import { TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circ
 import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit } from "../transform";
 import { tessellateTrack } from "./tessellateTrack";
 import {
-  SPRITE_FLOATS, SHAPE_RING, SHAPE_SQUARE_LINE, SHAPE_CIRCLE,
+  SPRITE_FLOATS, SHAPE_RING, SHAPE_SQUARE, SHAPE_SQUARE_LINE, SHAPE_CIRCLE,
   writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette,
 } from "./pack";
 import { BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL, BLIT_WGSL, BLUR_WGSL, COMPOSITE_WGSL } from "./shaders";
@@ -61,7 +61,7 @@ export interface GpuBundle {
 }
 
 const HIT_LIFETIME_MS = 240;
-const MAX_SPRITES = 4096;       // tiles(186)+towers+ghost+creeps*3(<=300)+bursts — ample headroom
+const MAX_SPRITES = 4096;       // tiles(186*2: fill+border)+towers+ghost+creeps*3(<=300)+bursts — ample headroom
 const HDR_FORMAT: GPUTextureFormat = "rgba16float";
 
 interface HitFlash { x: number; y: number; kind: number; ageMs: number; }
@@ -142,7 +142,11 @@ export class WebGpuRenderer implements Renderer {
   private canvas: HTMLCanvasElement | null = null;
   private fit: Fit = { scale: 1, offsetX: 0, offsetY: 0 };
   private deviceLost = false;
-  private reducedMotion = false;
+  // Findings 1 & 5: set true at the top of destroy() so the device.lost
+  // handler (which device.destroy() itself resolves) can tell an intentional
+  // teardown apart from a genuine, unexpected device loss and stay quiet on
+  // the former.
+  private destroyed = false;
   private palette: GpuPalette = readGpuPaletteSafe();
 
   // Persistent GPU resources (init).
@@ -176,7 +180,7 @@ export class WebGpuRenderer implements Renderer {
   private compositeBind: GPUBindGroup | null = null;
 
   // Frame scratch.
-  private readonly globalsData = new Float32Array(20); // 16 mat + 4 params
+  private readonly globalsData = new Float32Array(20); // 16 mat clip + 4 params (params unused — no shader reads them)
   private readonly instanceData = new Float32Array(MAX_SPRITES * SPRITE_FLOATS);
   private hits: HitFlash[] = [];
   private lastFrameAtMs: number | null = null;
@@ -195,13 +199,9 @@ export class WebGpuRenderer implements Renderer {
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     // `canvas` is not touched/assigned yet — see the comment below, right
-    // before the first real use of it (canvas.getContext('webgpu')), for
-    // why that has to wait until after pipeline validation.
+    // before the first real use of it (canvas.getContext('webgpu')), for why
+    // that has to wait until after every fallible GPU step has validated.
     this.palette = readGpuPaletteSafe();
-    this.reducedMotion =
-      typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        : false;
 
     const device = this.device;
 
@@ -240,34 +240,20 @@ export class WebGpuRenderer implements Renderer {
     this.blurBufV = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
 
-    // Build all pipelines under a validation error scope; on ANY error,
-    // throw the marker so the factory falls back to Canvas2D. Pipelines only
-    // need `device` + `this.format` (a string, from
-    // navigator.gpu.getPreferredCanvasFormat() — see createRenderer.ts),
-    // never the canvas itself, which is exactly what makes it possible to
-    // validate them before the next step below ever touches `canvas`.
+    // Build every pipeline, every bind group, AND the static track bundle
+    // under a SINGLE validation error scope; on ANY error, throw the marker
+    // so the factory falls back to Canvas2D. None of these need the canvas or
+    // context — only `device`, `this.format` (a string, from
+    // navigator.gpu.getPreferredCanvasFormat() — see createRenderer.ts), and
+    // the persistent buffers created above — which is exactly what lets them
+    // ALL be validated before the next step below ever touches `canvas`.
+    // (Finding 2: the bind groups and bundle used to be built AFTER
+    // getContext('webgpu'), leaving a residual window in which a failure
+    // there would strand the Canvas2D fallback on an already-committed
+    // canvas. They are fallible device calls, so they belong before the
+    // commit, under the same scope as the pipelines.)
     device.pushErrorScope("validation");
     this.buildPipelines();
-    const err = await device.popErrorScope();
-    if (err) throw new Error(`${WEBGPU_BUNDLE_MARKER}: ${err.message}`);
-
-    // Only NOW, with every pipeline already known-good, do we touch the
-    // canvas. canvas.getContext('webgpu') PERMANENTLY commits that canvas
-    // element's context-mode — a later canvas.getContext('2d') on the same
-    // element returns null forever, per the HTML spec. If this ran any
-    // earlier (e.g. before pipeline validation, as createRenderer.ts's
-    // acquireGpu used to do), a pipeline failure discovered afterward would
-    // strand createRenderer's Canvas2D fallback on a canvas that can no
-    // longer produce a "2d" context, defeating the fallback and leaving the
-    // player with a blank canvas (spec D7/§9.2 — never a blank canvas). By
-    // this point, adapter-limit and pipeline-validation failures — the
-    // realistic ways WebGPU init fails on real hardware — have already
-    // thrown, on a canvas that is still completely untouched.
-    const context = canvas.getContext("webgpu");
-    if (!context) throw new Error(`${WEBGPU_BUNDLE_MARKER}: getContext('webgpu') returned null`);
-    context.configure({ device, format: this.format, alphaMode: "opaque" });
-    this.context = context;
-    this.canvas = canvas;
 
     // Bind groups that never change (buffers are persistent).
     this.globalsBind = device.createBindGroup({ layout: this.trackPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.globalsBuf } }] });
@@ -288,8 +274,35 @@ export class WebGpuRenderer implements Renderer {
     be.draw(this.trackVertCount);
     this.trackBundle = be.finish();
 
-    // v1: no-op-until-reload on device loss.
+    const err = await device.popErrorScope();
+    if (err) throw new Error(`${WEBGPU_BUNDLE_MARKER}: ${err.message}`);
+
+    // Only NOW, with every pipeline, bind group, and bundle already
+    // known-good, do we touch the canvas. canvas.getContext('webgpu')
+    // PERMANENTLY commits that canvas element's context-mode — a later
+    // canvas.getContext('2d') on the same element returns null forever, per
+    // the HTML spec. If this ran any earlier (e.g. before validation, as
+    // createRenderer.ts's acquireGpu used to do), a failure discovered
+    // afterward would strand createRenderer's Canvas2D fallback on a canvas
+    // that can no longer produce a "2d" context, defeating the fallback and
+    // leaving the player with a blank canvas (spec D7/§9.2 — never a blank
+    // canvas). By this point, adapter-limit, pipeline, bind-group, and bundle
+    // validation failures — the realistic ways WebGPU init fails on real
+    // hardware — have already thrown, on a canvas that is still completely
+    // untouched. getContext + configure are the LAST fallible GPU steps; only
+    // assignments and the device.lost handler follow.
+    const context = canvas.getContext("webgpu");
+    if (!context) throw new Error(`${WEBGPU_BUNDLE_MARKER}: getContext('webgpu') returned null`);
+    context.configure({ device, format: this.format, alphaMode: "opaque" });
+    this.context = context;
+    this.canvas = canvas;
+
+    // v1: no-op-until-reload on device loss. device.destroy() (in destroy())
+    // itself resolves device.lost, so an intentional teardown must not warn
+    // (finding 5: skip when this.destroyed) — only a genuine, unexpected loss
+    // should log.
     device.lost.then((info) => {
+      if (this.destroyed) return;
       this.deviceLost = true;
       console.warn("WebGpuRenderer: device lost (no auto-reinit in v1)", info.message);
     });
@@ -404,8 +417,9 @@ export class WebGpuRenderer implements Renderer {
     const count = this.packFrame(prev, curr, alpha);
     const device = this.device;
     device.queue.writeBuffer(this.instanceBuf, 0, this.instanceData, 0, count * SPRITE_FLOATS);
-    this.globalsData[16] = this.reducedMotion ? 0 : nowMs() / 1000;
-    device.queue.writeBuffer(this.globalsBuf, 0, this.globalsData);
+    // globalsBuf holds only the clip matrix, uploaded once per resize(). No
+    // shader reads g.params, so there is nothing to push per frame (finding
+    // 3: the old per-frame time write gated nothing and is gone).
 
     const enc = device.createCommandEncoder();
     const scenePass = enc.beginRenderPass({
@@ -451,13 +465,26 @@ export class WebGpuRenderer implements Renderer {
     let o = 0;
     const cap = () => o / SPRITE_FLOATS < MAX_SPRITES - 8;
 
-    // Tiles (dimmed when an unaffordable type is armed — mirrors Canvas2D).
+    // Idle build tiles: FILLED neutral blocks with a subtle border — the
+    // same "proper map block" look the shipping Canvas2D backend draws
+    // (Canvas2DRenderer.drawTiles: a text-secondary-mixed fill at 0.82 alpha
+    // + a text-secondary border at 0.85), NOT the hollow outline this used to
+    // draw. Two sprites per tile — a FILLED SHAPE_SQUARE under a
+    // SHAPE_SQUARE_LINE border — mirror Canvas2D's fillRect + strokeRect,
+    // both at half = TILE_SIZE*0.44 so the block, its border, and the hover
+    // ghost / range ring below all register on the same ~28px cell. The fill
+    // (bgElevated mixed 0.9 toward text-secondary) is the same palette tone
+    // Canvas2D tuned to >=3:1 contrast at board centre AND edge; dimming uses
+    // the same armed-unaffordable rule as Canvas2D.
     const armedUnaffordable = this.highlightTowerType >= 0 && !this.highlightAffordable;
     const dim = armedUnaffordable ? 0.6 : 1;
     const tileFill = mix(pal.bgElevated, pal.textSecondary, 0.9);
     const tileHalf = TILE_SIZE * 0.44;
     for (let i = 0; i < this.tilesPx.length && cap(); i += 2) {
-      o = writeSprite(out, o, this.tilesPx[i], this.tilesPx[i + 1], tileHalf, tileHalf, tileFill, 0.82 * dim, SHAPE_SQUARE_LINE, 0);
+      const tx = this.tilesPx[i];
+      const ty = this.tilesPx[i + 1];
+      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, tileFill, 0.82 * dim, SHAPE_SQUARE, 0);
+      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, pal.textSecondary, 0.85 * dim, SHAPE_SQUARE_LINE, 0);
     }
 
     // Selected tower range ring (drawn under bodies).
@@ -525,9 +552,24 @@ export class WebGpuRenderer implements Renderer {
   }
 
   destroy(): void {
+    // Set first so the device.lost handler (device.destroy() below resolves
+    // it) sees this loss as intentional and stays quiet (finding 5).
+    // Idempotent: a repeat destroy() just re-sets flags and no-ops the
+    // already-null textures / already-destroyed device.
+    this.destroyed = true;
     for (const t of [this.sceneTex, this.emitTex, this.downTex, this.blurTemp]) t?.destroy();
     this.sceneTex = this.emitTex = this.downTex = this.blurTemp = null;
-    try { this.context.unconfigure(); } catch { /* context may already be gone */ }
+    // Finding 1: do NOT unconfigure the canvas context here. Under React
+    // StrictMode both setup passes run createRenderer to completion on the
+    // SAME <canvas>, and getContext('webgpu') hands back the SAME
+    // GPUCanvasContext to each pass. A discarded pass's unconfigure() can
+    // land AFTER the surviving pass has already configure()'d that shared
+    // context, leaving the survivor's context unconfigured — getCurrentTexture()
+    // then throws in the rAF loop and the canvas goes blank. device.destroy()
+    // below frees THIS pass's own resources; the surviving pass's own
+    // configure() already overrode the shared context, so there is nothing
+    // here that needs unconfiguring.
+    //
     // Buffers are freed with the device. Destroying the device releases the
     // adapter and all resources — v1 has no reuse path.
     try { this.device.destroy(); } catch { /* device may already be lost */ }

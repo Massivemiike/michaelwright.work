@@ -5,7 +5,7 @@ import {
   writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette,
 } from "./pack";
 import type { InterpCreep } from "../Renderer";
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
 
 const RED: Rgb = { r: 1, g: 0, b: 0 };
 

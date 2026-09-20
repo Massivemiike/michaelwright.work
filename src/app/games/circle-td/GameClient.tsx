@@ -2,8 +2,9 @@
 
 // src/app/games/circle-td/GameClient.tsx
 //
-// Owns the <canvas>, the Circle TD sim, the Canvas2D renderer, and the
-// fixed-timestep loop (src/game/runtime/loop.ts) driving them. 'use client'
+// Owns the <canvas>, the Circle TD sim, the renderer (WebGPU or Canvas2D,
+// chosen at runtime by createRenderer), and the fixed-timestep loop
+// (src/game/runtime/loop.ts) driving them. 'use client'
 // because it touches <canvas>, ResizeObserver, requestAnimationFrame, and
 // document visibility — none of which exist on the server (see
 // node_modules/next/dist/docs/01-app/01-getting-started/05-server-and-client-components.md).
@@ -273,7 +274,7 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
-    // Task 8: two live canvases (this one's Canvas2D drawing plus the
+    // Task 8: two live canvases (this one's WebGPU/Canvas2D drawing plus the
     // background NodeNetworkCanvas's own rAF loop) would otherwise fight
     // for GPU and, since both listen on `window`, pointer events. This
     // is a transient, per-mount fact — never persisted, never touching
