@@ -1,22 +1,18 @@
 // e2e/circle-td-fallback.smoke.spec.ts
 import { test, expect } from "@playwright/test";
+import { trackConsoleErrors } from "./_smoke-helpers";
 
 // Fallback smoke (webkit + firefox projects): forcing ?renderer=canvas2d
 // exercises the Canvas2D path deterministically (the escape hatch survives
 // the SPA "Free play" click since it never navigates), and the game is
 // playable without any GPU adapter.
 test("Canvas2D fallback engages and draws", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-  page.on("pageerror", (e) => errors.push(e.message));
-  // The root layout mounts <Analytics/> (@vercel/analytics) site-wide, which
-  // probes /_vercel/insights/script.js — a path that exists only on actual
-  // Vercel infra. `next start` (here and in CI) always 404s it, logging the
-  // browser's generic resource-load-failure line below. Unrelated to the
-  // renderer; tracked by response so exactly that many (and no more) generic
-  // 404 lines are excused below, not a blanket ignore.
-  let analytics404s = 0;
-  page.on("response", (r) => { if (r.status() === 404 && r.url().includes("/_vercel/insights/")) analytics404s++; });
+  // See _smoke-helpers.ts for why the benign, site-wide, renderer-unrelated
+  // /_vercel/insights/ 404 is excused (budgeted by confirmed network
+  // responses, matched loosely on "404" so it holds across engines — this
+  // spec runs on firefox, where the console text differs from Chromium/
+  // WebKit's per microsoft/playwright#24111).
+  const getUnexpectedErrors = trackConsoleErrors(page);
 
   await page.goto("/games/circle-td?renderer=canvas2d");
   await page.getByRole("button", { name: /free play/i }).click();
@@ -49,16 +45,5 @@ test("Canvas2D fallback engages and draws", async ({ page }) => {
     return seen.size;
   });
   expect(distinct).toBeGreaterThan(1);
-
-  const GENERIC_404 = "Failed to load resource: the server responded with a status of 404 (Not Found)";
-  let budget = analytics404s;
-  const unexpectedErrors: string[] = [];
-  for (const e of errors) {
-    if (e === GENERIC_404 && budget > 0) {
-      budget -= 1;
-    } else {
-      unexpectedErrors.push(e);
-    }
-  }
-  expect(unexpectedErrors).toEqual([]);
+  expect(getUnexpectedErrors()).toEqual([]);
 });
