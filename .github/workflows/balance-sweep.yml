@@ -1,0 +1,20 @@
+name: Balance sweep (scheduled)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  balance-sweep:
+    name: BALANCE_SWEEP=1 npm test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Full balance sweep + grid
+        run: BALANCE_SWEEP=1 npm test
