@@ -488,6 +488,41 @@ and re-run to pin:
 - **maxTowerLevel:** 9 (> 0 ✓)
 - **commands:** 355
 
+## Scarcity re-tune (2026-09-21) — SIM_VERSION 1 → 2
+
+**Trigger:** owner playtest on the leaderboard preview reported the economy still
+too generous — **58k bank at wave 44 with fast towers only**. Investigation
+confirmed it: the cap=25 / α=0.02 economy's *place-only* peak bank was **60,155**
+(measured by `balance.grid.test.ts`'s reframed peak-bank invariant), not the
+"~8k" an earlier note had claimed. The interest cap (α · totalWaveHp, which grows
+quadratically with wave) was the dominant late income (~2,300/wave at wave 44),
+with bounty adding 25 × 30 kills = 750/wave.
+
+**Change (owner-chosen values):**
+
+| Constant | Was | Now |
+|---|---|---|
+| `BOUNTY_CAP` | 25 | **17** |
+| `ALPHA_BP` (interest cap) | 200 (2%) | **110 (1.1%)** |
+| `GAMMA`, `INTEREST_RATE_PCT`, `START_BANK` | 5 / 5 / 125 | unchanged |
+
+**Measured effect** (`BALANCE_SWEEP=1`, open-area 186-tile board):
+
+- Place-only peak bank: **60,155 → 25,586** (~58% cut); per-wave income at wave 44 ~3,050 → ~1,100.
+- Still winnable: grid sweep floor-45 invariant holds (shipping run reaches wave 47–48); no trivial infinite survival; active defense still beats pure banking.
+- Both gated sweeps green: `balance.grid.test.ts` 5/5, `balance.sweep.test.ts` 8/8.
+
+**Golden fixture regenerated** (`UPDATE_GOLDEN=1`) for the new economy:
+
+- **hash:** `5167b43d`  **score:** 2970 (> 0 ✓)  **wave:** 53 (≥ 20 ✓)  **maxTowerLevel:** 7 (> 0 ✓)  **commands:** 263
+
+`SIM_VERSION` bumped to **2** (`src/game/sim/types.ts`) and mirrored in
+`src/lib/leaderboard/config.ts` (`LEADERBOARD_SIM_VERSION`, guarded equal by
+`leaderboard-sim-version.test.ts`). Any further balance change bumps it again and
+scopes out prior leaderboard rows (spec §8.4). Constants remain INVENTED and open
+to further owner tightening — 25.6k is still a hoarding upper bound; real play
+with upgrades sits lower.
+
 ## References
 
 - Sweep implementation and current acceptance thresholds:

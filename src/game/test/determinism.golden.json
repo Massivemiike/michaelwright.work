@@ -1,7 +1,7 @@
 {
   "replay": {
     "seed": 20260918,
-    "simVersion": 1,
+    "simVersion": 2,
     "mode": "daily",
     "commands": [
       {
@@ -59,7 +59,7 @@
         "tile": 8
       },
       {
-        "tick": 1864,
+        "tick": 1885,
         "type": "place",
         "tower": 1,
         "tile": 9
@@ -67,1763 +67,1303 @@
       {
         "tick": 1913,
         "type": "place",
-        "tower": 0,
+        "tower": 1,
         "tile": 10
       },
       {
-        "tick": 1955,
+        "tick": 1956,
         "type": "place",
-        "tower": 0,
+        "tower": 1,
         "tile": 11
-      },
-      {
-        "tick": 1987,
-        "type": "place",
-        "tower": 0,
-        "tile": 12
       },
       {
         "tick": 2018,
         "type": "place",
         "tower": 0,
+        "tile": 12
+      },
+      {
+        "tick": 2067,
+        "type": "place",
+        "tower": 0,
         "tile": 13
       },
       {
-        "tick": 2044,
+        "tick": 2100,
         "type": "place",
         "tower": 0,
         "tile": 14
       },
       {
-        "tick": 2075,
+        "tick": 2121,
         "type": "place",
         "tower": 0,
         "tile": 15
       },
       {
-        "tick": 2100,
+        "tick": 2143,
         "type": "place",
-        "tower": 1,
+        "tower": 0,
         "tile": 16
       },
       {
-        "tick": 2124,
+        "tick": 2173,
         "type": "place",
         "tower": 0,
         "tile": 17
       },
       {
-        "tick": 2158,
+        "tick": 2229,
         "type": "place",
         "tower": 0,
         "tile": 18
       },
       {
-        "tick": 2187,
+        "tick": 2328,
         "type": "place",
-        "tower": 1,
+        "tower": 0,
         "tile": 19
       },
       {
-        "tick": 2370,
+        "tick": 2412,
         "type": "place",
         "tower": 0,
         "tile": 20
       },
       {
-        "tick": 2436,
+        "tick": 2463,
         "type": "place",
         "tower": 0,
         "tile": 21
       },
       {
-        "tick": 2457,
+        "tick": 2494,
         "type": "place",
         "tower": 0,
         "tile": 22
       },
       {
-        "tick": 2492,
+        "tick": 2532,
         "type": "place",
         "tower": 0,
         "tile": 23
       },
       {
-        "tick": 2505,
+        "tick": 2558,
         "type": "place",
-        "tower": 0,
+        "tower": 1,
         "tile": 24
       },
       {
-        "tick": 2525,
+        "tick": 2568,
         "type": "place",
-        "tower": 0,
+        "tower": 1,
         "tile": 25
       },
       {
-        "tick": 2538,
+        "tick": 2603,
         "type": "place",
         "tower": 0,
         "tile": 26
       },
       {
-        "tick": 2554,
+        "tick": 2632,
         "type": "place",
         "tower": 0,
         "tile": 27
       },
       {
-        "tick": 2566,
+        "tick": 2667,
         "type": "place",
         "tower": 0,
         "tile": 28
       },
       {
-        "tick": 2576,
+        "tick": 2679,
         "type": "place",
         "tower": 0,
         "tile": 29
       },
       {
-        "tick": 2587,
+        "tick": 2693,
         "type": "place",
         "tower": 0,
         "tile": 30
       },
       {
-        "tick": 2597,
+        "tick": 2713,
         "type": "place",
         "tower": 0,
         "tile": 31
       },
       {
-        "tick": 2609,
+        "tick": 2736,
         "type": "place",
         "tower": 0,
         "tile": 32
-      },
-      {
-        "tick": 2623,
-        "type": "place",
-        "tower": 0,
-        "tile": 33
-      },
-      {
-        "tick": 2637,
-        "type": "place",
-        "tower": 0,
-        "tile": 34
-      },
-      {
-        "tick": 2651,
-        "type": "place",
-        "tower": 0,
-        "tile": 35
-      },
-      {
-        "tick": 2665,
-        "type": "place",
-        "tower": 0,
-        "tile": 36
-      },
-      {
-        "tick": 2682,
-        "type": "place",
-        "tower": 0,
-        "tile": 37
-      },
-      {
-        "tick": 2695,
-        "type": "place",
-        "tower": 0,
-        "tile": 38
       },
       {
         "tick": 3036,
         "type": "place",
         "tower": 0,
+        "tile": 33
+      },
+      {
+        "tick": 3085,
+        "type": "place",
+        "tower": 0,
+        "tile": 34
+      },
+      {
+        "tick": 3125,
+        "type": "place",
+        "tower": 1,
+        "tile": 35
+      },
+      {
+        "tick": 3169,
+        "type": "place",
+        "tower": 0,
+        "tile": 36
+      },
+      {
+        "tick": 3225,
+        "type": "place",
+        "tower": 0,
+        "tile": 37
+      },
+      {
+        "tick": 3281,
+        "type": "place",
+        "tower": 0,
+        "tile": 38
+      },
+      {
+        "tick": 3316,
+        "type": "place",
+        "tower": 0,
         "tile": 39
       },
       {
-        "tick": 3071,
+        "tick": 3369,
         "type": "place",
         "tower": 0,
         "tile": 158
       },
       {
-        "tick": 3071,
+        "tick": 3369,
         "type": "sell",
         "tile": 158
       },
       {
-        "tick": 3094,
+        "tick": 3372,
         "type": "upgrade",
         "tile": 1
       },
       {
-        "tick": 3125,
+        "tick": 3424,
         "type": "upgrade",
         "tile": 2
       },
       {
-        "tick": 3155,
+        "tick": 3449,
         "type": "upgrade",
         "tile": 3
       },
       {
-        "tick": 3183,
+        "tick": 3477,
         "type": "upgrade",
         "tile": 4
       },
       {
-        "tick": 3197,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 3218,
+        "tick": 3627,
         "type": "upgrade",
         "tile": 5
       },
       {
-        "tick": 3240,
+        "tick": 3640,
         "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 3267,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 3288,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 3309,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 3337,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 3358,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 3379,
-        "type": "upgrade",
-        "tile": 13
-      },
-      {
-        "tick": 3400,
-        "type": "upgrade",
-        "tile": 14
-      },
-      {
-        "tick": 3608,
-        "type": "upgrade",
-        "tile": 15
-      },
-      {
-        "tick": 3622,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 3630,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 3641,
-        "type": "upgrade",
-        "tile": 17
+        "tile": 6
       },
       {
         "tick": 3653,
         "type": "upgrade",
-        "tile": 18
-      },
-      {
-        "tick": 3666,
-        "type": "upgrade",
-        "tile": 20
+        "tile": 7
       },
       {
         "tick": 3679,
         "type": "upgrade",
-        "tile": 21
+        "tile": 8
       },
       {
         "tick": 3692,
         "type": "upgrade",
-        "tile": 22
+        "tile": 9
       },
       {
         "tick": 3705,
         "type": "upgrade",
-        "tile": 23
-      },
-      {
-        "tick": 3713,
-        "type": "upgrade",
-        "tile": 24
-      },
-      {
-        "tick": 3726,
-        "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 3734,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 3745,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 3757,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 3769,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 4215,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 4232,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 4255,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 4275,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 4294,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 4315,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 4328,
-        "type": "upgrade",
-        "tile": 36
-      },
-      {
-        "tick": 4348,
-        "type": "upgrade",
-        "tile": 37
-      },
-      {
-        "tick": 4368,
-        "type": "upgrade",
-        "tile": 38
-      },
-      {
-        "tick": 4388,
-        "type": "upgrade",
-        "tile": 39
-      },
-      {
-        "tick": 4408,
-        "type": "upgrade",
-        "tile": 1
-      },
-      {
-        "tick": 4431,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 4448,
-        "type": "upgrade",
-        "tile": 3
-      },
-      {
-        "tick": 4468,
-        "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 4488,
-        "type": "upgrade",
-        "tile": 5
-      },
-      {
-        "tick": 4815,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 4832,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 4855,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 4875,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 4894,
-        "type": "upgrade",
         "tile": 10
       },
       {
-        "tick": 4915,
+        "tick": 3720,
         "type": "upgrade",
         "tile": 11
       },
       {
-        "tick": 4928,
+        "tick": 3744,
         "type": "upgrade",
         "tile": 12
       },
       {
-        "tick": 4949,
+        "tick": 3757,
         "type": "upgrade",
         "tile": 13
       },
       {
-        "tick": 4968,
+        "tick": 3776,
         "type": "upgrade",
         "tile": 14
       },
       {
-        "tick": 4989,
+        "tick": 3783,
+        "type": "upgrade",
+        "tile": 24
+      },
+      {
+        "tick": 4243,
         "type": "upgrade",
         "tile": 15
       },
       {
-        "tick": 5010,
+        "tick": 4278,
         "type": "upgrade",
         "tile": 16
       },
       {
-        "tick": 5035,
+        "tick": 4320,
         "type": "upgrade",
         "tile": 17
       },
       {
-        "tick": 5048,
+        "tick": 4355,
         "type": "upgrade",
         "tile": 18
       },
       {
-        "tick": 5069,
+        "tick": 4397,
         "type": "upgrade",
         "tile": 19
       },
       {
-        "tick": 5090,
+        "tick": 4432,
         "type": "upgrade",
         "tile": 20
       },
       {
-        "tick": 5415,
+        "tick": 4467,
         "type": "upgrade",
         "tile": 21
       },
       {
-        "tick": 5436,
+        "tick": 4502,
         "type": "upgrade",
         "tile": 22
       },
       {
-        "tick": 5457,
+        "tick": 4537,
         "type": "upgrade",
         "tile": 23
       },
       {
-        "tick": 5475,
+        "tick": 4558,
+        "type": "upgrade",
+        "tile": 25
+      },
+      {
+        "tick": 4829,
+        "type": "upgrade",
+        "tile": 35
+      },
+      {
+        "tick": 4871,
+        "type": "upgrade",
+        "tile": 26
+      },
+      {
+        "tick": 4906,
+        "type": "upgrade",
+        "tile": 27
+      },
+      {
+        "tick": 4941,
+        "type": "upgrade",
+        "tile": 28
+      },
+      {
+        "tick": 4976,
+        "type": "upgrade",
+        "tile": 29
+      },
+      {
+        "tick": 5004,
+        "type": "upgrade",
+        "tile": 30
+      },
+      {
+        "tick": 5039,
+        "type": "upgrade",
+        "tile": 31
+      },
+      {
+        "tick": 5074,
+        "type": "upgrade",
+        "tile": 32
+      },
+      {
+        "tick": 5102,
+        "type": "upgrade",
+        "tile": 33
+      },
+      {
+        "tick": 5127,
+        "type": "upgrade",
+        "tile": 34
+      },
+      {
+        "tick": 5422,
+        "type": "upgrade",
+        "tile": 36
+      },
+      {
+        "tick": 5450,
         "type": "upgrade",
         "tile": 2
       },
       {
         "tick": 5494,
         "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 5515,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 5528,
-        "type": "upgrade",
-        "tile": 24
-      },
-      {
-        "tick": 5549,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 5568,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 5589,
-        "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 5608,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 5633,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 5648,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 5669,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 5688,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 6015,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 6036,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 6056,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 6076,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 6095,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 6115,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 6142,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 6161,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 6181,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 6201,
-        "type": "upgrade",
-        "tile": 36
-      },
-      {
-        "tick": 6220,
-        "type": "upgrade",
         "tile": 37
       },
       {
-        "tick": 6235,
+        "tick": 5520,
         "type": "upgrade",
         "tile": 38
       },
       {
-        "tick": 6262,
+        "tick": 5562,
         "type": "upgrade",
         "tile": 39
       },
       {
-        "tick": 6290,
+        "tick": 5597,
         "type": "upgrade",
         "tile": 1
       },
       {
-        "tick": 6615,
+        "tick": 5625,
         "type": "upgrade",
         "tile": 3
+      },
+      {
+        "tick": 5667,
+        "type": "upgrade",
+        "tile": 4
+      },
+      {
+        "tick": 5695,
+        "type": "upgrade",
+        "tile": 5
+      },
+      {
+        "tick": 5730,
+        "type": "upgrade",
+        "tile": 6
+      },
+      {
+        "tick": 6022,
+        "type": "upgrade",
+        "tile": 7
+      },
+      {
+        "tick": 6043,
+        "type": "upgrade",
+        "tile": 8
+      },
+      {
+        "tick": 6071,
+        "type": "upgrade",
+        "tile": 9
+      },
+      {
+        "tick": 6120,
+        "type": "upgrade",
+        "tile": 10
+      },
+      {
+        "tick": 6148,
+        "type": "upgrade",
+        "tile": 11
+      },
+      {
+        "tick": 6176,
+        "type": "upgrade",
+        "tile": 24
+      },
+      {
+        "tick": 6211,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 6246,
+        "type": "upgrade",
+        "tile": 13
+      },
+      {
+        "tick": 6288,
+        "type": "upgrade",
+        "tile": 14
+      },
+      {
+        "tick": 6316,
+        "type": "upgrade",
+        "tile": 25
+      },
+      {
+        "tick": 6351,
+        "type": "upgrade",
+        "tile": 15
       },
       {
         "tick": 6629,
         "type": "upgrade",
-        "tile": 5
+        "tile": 16
       },
       {
-        "tick": 6650,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 6664,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 6678,
-        "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 6692,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 6713,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 6727,
-        "type": "upgrade",
-        "tile": 13
-      },
-      {
-        "tick": 6741,
-        "type": "upgrade",
-        "tile": 14
-      },
-      {
-        "tick": 6755,
-        "type": "upgrade",
-        "tile": 15
-      },
-      {
-        "tick": 6769,
+        "tick": 6671,
         "type": "upgrade",
         "tile": 17
       },
       {
-        "tick": 6787,
+        "tick": 6704,
+        "type": "upgrade",
+        "tile": 35
+      },
+      {
+        "tick": 6734,
         "type": "upgrade",
         "tile": 18
       },
       {
-        "tick": 6798,
+        "tick": 6762,
+        "type": "upgrade",
+        "tile": 19
+      },
+      {
+        "tick": 6790,
         "type": "upgrade",
         "tile": 20
       },
       {
-        "tick": 6811,
+        "tick": 6818,
         "type": "upgrade",
         "tile": 21
       },
       {
-        "tick": 7215,
+        "tick": 6845,
+        "type": "upgrade",
+        "tile": 2
+      },
+      {
+        "tick": 6860,
         "type": "upgrade",
         "tile": 22
       },
       {
-        "tick": 7236,
+        "tick": 6887,
         "type": "upgrade",
         "tile": 23
       },
       {
-        "tick": 7257,
+        "tick": 7229,
         "type": "upgrade",
-        "tile": 24
+        "tile": 4
       },
       {
         "tick": 7278,
         "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 7297,
-        "type": "upgrade",
         "tile": 26
       },
       {
-        "tick": 7316,
+        "tick": 7313,
         "type": "upgrade",
         "tile": 27
       },
       {
-        "tick": 7342,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 7358,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 7388,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 7408,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 7435,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 7448,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 7468,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 7498,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 7808,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 7828,
-        "type": "upgrade",
-        "tile": 36
-      },
-      {
-        "tick": 7848,
-        "type": "upgrade",
-        "tile": 37
-      },
-      {
-        "tick": 7868,
-        "type": "upgrade",
-        "tile": 38
-      },
-      {
-        "tick": 7888,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 7921,
-        "type": "upgrade",
-        "tile": 39
-      },
-      {
-        "tick": 7941,
-        "type": "upgrade",
-        "tile": 1
-      },
-      {
-        "tick": 7961,
-        "type": "upgrade",
-        "tile": 3
-      },
-      {
-        "tick": 7981,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 8001,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 8028,
-        "type": "upgrade",
-        "tile": 5
-      },
-      {
-        "tick": 8054,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 8075,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 8094,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 8436,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 8499,
-        "type": "upgrade",
-        "tile": 13
-      },
-      {
-        "tick": 8527,
-        "type": "upgrade",
-        "tile": 14
-      },
-      {
-        "tick": 8555,
-        "type": "upgrade",
-        "tile": 15
-      },
-      {
-        "tick": 8587,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 8625,
-        "type": "upgrade",
-        "tile": 17
-      },
-      {
-        "tick": 8653,
-        "type": "upgrade",
-        "tile": 18
-      },
-      {
-        "tick": 8681,
-        "type": "upgrade",
-        "tile": 20
-      },
-      {
-        "tick": 8709,
-        "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 8745,
-        "type": "upgrade",
-        "tile": 21
-      },
-      {
-        "tick": 8765,
-        "type": "upgrade",
-        "tile": 22
-      },
-      {
-        "tick": 8786,
-        "type": "upgrade",
-        "tile": 23
-      },
-      {
-        "tick": 8809,
+        "tick": 7355,
         "type": "upgrade",
         "tile": 6
       },
       {
-        "tick": 9015,
+        "tick": 7390,
+        "type": "upgrade",
+        "tile": 28
+      },
+      {
+        "tick": 7432,
+        "type": "upgrade",
+        "tile": 29
+      },
+      {
+        "tick": 7467,
+        "type": "upgrade",
+        "tile": 7
+      },
+      {
+        "tick": 7509,
+        "type": "upgrade",
+        "tile": 30
+      },
+      {
+        "tick": 7530,
+        "type": "upgrade",
+        "tile": 31
+      },
+      {
+        "tick": 7572,
+        "type": "upgrade",
+        "tile": 8
+      },
+      {
+        "tick": 7814,
+        "type": "upgrade",
+        "tile": 32
+      },
+      {
+        "tick": 7854,
+        "type": "upgrade",
+        "tile": 33
+      },
+      {
+        "tick": 7874,
+        "type": "upgrade",
+        "tile": 9
+      },
+      {
+        "tick": 7914,
+        "type": "upgrade",
+        "tile": 34
+      },
+      {
+        "tick": 7940,
+        "type": "upgrade",
+        "tile": 36
+      },
+      {
+        "tick": 7967,
+        "type": "upgrade",
+        "tile": 10
+      },
+      {
+        "tick": 8003,
+        "type": "upgrade",
+        "tile": 37
+      },
+      {
+        "tick": 8027,
+        "type": "upgrade",
+        "tile": 38
+      },
+      {
+        "tick": 8057,
+        "type": "upgrade",
+        "tile": 11
+      },
+      {
+        "tick": 8082,
+        "type": "upgrade",
+        "tile": 39
+      },
+      {
+        "tick": 8460,
         "type": "upgrade",
         "tile": 24
       },
       {
-        "tick": 9036,
+        "tick": 8548,
         "type": "upgrade",
         "tile": 25
       },
       {
-        "tick": 9057,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 9078,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 9115,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 9129,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 9151,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 9172,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 9207,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 9228,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 9242,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 9268,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 9295,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 9615,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 9632,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 9650,
-        "type": "upgrade",
-        "tile": 36
-      },
-      {
-        "tick": 9671,
-        "type": "upgrade",
-        "tile": 37
-      },
-      {
-        "tick": 9685,
-        "type": "upgrade",
-        "tile": 38
-      },
-      {
-        "tick": 9704,
-        "type": "upgrade",
-        "tile": 39
-      },
-      {
-        "tick": 9720,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 9741,
+        "tick": 8609,
         "type": "upgrade",
         "tile": 1
       },
       {
-        "tick": 9755,
+        "tick": 8673,
         "type": "upgrade",
-        "tile": 3
+        "tile": 35
       },
       {
-        "tick": 9769,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 9790,
-        "type": "upgrade",
-        "tile": 5
-      },
-      {
-        "tick": 9804,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 9818,
+        "tick": 8725,
         "type": "upgrade",
         "tile": 2
       },
       {
-        "tick": 10215,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 10236,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 10257,
+        "tick": 8784,
         "type": "upgrade",
         "tile": 4
       },
       {
-        "tick": 10281,
+        "tick": 8833,
+        "type": "upgrade",
+        "tile": 6
+      },
+      {
+        "tick": 8883,
+        "type": "upgrade",
+        "tile": 7
+      },
+      {
+        "tick": 8919,
+        "type": "upgrade",
+        "tile": 8
+      },
+      {
+        "tick": 8972,
+        "type": "upgrade",
+        "tile": 9
+      },
+      {
+        "tick": 9034,
+        "type": "upgrade",
+        "tile": 3
+      },
+      {
+        "tick": 9085,
+        "type": "upgrade",
+        "tile": 10
+      },
+      {
+        "tick": 9127,
+        "type": "upgrade",
+        "tile": 11
+      },
+      {
+        "tick": 9176,
+        "type": "upgrade",
+        "tile": 24
+      },
+      {
+        "tick": 9211,
+        "type": "upgrade",
+        "tile": 25
+      },
+      {
+        "tick": 9259,
+        "type": "upgrade",
+        "tile": 35
+      },
+      {
+        "tick": 9309,
+        "type": "upgrade",
+        "tile": 5
+      },
+      {
+        "tick": 9337,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 9379,
         "type": "upgrade",
         "tile": 13
       },
       {
-        "tick": 10299,
+        "tick": 9414,
         "type": "upgrade",
         "tile": 14
       },
       {
-        "tick": 10321,
+        "tick": 9664,
         "type": "upgrade",
-        "tile": 6
+        "tile": 15
+      },
+      {
+        "tick": 9706,
+        "type": "upgrade",
+        "tile": 16
+      },
+      {
+        "tick": 9738,
+        "type": "upgrade",
+        "tile": 17
+      },
+      {
+        "tick": 9776,
+        "type": "upgrade",
+        "tile": 18
+      },
+      {
+        "tick": 9812,
+        "type": "upgrade",
+        "tile": 19
+      },
+      {
+        "tick": 9839,
+        "type": "upgrade",
+        "tile": 20
+      },
+      {
+        "tick": 9867,
+        "type": "upgrade",
+        "tile": 21
+      },
+      {
+        "tick": 9888,
+        "type": "upgrade",
+        "tile": 22
+      },
+      {
+        "tick": 9913,
+        "type": "upgrade",
+        "tile": 2
+      },
+      {
+        "tick": 10264,
+        "type": "upgrade",
+        "tile": 23
+      },
+      {
+        "tick": 10306,
+        "type": "upgrade",
+        "tile": 26
       },
       {
         "tick": 10355,
         "type": "upgrade",
-        "tile": 15
+        "tile": 27
       },
       {
-        "tick": 10376,
+        "tick": 10397,
         "type": "upgrade",
-        "tile": 17
-      },
-      {
-        "tick": 10417,
-        "type": "upgrade",
-        "tile": 18
-      },
-      {
-        "tick": 10438,
-        "type": "upgrade",
-        "tile": 20
+        "tile": 28
       },
       {
         "tick": 10453,
         "type": "upgrade",
-        "tile": 21
-      },
-      {
-        "tick": 10481,
-        "type": "upgrade",
-        "tile": 22
-      },
-      {
-        "tick": 10502,
-        "type": "upgrade",
-        "tile": 23
-      },
-      {
-        "tick": 10815,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 10843,
-        "type": "upgrade",
-        "tile": 24
-      },
-      {
-        "tick": 10864,
-        "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 10899,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 10920,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 10934,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 10969,
-        "type": "upgrade",
         "tile": 29
       },
       {
-        "tick": 10990,
+        "tick": 10494,
         "type": "upgrade",
         "tile": 30
       },
       {
-        "tick": 11018,
+        "tick": 10523,
         "type": "upgrade",
         "tile": 31
       },
       {
-        "tick": 11049,
+        "tick": 10565,
         "type": "upgrade",
         "tile": 32
       },
       {
-        "tick": 11060,
+        "tick": 10607,
         "type": "upgrade",
         "tile": 33
       },
       {
-        "tick": 11095,
+        "tick": 10834,
         "type": "upgrade",
         "tile": 34
       },
       {
-        "tick": 11116,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 11436,
+        "tick": 10892,
         "type": "upgrade",
         "tile": 36
       },
       {
-        "tick": 11457,
+        "tick": 10927,
         "type": "upgrade",
         "tile": 37
       },
       {
-        "tick": 11478,
+        "tick": 10976,
         "type": "upgrade",
         "tile": 38
       },
       {
-        "tick": 11499,
+        "tick": 11032,
         "type": "upgrade",
         "tile": 39
       },
       {
-        "tick": 11522,
+        "tick": 11074,
         "type": "upgrade",
         "tile": 1
       },
       {
-        "tick": 11555,
+        "tick": 11111,
         "type": "upgrade",
         "tile": 3
       },
       {
-        "tick": 11576,
+        "tick": 11162,
         "type": "upgrade",
         "tile": 5
       },
       {
-        "tick": 11618,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 11639,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 11653,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 11681,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 11702,
+        "tick": 11193,
         "type": "upgrade",
         "tile": 12
       },
       {
-        "tick": 12008,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 12034,
+        "tick": 11429,
         "type": "upgrade",
         "tile": 13
       },
       {
-        "tick": 12054,
+        "tick": 11492,
         "type": "upgrade",
         "tile": 14
       },
       {
-        "tick": 12088,
+        "tick": 11534,
         "type": "upgrade",
         "tile": 15
       },
       {
-        "tick": 12108,
+        "tick": 11583,
+        "type": "upgrade",
+        "tile": 16
+      },
+      {
+        "tick": 11636,
         "type": "upgrade",
         "tile": 17
       },
       {
-        "tick": 12135,
+        "tick": 11674,
         "type": "upgrade",
         "tile": 18
       },
       {
-        "tick": 12156,
+        "tick": 11715,
         "type": "upgrade",
         "tile": 19
       },
       {
-        "tick": 12176,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 12203,
+        "tick": 11765,
         "type": "upgrade",
         "tile": 20
       },
       {
-        "tick": 12230,
+        "tick": 11800,
         "type": "upgrade",
         "tile": 21
       },
       {
-        "tick": 12255,
+        "tick": 12014,
         "type": "upgrade",
         "tile": 22
       },
       {
-        "tick": 12276,
+        "tick": 12056,
         "type": "upgrade",
         "tile": 23
       },
       {
-        "tick": 12615,
-        "type": "upgrade",
-        "tile": 24
-      },
-      {
-        "tick": 12636,
-        "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 12657,
+        "tick": 12079,
         "type": "upgrade",
         "tile": 26
       },
       {
-        "tick": 12677,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 12692,
+        "tick": 12107,
         "type": "upgrade",
         "tile": 4
       },
       {
-        "tick": 12720,
+        "tick": 12154,
+        "type": "upgrade",
+        "tile": 27
+      },
+      {
+        "tick": 12189,
         "type": "upgrade",
         "tile": 28
       },
       {
-        "tick": 12734,
+        "tick": 12213,
         "type": "upgrade",
         "tile": 29
       },
       {
-        "tick": 12762,
+        "tick": 12250,
         "type": "upgrade",
         "tile": 30
       },
       {
-        "tick": 12776,
+        "tick": 12287,
         "type": "upgrade",
         "tile": 31
       },
       {
-        "tick": 12795,
+        "tick": 12629,
         "type": "upgrade",
         "tile": 32
       },
       {
-        "tick": 12808,
+        "tick": 12678,
         "type": "upgrade",
         "tile": 33
       },
       {
-        "tick": 12825,
+        "tick": 12713,
         "type": "upgrade",
         "tile": 34
       },
       {
-        "tick": 12839,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 13236,
+        "tick": 12748,
         "type": "upgrade",
         "tile": 36
       },
       {
-        "tick": 13263,
+        "tick": 12790,
         "type": "upgrade",
         "tile": 37
       },
       {
-        "tick": 13285,
+        "tick": 12818,
         "type": "upgrade",
         "tile": 38
       },
       {
-        "tick": 13306,
+        "tick": 12848,
         "type": "upgrade",
         "tile": 39
       },
       {
-        "tick": 13341,
+        "tick": 12882,
         "type": "upgrade",
         "tile": 1
       },
       {
-        "tick": 13362,
+        "tick": 12903,
+        "type": "upgrade",
+        "tile": 6
+      },
+      {
+        "tick": 13229,
+        "type": "upgrade",
+        "tile": 7
+      },
+      {
+        "tick": 13271,
+        "type": "upgrade",
+        "tile": 8
+      },
+      {
+        "tick": 13334,
         "type": "upgrade",
         "tile": 3
       },
       {
-        "tick": 13404,
+        "tick": 13387,
         "type": "upgrade",
-        "tile": 5
+        "tile": 9
       },
       {
         "tick": 13425,
         "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 13455,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 13467,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 13488,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 13523,
-        "type": "upgrade",
         "tile": 10
       },
       {
-        "tick": 13843,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 13913,
-        "type": "upgrade",
-        "tile": 11
-      },
-      {
-        "tick": 13948,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 13983,
-        "type": "upgrade",
-        "tile": 13
-      },
-      {
-        "tick": 14015,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 14060,
-        "type": "upgrade",
-        "tile": 14
-      },
-      {
-        "tick": 14089,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 14137,
-        "type": "upgrade",
-        "tile": 15
-      },
-      {
-        "tick": 14165,
-        "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 14200,
-        "type": "upgrade",
-        "tile": 17
-      },
-      {
-        "tick": 14225,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 14264,
-        "type": "upgrade",
-        "tile": 18
-      },
-      {
-        "tick": 14422,
-        "type": "upgrade",
-        "tile": 7
-      },
-      {
-        "tick": 14464,
-        "type": "upgrade",
-        "tile": 20
-      },
-      {
-        "tick": 14485,
-        "type": "upgrade",
-        "tile": 8
-      },
-      {
-        "tick": 14513,
-        "type": "upgrade",
-        "tile": 21
-      },
-      {
-        "tick": 14539,
-        "type": "upgrade",
-        "tile": 9
-      },
-      {
-        "tick": 14569,
-        "type": "upgrade",
-        "tile": 22
-      },
-      {
-        "tick": 14597,
-        "type": "upgrade",
-        "tile": 16
-      },
-      {
-        "tick": 14632,
-        "type": "upgrade",
-        "tile": 23
-      },
-      {
-        "tick": 14653,
-        "type": "upgrade",
-        "tile": 19
-      },
-      {
-        "tick": 14681,
-        "type": "upgrade",
-        "tile": 24
-      },
-      {
-        "tick": 14702,
-        "type": "upgrade",
-        "tile": 2
-      },
-      {
-        "tick": 14737,
-        "type": "upgrade",
-        "tile": 25
-      },
-      {
-        "tick": 15043,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 15064,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 15092,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 15113,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 15148,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 15190,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 15211,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 15239,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 15267,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 15295,
-        "type": "upgrade",
-        "tile": 35
-      },
-      {
-        "tick": 15323,
-        "type": "upgrade",
-        "tile": 36
-      },
-      {
-        "tick": 15615,
-        "type": "upgrade",
-        "tile": 37
-      },
-      {
-        "tick": 15643,
-        "type": "upgrade",
-        "tile": 38
-      },
-      {
-        "tick": 15664,
-        "type": "upgrade",
-        "tile": 39
-      },
-      {
-        "tick": 15699,
-        "type": "upgrade",
-        "tile": 1
-      },
-      {
-        "tick": 15715,
-        "type": "upgrade",
-        "tile": 3
-      },
-      {
-        "tick": 15734,
+        "tick": 13481,
         "type": "upgrade",
         "tile": 5
       },
       {
-        "tick": 15757,
-        "type": "upgrade",
-        "tile": 10
-      },
-      {
-        "tick": 15783,
+        "tick": 13519,
         "type": "upgrade",
         "tile": 11
       },
       {
-        "tick": 15797,
-        "type": "upgrade",
-        "tile": 12
-      },
-      {
-        "tick": 15818,
-        "type": "upgrade",
-        "tile": 13
-      },
-      {
-        "tick": 15839,
-        "type": "upgrade",
-        "tile": 14
-      },
-      {
-        "tick": 15853,
-        "type": "upgrade",
-        "tile": 4
-      },
-      {
-        "tick": 16228,
-        "type": "upgrade",
-        "tile": 15
-      },
-      {
-        "tick": 16254,
-        "type": "upgrade",
-        "tile": 17
-      },
-      {
-        "tick": 16275,
-        "type": "upgrade",
-        "tile": 18
-      },
-      {
-        "tick": 16308,
-        "type": "upgrade",
-        "tile": 20
-      },
-      {
-        "tick": 16336,
-        "type": "upgrade",
-        "tile": 21
-      },
-      {
-        "tick": 16360,
-        "type": "upgrade",
-        "tile": 22
-      },
-      {
-        "tick": 16386,
-        "type": "upgrade",
-        "tile": 23
-      },
-      {
-        "tick": 16422,
+        "tick": 13551,
         "type": "upgrade",
         "tile": 24
       },
       {
-        "tick": 16436,
+        "tick": 13593,
         "type": "upgrade",
         "tile": 25
       },
       {
-        "tick": 16467,
-        "type": "upgrade",
-        "tile": 26
-      },
-      {
-        "tick": 16497,
-        "type": "upgrade",
-        "tile": 27
-      },
-      {
-        "tick": 16822,
-        "type": "upgrade",
-        "tile": 6
-      },
-      {
-        "tick": 16864,
-        "type": "upgrade",
-        "tile": 28
-      },
-      {
-        "tick": 16895,
-        "type": "upgrade",
-        "tile": 29
-      },
-      {
-        "tick": 16920,
-        "type": "upgrade",
-        "tile": 30
-      },
-      {
-        "tick": 16955,
-        "type": "upgrade",
-        "tile": 31
-      },
-      {
-        "tick": 16997,
-        "type": "upgrade",
-        "tile": 32
-      },
-      {
-        "tick": 17018,
-        "type": "upgrade",
-        "tile": 33
-      },
-      {
-        "tick": 17042,
-        "type": "upgrade",
-        "tile": 34
-      },
-      {
-        "tick": 17074,
+        "tick": 13801,
         "type": "upgrade",
         "tile": 35
       },
       {
-        "tick": 17102,
+        "tick": 13935,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 14018,
+        "type": "upgrade",
+        "tile": 2
+      },
+      {
+        "tick": 14109,
+        "type": "upgrade",
+        "tile": 13
+      },
+      {
+        "tick": 14166,
+        "type": "upgrade",
+        "tile": 14
+      },
+      {
+        "tick": 14247,
+        "type": "upgrade",
+        "tile": 15
+      },
+      {
+        "tick": 14305,
+        "type": "upgrade",
+        "tile": 16
+      },
+      {
+        "tick": 14383,
+        "type": "upgrade",
+        "tile": 17
+      },
+      {
+        "tick": 14425,
+        "type": "upgrade",
+        "tile": 18
+      },
+      {
+        "tick": 14461,
+        "type": "upgrade",
+        "tile": 19
+      },
+      {
+        "tick": 14513,
+        "type": "upgrade",
+        "tile": 20
+      },
+      {
+        "tick": 14577,
+        "type": "upgrade",
+        "tile": 21
+      },
+      {
+        "tick": 14618,
+        "type": "upgrade",
+        "tile": 4
+      },
+      {
+        "tick": 14676,
+        "type": "upgrade",
+        "tile": 22
+      },
+      {
+        "tick": 14716,
+        "type": "upgrade",
+        "tile": 23
+      },
+      {
+        "tick": 14774,
+        "type": "upgrade",
+        "tile": 26
+      },
+      {
+        "tick": 14802,
+        "type": "upgrade",
+        "tile": 27
+      },
+      {
+        "tick": 14849,
+        "type": "upgrade",
+        "tile": 28
+      },
+      {
+        "tick": 15064,
+        "type": "upgrade",
+        "tile": 29
+      },
+      {
+        "tick": 15134,
+        "type": "upgrade",
+        "tile": 30
+      },
+      {
+        "tick": 15176,
+        "type": "upgrade",
+        "tile": 6
+      },
+      {
+        "tick": 15239,
+        "type": "upgrade",
+        "tile": 31
+      },
+      {
+        "tick": 15281,
+        "type": "upgrade",
+        "tile": 32
+      },
+      {
+        "tick": 15335,
+        "type": "upgrade",
+        "tile": 33
+      },
+      {
+        "tick": 15369,
+        "type": "upgrade",
+        "tile": 34
+      },
+      {
+        "tick": 15421,
         "type": "upgrade",
         "tile": 36
       },
       {
-        "tick": 17130,
+        "tick": 15629,
         "type": "upgrade",
         "tile": 37
+      },
+      {
+        "tick": 15692,
+        "type": "upgrade",
+        "tile": 38
+      },
+      {
+        "tick": 15723,
+        "type": "upgrade",
+        "tile": 39
+      },
+      {
+        "tick": 15769,
+        "type": "upgrade",
+        "tile": 1
+      },
+      {
+        "tick": 15804,
+        "type": "upgrade",
+        "tile": 7
+      },
+      {
+        "tick": 15846,
+        "type": "upgrade",
+        "tile": 3
+      },
+      {
+        "tick": 15874,
+        "type": "upgrade",
+        "tile": 8
+      },
+      {
+        "tick": 15909,
+        "type": "upgrade",
+        "tile": 5
+      },
+      {
+        "tick": 15942,
+        "type": "upgrade",
+        "tile": 9
+      },
+      {
+        "tick": 16215,
+        "type": "upgrade",
+        "tile": 10
+      },
+      {
+        "tick": 16264,
+        "type": "upgrade",
+        "tile": 11
+      },
+      {
+        "tick": 16305,
+        "type": "upgrade",
+        "tile": 12
+      },
+      {
+        "tick": 16335,
+        "type": "upgrade",
+        "tile": 13
+      },
+      {
+        "tick": 16376,
+        "type": "upgrade",
+        "tile": 24
+      },
+      {
+        "tick": 16422,
+        "type": "upgrade",
+        "tile": 14
+      },
+      {
+        "tick": 16448,
+        "type": "upgrade",
+        "tile": 25
+      },
+      {
+        "tick": 16487,
+        "type": "upgrade",
+        "tile": 15
+      },
+      {
+        "tick": 16523,
+        "type": "upgrade",
+        "tile": 35
+      },
+      {
+        "tick": 16878,
+        "type": "upgrade",
+        "tile": 16
+      },
+      {
+        "tick": 16948,
+        "type": "upgrade",
+        "tile": 2
+      },
+      {
+        "tick": 17011,
+        "type": "upgrade",
+        "tile": 17
+      },
+      {
+        "tick": 17053,
+        "type": "upgrade",
+        "tile": 4
+      },
+      {
+        "tick": 17109,
+        "type": "upgrade",
+        "tile": 18
+      },
+      {
+        "tick": 17151,
+        "type": "upgrade",
+        "tile": 6
+      },
+      {
+        "tick": 17203,
+        "type": "upgrade",
+        "tile": 19
+      },
+      {
+        "tick": 17242,
+        "type": "upgrade",
+        "tile": 7
       }
     ]
   },
-  "score": 3628,
-  "wave": 64,
-  "hash": "1f8de6fe",
-  "maxTowerLevel": 9
+  "score": 2970,
+  "wave": 53,
+  "hash": "5167b43d",
+  "maxTowerLevel": 7
 }

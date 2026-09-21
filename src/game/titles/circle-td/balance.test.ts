@@ -34,8 +34,10 @@ describe("balance", () => {
     expect(deriveOffsets(makeRng(42))).toEqual(expected);
   });
   it("interest is 5% early (cap inert), capped late", () => {
-    // early: small bank, cap does not bite
-    expect(interest(1000, 5, O)).toBe(50);
+    // early: small bank, cap does not bite. At wave 5 the α·waveHP cap is
+    // floor(30·hp(5)·110/10000) = floor(3870·0.011) = 42, so 5% of a bank
+    // under ~840 is the binding term: 5% of 500 = 25 < 42.
+    expect(interest(500, 5, O)).toBe(25);
     // late: huge bank, payout limited by α·waveHP, far below 5%
     const capped = interest(1_000_000_000, 150, O);
     expect(capped).toBeLessThan(1_000_000_000 * 0.05);
@@ -46,10 +48,10 @@ describe("balance", () => {
     // In the UNCAPPED region (small maxHp, floor(maxHp/5) below BOUNTY_CAP),
     // the by-maxHp property still holds: a creep with 2x maxHp pays ~2x — a
     // Hard creep is worth ~2x a Normal from the same wave.
-    expect(bounty(50)).toBe(10); // floor(50/5), well under the cap
-    expect(bounty(100)).toBe(20); // floor(100/5), still under the cap
-    expect(bounty(100)).toBeGreaterThanOrEqual(2 * bounty(50) - 1);
-    expect(bounty(100)).toBeLessThanOrEqual(2 * bounty(50) + 1);
+    expect(bounty(30)).toBe(6); // floor(30/5), well under the cap (17)
+    expect(bounty(60)).toBe(12); // floor(60/5), still under the cap
+    expect(bounty(60)).toBeGreaterThanOrEqual(2 * bounty(30) - 1);
+    expect(bounty(60)).toBeLessThanOrEqual(2 * bounty(30) + 1);
     // The per-kill cap (BOUNTY_CAP) flattens the LATE game: a huge-maxHp
     // creep never pays more than the cap — this is what kills the old glut
     // (an uncapped late kill paid floor(~18000/5)=3600). The cap is still a

@@ -73,7 +73,7 @@ function playBanking(seed: number, b: Balance): number {
 }
 
 // Shipping (frozen) constants — see balance.ts / content.ts.
-const SHIPPING: Balance = { startBank: 125, gamma: 5, alphaBp: 200, bountyCap: 25 };
+const SHIPPING: Balance = { startBank: 125, gamma: 5, alphaBp: 110, bountyCap: 17 };
 const SEEDS = [20260918, 1, 2, 3, 4];
 
 describe("balance grid sweep (spec §5.4, incl. BOUNTY_CAP)", () => {

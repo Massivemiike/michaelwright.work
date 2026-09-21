@@ -11,4 +11,4 @@ export const LEADERBOARD_PUBLIC = false;
 // Mirror of @/game/sim/types SIM_VERSION for use in GUARDED src/lib code
 // (the lazy-boundary guard forbids importing @/game from src/lib). Kept in
 // sync by src/game/test/leaderboard-sim-version.test.ts.
-export const LEADERBOARD_SIM_VERSION = 1;
+export const LEADERBOARD_SIM_VERSION = 2;

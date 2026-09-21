@@ -269,12 +269,15 @@ collapsed the decision space. Scaling restores the real choice at every wave:
 bounty(maxHp) = max(1, min(BOUNTY_CAP, floor( maxHp / γ )))
 ```
 
-Shipped values (all INVENTED, re-tuned 2026-09-19; see
+Shipped values (all INVENTED, scarcity re-tune 2026-09-21, SIM_VERSION 2; see
 `docs/superpowers/2026-09-18-circle-td-balance-tuning.md`): γ = 5, and a hard per-kill ceiling
-**BOUNTY_CAP = 25** (spec-new — it did not exist at spec time). The cap leaves early payouts
-untouched (floor(maxHp/5) stays under 25 until ~wave 6) while flattening the late game so a
-single kill can never fund the ~3.15M-bank glut. Bounty is paid by the KILLED creep's own
-maxHp, not the current wave. `α = ALPHA_BP/10000 = 0.02` is unchanged.
+**BOUNTY_CAP = 17** (spec-new — it did not exist at spec time). The cap leaves early payouts
+untouched (floor(maxHp/5) stays under 17 until ~wave 5) while flattening the late game so a
+single kill can never fund the old ~3.15M-bank glut. Bounty is paid by the KILLED creep's own
+maxHp, not the current wave. `α = ALPHA_BP/10000 = 0.011` (lowered from 0.02 in the 2026-09-21
+re-tune: at cap=25/α=0.02 the capped economy still peaked ~60k bank; cap=17/α=0.011 brings the
+place-only peak to ~25.6k and per-wave income at wave 44 from ~3,050 to ~1,100). Any later
+balance change bumps SIM_VERSION again and invalidates stored scores (§8.4).
 
 ### 5.3 What we invent
 
