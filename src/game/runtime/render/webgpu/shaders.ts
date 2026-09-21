@@ -60,20 +60,26 @@ struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 }`;
 
 export const TRACK_WGSL = /* wgsl */ `
+// Phase 2 (S2) track lanes. Each vertex carries a per-vertex emissive scalar
+// (e) alongside its color so the bright rim band (built by trackBands.ts with
+// e = EDGE_EMISSIVE) writes into the emissive/bloom target while the dark
+// recessed lane (e = 0) does not. No derivatives here => uniform-safe (the
+// f6f3787 rule only bites shaders that sample or take fwidth).
 struct Globals { clip: mat4x4f, params: vec4f };
 @group(0) @binding(0) var<uniform> g: Globals;
-struct VsOut { @builtin(position) pos: vec4f, @location(0) color: vec3f };
-@vertex fn vs(@location(0) p: vec2f, @location(1) col: vec3f) -> VsOut {
+struct VsOut { @builtin(position) pos: vec4f, @location(0) color: vec3f, @location(1) e: f32 };
+@vertex fn vs(@location(0) p: vec2f, @location(1) col: vec3f, @location(2) e: f32) -> VsOut {
   var o: VsOut;
   o.pos = g.clip * vec4f(p, 0.0, 1.0);
   o.color = col;
+  o.e = e;
   return o;
 }
 struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 @fragment fn fs(in: VsOut) -> FragOut {
   var o: FragOut;
   o.scene = vec4f(in.color, 1.0);
-  o.emit = vec4f(0.0, 0.0, 0.0, 1.0);
+  o.emit = vec4f(in.color * in.e, 1.0);
   return o;
 }`;
 

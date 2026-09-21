@@ -143,6 +143,25 @@ const BACKDROP_VIGNETTE_ALPHA = 0.62;
 const BACKDROP_GRID_PITCH = 32;
 const BACKDROP_GRID_ALPHA = 0.09;
 
+// Track lane tunables (Phase 2 board art, S2) — mirror the WebGPU twin
+// (WebGpuRenderer.ts TRACK_*). Each loop reads as a recessed dark channel with
+// a thin bright NEUTRAL neon rim that blooms (brighter OUTER, dimmer INNER)
+// plus a faint center light-strip. Colors are brightness steps of the
+// border/text neutrals (mix(borderMuted -> textPrimary)) — NEVER the enemy
+// blue, NEVER a new hue. The rim glow is a shadowBlur bloom whose brightness
+// tracks the (brighter OUTER) rim color, matching how the WebGPU rim feeds its
+// bloom pass. Keep these in sync with the WebGPU twin or the backends drift.
+const TRACK_EDGE_PX = 3; // visible bright rim width on each side of the channel
+const TRACK_CENTER_PX = 2; // faint center light-strip width
+const TRACK_EDGE_GLOW = 8; // shadowBlur px for the rim bloom (both loops)
+const TRACK_CENTER_GLOW = 3; // shadowBlur px for the faint center strip
+const TRACK_EDGE_MIX_OUTER = 0.85; // borderMuted -> textPrimary for OUTER rim
+const TRACK_EDGE_MIX_INNER = 0.55; // borderMuted -> textPrimary for INNER rim
+const TRACK_DARK_MIX = 0.2; // bgBase -> black for the recessed lane
+const TRACK_CENTER_MIX = 0.35; // borderMuted -> textPrimary for center strip
+const TRACK_EDGE_ALPHA = 0.95; // rim stroke + glow alpha
+const TRACK_CENTER_ALPHA = 0.5; // center strip alpha (faint)
+
 function hexToRgb(hex: string): RGB {
   const cleaned = hex.trim().replace("#", "");
   const full = cleaned.length === 3 ? cleaned.split("").map((c) => c + c).join("") : cleaned;
@@ -606,23 +625,40 @@ export class Canvas2DRenderer implements Renderer {
   // sync). content.ts's MIN_CLEARANCE (= TRACK_WIDTH/2 + TILE_SIZE/2) is
   // computed against this same TRACK_WIDTH, so every build tile's centre sits
   // ~TILE_SIZE/2 CLEAR of this drawn band's edge (the open-area grid model —
-  // tiles no longer abut the path). The edge-highlight stroke added below is
-  // a few px wider than TRACK_WIDTH — a cosmetic overshoot into the (~150px)
-  // inter-loop gap; it visually abuts the nearest tiles but doesn't change
-  // the clearance the geometry guarantees.
+  // tiles no longer abut the path). The rim bloom below spreads a few px past
+  // TRACK_WIDTH — a cosmetic glow into the (~150px) inter-loop gap; it doesn't
+  // change the clearance the geometry guarantees.
+  //
+  // Phase 2 (S2): each loop is drawn as a RECESSED DARK CHANNEL with a thin
+  // bright NEUTRAL neon rim that blooms plus a faint center light-strip — the
+  // Canvas2D twin of the WebGPU three-band track (trackBands.ts). Same
+  // mechanism per loop, in the same draw order the WebGPU vertex list uses:
+  //   1. bright rim stroke at full TRACK_WIDTH, with a shadowBlur glow (the
+  //      bloom). Its color is the brighter OUTER / dimmer INNER neutral step,
+  //      so — like the WebGPU rim feeding its bloom pass — the OUTER loop glows
+  //      brighter than the INNER at the same blur radius.
+  //   2. the dark recessed lane stroked ON TOP at TRACK_WIDTH - 2*EDGE_PX,
+  //      glow off, leaving an EDGE_PX bright rim on each side.
+  //   3. a faint thin center strip.
+  // shadowBlur and lineDash are reset before returning so no glow/dash leaks
+  // into drawTiles or any later stroke this frame.
   private drawTrack(ctx: CanvasRenderingContext2D): void {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    ctx.setLineDash([]);
 
-    // Outer vs inner lane get a brightness difference (never a hue
-    // difference — no third color channel), so the two nested loops read
-    // as distinct without breaking the one-accent/one-blue brand rule.
-    const lanes: ReadonlyArray<{ poly: Float64Array; fill: RGB }> = [
-      { poly: this.trackOuterPx, fill: this.palette.borderMutedRgb },
-      { poly: this.trackInnerPx, fill: mixRgb(this.palette.borderSubtleRgb, this.palette.borderMutedRgb, 0.5) },
+    // Neutral brightness steps of the border/text family (never a hue). OUTER's
+    // rim is a brighter step than INNER's — the depth hierarchy is brightness
+    // only, matching the WebGPU twin's per-loop rim mix ratios.
+    const rimOuter = mixRgb(this.palette.borderMutedRgb, this.palette.textPrimaryRgb, TRACK_EDGE_MIX_OUTER);
+    const rimInner = mixRgb(this.palette.borderMutedRgb, this.palette.textPrimaryRgb, TRACK_EDGE_MIX_INNER);
+    const darkLane = mixRgb(this.palette.bgBaseRgb, BLACK, TRACK_DARK_MIX);
+    const centerCol = mixRgb(this.palette.borderMutedRgb, this.palette.textPrimaryRgb, TRACK_CENTER_MIX);
+
+    const lanes: ReadonlyArray<{ poly: Float64Array; rim: RGB }> = [
+      { poly: this.trackOuterPx, rim: rimOuter },
+      { poly: this.trackInnerPx, rim: rimInner },
     ];
-    const edgeColor = rgbaOf(this.palette.textSecondaryRgb, 0.22);
-    const centerlineColor = rgbaOf(this.palette.textSecondaryRgb, 0.12);
 
     for (const lane of lanes) {
       const poly = lane.poly;
@@ -631,26 +667,32 @@ export class Canvas2DRenderer implements Renderer {
       ctx.moveTo(poly[0], poly[1]);
       for (let i = 2; i < poly.length; i += 2) ctx.lineTo(poly[i], poly[i + 1]);
 
-      // Brighter, slightly-wider stroke underneath, the lane fill on top —
-      // leaves a thin visible edge on both sides of the band, "the route
-      // is unmistakable" per the brief.
-      ctx.lineWidth = TRACK_WIDTH + 4;
-      ctx.strokeStyle = edgeColor;
-      ctx.stroke();
-
+      // 1. Bright rim (full width) + bloom. shadowColor tracks the rim color,
+      //    so the brighter OUTER rim glows brighter than the INNER at the same
+      //    blur radius — the Canvas2D echo of "brighter color => more bloom".
       ctx.lineWidth = TRACK_WIDTH;
-      ctx.strokeStyle = rgbaOf(lane.fill, 1);
+      ctx.strokeStyle = rgbaOf(lane.rim, TRACK_EDGE_ALPHA);
+      ctx.shadowBlur = TRACK_EDGE_GLOW;
+      ctx.shadowColor = rgbaOf(lane.rim, TRACK_EDGE_ALPHA);
       ctx.stroke();
 
-      // Faint dashed centerline — a directional hint, not required
-      // reading (per the brief, "a plus, not required"). setLineDash is
-      // reset immediately after so it never leaks into a later stroke.
-      ctx.setLineDash([6, 10]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = centerlineColor;
+      // 2. Dark recessed lane on top (glow off), leaving an EDGE_PX rim visible.
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = Math.max(1, TRACK_WIDTH - 2 * TRACK_EDGE_PX);
+      ctx.strokeStyle = rgbaOf(darkLane, 1);
       ctx.stroke();
-      ctx.setLineDash([]);
+
+      // 3. Faint thin center strip — a subtle center/direction cue, gently lit.
+      ctx.lineWidth = TRACK_CENTER_PX;
+      ctx.strokeStyle = rgbaOf(centerCol, TRACK_CENTER_ALPHA);
+      ctx.shadowBlur = TRACK_CENTER_GLOW;
+      ctx.shadowColor = rgbaOf(centerCol, TRACK_CENTER_ALPHA);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
     }
+
+    // Belt-and-braces: no glow leaks into drawTiles / drawTowers this frame.
+    ctx.shadowBlur = 0;
   }
 
   // Map fix (2026-09-19): the old fill (bg-elevated@0.6, half=TILE_SIZE*0.32)

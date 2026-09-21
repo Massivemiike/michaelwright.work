@@ -35,7 +35,7 @@ import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
 import { TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
 import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit } from "../transform";
-import { tessellateTrack } from "./tessellateTrack";
+import { buildTrackBands, TRACK_BAND_STRIDE } from "./trackBands";
 import {
   SPRITE_FLOATS, SHAPE_RING, SHAPE_SQUARE, SHAPE_SQUARE_LINE, SHAPE_CIRCLE,
   writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette, type FrameUvFor,
@@ -78,6 +78,23 @@ const HDR_FORMAT: GPUTextureFormat = "rgba16float";
 // all three places' numbers in sync or the two backends drift apart.
 const BACKDROP_CENTER_LIFT = 0.7;  // centre lifted from bg-surface toward bg-elevated
 const BACKDROP_EDGE_DEEPEN = 0.35; // edge pushed past bg-base toward black
+
+// Track lane tunables (Phase 2 board art, S2) — mirror the Canvas2D twin
+// (Canvas2DRenderer.ts TRACK_*). Each loop is a recessed dark channel with a
+// thin bright NEUTRAL neon rim that blooms (brighter OUTER) plus a faint center
+// strip. The rim/center colors are brightness steps of the border/text
+// neutrals (NEVER the enemy blue, NEVER a new hue): mix(borderMuted ->
+// textPrimary). OUTER is brighter than INNER purely via that mix ratio; the
+// emissive is a single constant so the bloom radius is uniform across loops.
+// Keep these in sync with the Canvas2D twin or the two backends drift apart.
+const TRACK_EDGE_PX = 3;              // visible bright rim width on each side
+const TRACK_CENTER_PX = 2;           // faint center light-strip width
+const TRACK_EDGE_EMISSIVE = 0.6;     // rim bloom — modest so it stays in-palette
+const TRACK_CENTER_EMISSIVE = 0.15;  // center strip glow — barely there
+const TRACK_EDGE_MIX_OUTER = 0.85;   // borderMuted -> textPrimary for OUTER rim
+const TRACK_EDGE_MIX_INNER = 0.55;   // borderMuted -> textPrimary for INNER rim
+const TRACK_DARK_MIX = 0.2;          // bgBase -> black for the recessed lane
+const TRACK_CENTER_MIX = 0.35;       // borderMuted -> textPrimary for center strip
 
 interface HitFlash { x: number; y: number; tx: number; ty: number; kind: number; ageMs: number; }
 
@@ -168,7 +185,7 @@ export class WebGpuRenderer implements Renderer {
   private globalsBuf!: GPUBuffer;      // mat4 clip + vec4 params (80 bytes)
   private backdropBuf!: GPUBuffer;     // 4x vec4 colors (64 bytes): center/mid/edge/grid
   private instanceBuf!: GPUBuffer;     // storage, MAX_SPRITES sprites
-  private trackBuf!: GPUBuffer;        // vertex: [x,y,r,g,b] per vertex
+  private trackBuf!: GPUBuffer;        // vertex: [x,y,r,g,b,e] per vertex (stride 24)
   private trackVertCount = 0;
   private sampler!: GPUSampler;
   private backdropPipeline!: GPURenderPipeline;
@@ -240,24 +257,35 @@ export class WebGpuRenderer implements Renderer {
 
     const device = this.device;
 
-    // Static track band (both loops), colored by loop (brightness only).
+    // Static track bands (both loops), Phase 2 (S2): each loop is a recessed
+    // dark channel with a bright neutral neon rim that blooms + a faint center
+    // strip, built by the pure trackBands module (interleaved [x,y,r,g,b,e],
+    // 6 floats/vert). The rim/center colors are brightness steps of the
+    // border/text neutrals — no hue — and OUTER's rim is a brighter step than
+    // INNER's for the depth hierarchy. Emissive is constant; only the rim band
+    // carries it (>0) so only the rim feeds the bloom target (TRACK_WGSL emits
+    // color*e). See trackBands.ts for the band/draw-order mechanism.
     this.tilesPx = toFloatPairs(TILES);
-    const outerTris = tessellateTrack(toFloatPairs(TRACK.outer), TRACK_WIDTH);
-    const innerTris = tessellateTrack(toFloatPairs(TRACK.inner), TRACK_WIDTH);
-    const outerCol = this.palette.borderMuted;
-    const innerCol = mix(this.palette.borderSubtle, this.palette.borderMuted, 0.5);
-    const totalVerts = (outerTris.length + innerTris.length) / 2;
-    const trackData = new Float32Array(totalVerts * 5); // x,y,r,g,b
-    let w = 0;
-    const writeBand = (tris: Float32Array, col: Rgb) => {
-      for (let i = 0; i < tris.length; i += 2) {
-        trackData[w++] = tris[i]; trackData[w++] = tris[i + 1];
-        trackData[w++] = col.r; trackData[w++] = col.g; trackData[w++] = col.b;
-      }
-    };
-    writeBand(outerTris, outerCol);
-    writeBand(innerTris, innerCol);
-    this.trackVertCount = totalVerts;
+    const pal = this.palette;
+    const rimOuter = mix(pal.borderMuted, pal.textPrimary, TRACK_EDGE_MIX_OUTER);
+    const rimInner = mix(pal.borderMuted, pal.textPrimary, TRACK_EDGE_MIX_INNER);
+    const darkLane = mix(pal.bgBase, BLACK, TRACK_DARK_MIX);
+    const centerCol = mix(pal.borderMuted, pal.textPrimary, TRACK_CENTER_MIX);
+    const trackData = buildTrackBands(
+      [toFloatPairs(TRACK.outer), toFloatPairs(TRACK.inner)],
+      {
+        trackWidth: TRACK_WIDTH,
+        edgePx: TRACK_EDGE_PX,
+        centerPx: TRACK_CENTER_PX,
+        edgeEmissive: TRACK_EDGE_EMISSIVE,
+        centerEmissive: TRACK_CENTER_EMISSIVE,
+        colors: [
+          { rim: rimOuter, dark: darkLane, center: centerCol },
+          { rim: rimInner, dark: darkLane, center: centerCol },
+        ],
+      },
+    );
+    this.trackVertCount = trackData.length / TRACK_BAND_STRIDE;
     this.trackBuf = device.createBuffer({ size: trackData.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.trackBuf, 0, trackData);
 
@@ -455,7 +483,9 @@ export class WebGpuRenderer implements Renderer {
       layout: "auto",
       vertex: {
         module: trackMod, entryPoint: "vs",
-        buffers: [{ arrayStride: 20, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }, { shaderLocation: 1, offset: 8, format: "float32x3" }] }],
+        // Stride 24 = [x,y (float32x2 @0), r,g,b (float32x3 @8), e (float32 @20)].
+        // Matches trackBands.ts's interleaved output and TRACK_WGSL's vs inputs.
+        buffers: [{ arrayStride: 24, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }, { shaderLocation: 1, offset: 8, format: "float32x3" }, { shaderLocation: 2, offset: 20, format: "float32" }] }],
       },
       fragment: { module: trackMod, entryPoint: "fs", targets: opaqueSceneTargets },
       primitive: { topology: "triangle-list" },
