@@ -56,6 +56,7 @@ create table if not exists public.rate_limits (
   window_start timestamptz not null default now()
 );
 alter table public.rate_limits enable row level security;   -- no policy → no client access
+revoke all on public.rate_limits from anon, authenticated;   -- defense-in-depth: match game_scores; service_role bypasses RLS and is the sole writer via hit_rate_limit
 
 create or replace function public.hit_rate_limit(
   p_bucket text, p_limit integer, p_window_seconds integer
