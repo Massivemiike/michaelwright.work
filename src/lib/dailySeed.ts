@@ -66,3 +66,21 @@ export function dailySeed(now: Date = new Date()): number {
 export function randomSeed(): number {
   return (Math.random() * 0xffffffff) | 0;
 }
+
+/**
+ * The daily seeds a ranked submission may legitimately carry right now.
+ * Always today's UTC seed; also yesterday's if the current UTC time is
+ * within `graceMinutes` of midnight — a run started at 23:58 UTC and
+ * submitted at 00:01 was played on yesterday's seed and must not be
+ * rejected as a cheat (research §3.6 UTC-rollover edge). Lives here (not in
+ * the purity-guarded sim) precisely because it reads the clock via `Date`.
+ */
+export function acceptableDailySeeds(now: Date = new Date(), graceMinutes: number = 10): number[] {
+  const seeds = [dailySeed(now)];
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (utcMinutes < graceMinutes) {
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    seeds.push(dailySeed(yesterday));
+  }
+  return seeds;
+}

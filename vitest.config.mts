@@ -16,7 +16,9 @@ export default defineConfig({
     include: [
       "src/game/**/*.test.ts",
       "src/app/games/**/*.test.tsx",
+      "src/app/api/**/*.test.ts",
       "src/components/game/**/*.test.tsx",
+      "src/lib/**/*.test.ts",
     ],
   },
 });
