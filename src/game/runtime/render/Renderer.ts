@@ -96,6 +96,12 @@ export interface InterpCreep {
   y: number;
   hp01: number;
   flags: number;
+  // Travel direction this frame, in radians (atan2 of the per-tick motion
+  // curr-pos minus prev-pos), so a renderer can rotate a directional sprite
+  // (plane/dart) to face where the creep is going. 0 when there is no prior
+  // position to derive a direction from (a creep that spawned this frame) or
+  // the creep did not move.
+  heading: number;
 }
 
 // The one pure, unit-tested piece of this module (see Renderer.test.ts) —
@@ -131,13 +137,17 @@ export function interpolateById(
     const pi = prevIndexById.get(id);
     let x = cx;
     let y = cy;
+    let heading = 0;
     if (pi !== undefined) {
       const px = prev.creepXY[pi * 2];
       const py = prev.creepXY[pi * 2 + 1];
       x = px + (cx - px) * alpha;
       y = py + (cy - py) * alpha;
+      const dx = cx - px;
+      const dy = cy - py;
+      if (dx !== 0 || dy !== 0) heading = Math.atan2(dy, dx);
     }
-    out[i] = { id, x, y, hp01: curr.creepHp01[i], flags: curr.creepFlags[i] };
+    out[i] = { id, x, y, hp01: curr.creepHp01[i], flags: curr.creepFlags[i], heading };
   }
   return out;
 }

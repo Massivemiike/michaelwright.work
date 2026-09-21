@@ -12,7 +12,7 @@
 // texel. This module is float-only, DOM-free, and node-unit-tested. Under
 // src/game/runtime/** => outside the sim purity guard (Math.*/float allowed).
 import type { InterpCreep } from "../Renderer";
-import type { Uv } from "../atlas";
+import { TEX_TOWER_SCALE, TEX_CREEP_SCALE, type Uv } from "../atlas";
 import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
 import { TOWERS } from "@/game/titles/circle-td/content";
 import { towerFrame, creepFrame } from "@/game/titles/circle-td/sprites";
@@ -101,7 +101,10 @@ export function packTowers(
     const shape = TOWER_SHAPE[t] ?? SHAPE_CIRCLE;
     const uv = frameUvFor ? frameUvFor(towerFrame(t)) : null;
     if (uv) {
-      off = writeSprite(out, off, xy[i * 2], xy[i * 2 + 1], r, r, color, 1, shape, emissive, 0, uv, true);
+      // Textured towers read larger than the SDF body; towers are stationary
+      // so no rotation (turret art points "up").
+      const tr = r * TEX_TOWER_SCALE;
+      off = writeSprite(out, off, xy[i * 2], xy[i * 2 + 1], tr, tr, color, 1, shape, emissive, 0, uv, true);
     } else {
       off = writeSprite(out, off, xy[i * 2], xy[i * 2 + 1], r, r, color, 1, shape, emissive);
     }
@@ -138,17 +141,23 @@ export function packCreeps(
     const bodyAlpha = isFast ? 1 : 0.9;
     const bodyEmissive = isFast ? 0.9 : 0.5;
     const uv = frameUvFor ? frameUvFor(creepFrame(c.flags)) : null;
+    // Drawn body radius: bigger for a textured sprite; also drives the hp-bar
+    // offset so the bar clears the larger art.
+    const drawnHalf = uv ? half * TEX_CREEP_SCALE : half;
     if (uv) {
-      off = writeSprite(out, off, c.x, c.y, half, half, body, bodyAlpha, shape, bodyEmissive, 0, uv, true);
+      // Rotate the sprite to face travel: the art points "up" (-y), so add
+      // pi/2 to the heading (0 = +x). hp bar stays axis-aligned below.
+      const rot = c.heading + Math.PI / 2;
+      off = writeSprite(out, off, c.x, c.y, drawnHalf, drawnHalf, body, bodyAlpha, shape, bodyEmissive, rot, uv, true);
     } else {
       off = writeSprite(out, off, c.x, c.y, half, half, body, bodyAlpha, shape, bodyEmissive);
     }
 
-    // hp bar just above the body.
-    const width = Math.max(14, baseR * 2.4);
+    // hp bar just above the (possibly larger) body — never rotated.
+    const width = Math.max(14, drawnHalf * 1.6);
     const barHalfX = width / 2;
     const barHalfY = 1.5;
-    const topY = c.y - baseR - 6;
+    const topY = c.y - drawnHalf - 5;
     off = writeSprite(out, off, c.x, topY, barHalfX, barHalfY, pal.track, 0.9, SHAPE_SQUARE, 0);
     const hp = clamp01(c.hp01);
     const fill = mix(pal.blue, pal.accent, (1 - hp) * 0.85);

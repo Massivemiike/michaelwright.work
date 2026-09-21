@@ -57,6 +57,18 @@ describe("interpolateById", () => {
     expect(c.flags).toBe(6);
   });
 
+  it("derives heading from per-tick motion (0 rightward, -pi/2 upward), 0 when spawned/still", () => {
+    // moving +x (rightward): heading ~ 0
+    expect(interpolateById(snap([1], [0, 0], [1], [0]), snap([1], [10, 0], [1], [0]), 0.5)[0].heading).toBeCloseTo(0);
+    // moving -y (upward in screen space): heading ~ -pi/2
+    expect(interpolateById(snap([1], [0, 10], [1], [0]), snap([1], [0, 0], [1], [0]), 0.5)[0].heading).toBeCloseTo(-Math.PI / 2);
+    // spawned this frame (absent from prev): heading 0
+    const spawned = interpolateById(snap([1], [0, 0], [1], [0]), snap([1, 2], [0, 0, 5, 5], [1, 1], [0, 0]), 0.5).find((c) => c.id === 2)!;
+    expect(spawned.heading).toBe(0);
+    // present but did not move: heading 0
+    expect(interpolateById(snap([1], [3, 3], [1], [0]), snap([1], [3, 3], [1], [0]), 0.5)[0].heading).toBe(0);
+  });
+
   it("orders and sizes output by curr's creep list, not prev's", () => {
     const prev = snap([1, 2, 3], [0, 0, 0, 0, 0, 0], [1, 1, 1], [0, 0, 0]);
     const curr = snap([3, 1], [1, 1, 2, 2], [1, 1], [0, 0]);

@@ -26,6 +26,13 @@ export interface Uv {
   v1: number;
 }
 
+// Textured atlas sprites read larger than the SDF primitives they replace: the
+// art has internal padding and a unit should fill ~a tile, so both backends
+// scale the drawn quad by these when drawing an atlas frame (vs the SDF size).
+// Tuned visually against the shipped atlas.
+export const TEX_TOWER_SCALE = 1.6;
+export const TEX_CREEP_SCALE = 2.4;
+
 // Normalized UV rect for a frame within an atlas of the given pixel size.
 // Guards a zero-sized atlas (returns a zero rect) so a malformed manifest can
 // never divide by zero into NaN UVs.

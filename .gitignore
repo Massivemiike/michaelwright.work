@@ -52,3 +52,7 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /.playwright/
+
+# Raw Kenney asset kits (source only) — we commit the derived sprite atlas
+# (public/games/circle-td/sprites/), not the hundreds of raw pack files.
+public/games/circle-td/kenney_*/

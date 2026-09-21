@@ -100,8 +100,8 @@ describe("packCreeps", () => {
     white: { r: 1, g: 1, b: 1 }, accent: { r: 1, g: 0.2, b: 0.1 }, track: { r: 0.1, g: 0.1, b: 0.1 },
   };
   it("uses a diamond for AIR, a circle for ground, and writes a hp bar (body + 2 rects = 3 sprites)", () => {
-    const air: InterpCreep = { id: 1, x: 5, y: 5, hp01: 1, flags: CREEP_AIR };
-    const ground: InterpCreep = { id: 2, x: 9, y: 9, hp01: 1, flags: 0 };
+    const air: InterpCreep = { id: 1, x: 5, y: 5, hp01: 1, flags: CREEP_AIR, heading: 0 };
+    const ground: InterpCreep = { id: 2, x: 9, y: 9, hp01: 1, flags: 0, heading: 0 };
     const out = new Float32Array(SPRITE_FLOATS * 8);
     const next = packCreeps(out, 0, [air, ground], pal);
     // 2 creeps * 3 sprites (body + bg rect + fill rect)
@@ -110,22 +110,22 @@ describe("packCreeps", () => {
     expect(out[SPRITE_FLOATS * 3 + 8]).toBe(SHAPE_CIRCLE); // ground body shape
   });
   it("makes HARD bigger than a plain ground creep", () => {
-    const hard: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: CREEP_HARD };
-    const soft: InterpCreep = { id: 2, x: 0, y: 0, hp01: 1, flags: 0 };
+    const hard: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: CREEP_HARD, heading: 0 };
+    const soft: InterpCreep = { id: 2, x: 0, y: 0, hp01: 1, flags: 0, heading: 0 };
     const a = new Float32Array(SPRITE_FLOATS * 3); packCreeps(a, 0, [hard], pal);
     const b = new Float32Array(SPRITE_FLOATS * 3); packCreeps(b, 0, [soft], pal);
     expect(a[2]).toBeGreaterThan(b[2]); // hard halfX bigger
   });
   it("blends the hp-bar fill toward accent as hp drops (danger cue, no new hue)", () => {
-    const full: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: 0 };
-    const low: InterpCreep = { id: 2, x: 0, y: 0, hp01: 0.1, flags: 0 };
+    const full: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: 0, heading: 0 };
+    const low: InterpCreep = { id: 2, x: 0, y: 0, hp01: 0.1, flags: 0, heading: 0 };
     const a = new Float32Array(SPRITE_FLOATS * 3); packCreeps(a, 0, [full], pal);
     const b = new Float32Array(SPRITE_FLOATS * 3); packCreeps(b, 0, [low], pal);
     // fill rect is the 3rd sprite; its red channel rises as hp falls.
     expect(b[SPRITE_FLOATS * 2 + 4]).toBeGreaterThan(a[SPRITE_FLOATS * 2 + 4]);
   });
   it("textures ONLY the creep body when frameUvFor resolves; hp-bar sprites stay SDF (untextured)", () => {
-    const ground: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: 0 };
+    const ground: InterpCreep = { id: 1, x: 0, y: 0, hp01: 1, flags: 0, heading: 0 };
     const out = new Float32Array(SPRITE_FLOATS * 3);
     const seen: string[] = [];
     const uvFor: FrameUvFor = (name) => { seen.push(name); return UV; };

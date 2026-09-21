@@ -32,7 +32,7 @@ import type { Renderer, RendererCaps, HitEvent } from "../Renderer";
 import { interpolateById } from "../Renderer";
 import { computeFit, screenToWorld as sharedScreenToWorld, type Fit } from "../transform";
 import { loadAtlas } from "../loadAtlas";
-import { hasFrame, type AtlasManifest, type Frame } from "../atlas";
+import { hasFrame, TEX_TOWER_SCALE, TEX_CREEP_SCALE, type AtlasManifest, type Frame } from "../atlas";
 import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
 import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
@@ -721,12 +721,14 @@ export class Canvas2DRenderer implements Renderer {
     if (towerF) {
       const tinted = this.tintedFrame(towerF, bodyRgb);
       if (tinted) {
+        // Textured sprites read larger than the SDF body (art has padding).
+        const tr = r * TEX_TOWER_SCALE;
         ctx.save();
         ctx.shadowColor = rgbaOf(bodyRgb, 0.7);
         ctx.shadowBlur = selected ? 20 : 11;
-        ctx.drawImage(tinted, x - r, y - r, r * 2, r * 2);
+        ctx.drawImage(tinted, x - tr, y - tr, tr * 2, tr * 2);
         ctx.restore();
-        if (clampedLevel > 0) this.drawLevelPips(ctx, x, y, r, clampedLevel);
+        if (clampedLevel > 0) this.drawLevelPips(ctx, x, y, tr, clampedLevel);
         return;
       }
     }
@@ -868,12 +870,18 @@ export class Canvas2DRenderer implements Renderer {
       // on any miss.
       const creepF = this.frameFor(creepFrame(c.flags));
       const tinted = creepF ? this.tintedFrame(creepF, bodyRgb) : null;
+      // Drawn body radius: textured sprites read larger (art has padding);
+      // also drives the hp-bar offset so the bar clears the larger art.
+      const drawnHalf = tinted ? (isAir ? baseR * 1.35 : baseR) * TEX_CREEP_SCALE : baseR;
       if (tinted) {
-        const half = isAir ? baseR * 1.35 : baseR;
         ctx.save();
         ctx.shadowColor = rgbaOf(this.palette.blueRgb, 0.6);
         ctx.shadowBlur = isFast ? 13 : 8;
-        ctx.drawImage(tinted, c.x - half, c.y - half, half * 2, half * 2);
+        // Rotate the sprite to face travel: the art points "up" (-y), so add
+        // pi/2 to the heading (0 = +x).
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.heading + Math.PI / 2);
+        ctx.drawImage(tinted, -drawnHalf, -drawnHalf, drawnHalf * 2, drawnHalf * 2);
         ctx.restore();
       } else {
         ctx.save();
@@ -912,7 +920,7 @@ export class Canvas2DRenderer implements Renderer {
         ctx.restore();
       }
 
-      this.drawHpBar(ctx, c.x, c.y - baseR - 6, Math.max(14, baseR * 2.4), c.hp01);
+      this.drawHpBar(ctx, c.x, c.y - drawnHalf - 5, Math.max(14, drawnHalf * 1.8), c.hp01);
     }
 
     this.pruneTrails(aliveIds);
