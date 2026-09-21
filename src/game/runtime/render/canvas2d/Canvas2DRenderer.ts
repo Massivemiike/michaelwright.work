@@ -120,6 +120,29 @@ const MAX_PARTICLES = 400;
 // (see `reducedMotion` below, which skips this entirely).
 const FAST_TRAIL_LEN = 4;
 
+// --- Backdrop tunables (Phase 2 board art, S1 · Backdrop & ambiance) ---
+//
+// The magnitudes the controller tunes by eye. Both backends read the SAME
+// intent: the WebGPU twin mirrors CENTER_LIFT/EDGE_DEEPEN when it uploads the
+// backdrop color uniforms (WebGpuRenderer.ts) and mirrors VIGNETTE/GRID_* as
+// WGSL consts (webgpu/shaders.ts BACKDROP_WGSL). Keep the numbers in sync
+// across those three places or the two backends drift apart.
+//
+// How far the board centre is lifted toward bg-elevated (0 = a flat bg-surface
+// floor, 1 = full bg-elevated). Higher reads as a more clearly "lit stage".
+const BACKDROP_CENTER_LIFT = 0.7;
+// How far the board EDGE is pushed past bg-base toward black (0 = plain
+// bg-base, 1 = black). Deepens the radial falloff so focus pulls to centre.
+const BACKDROP_EDGE_DEEPEN = 0.35;
+// Peak darkening alpha at the extreme corners — a photographic vignette (pure
+// black, darkens rather than tints; see makeVignetteGradient's rationale).
+const BACKDROP_VIGNETTE_ALPHA = 0.62;
+// Faint structural grid: pitch in stage px and its whisper-low line alpha
+// (spec S1: ~0.06-0.12, kept well under the build-tile grid so it never
+// competes). Drawn in the neutral border-subtle tone between floor & vignette.
+const BACKDROP_GRID_PITCH = 32;
+const BACKDROP_GRID_ALPHA = 0.09;
+
 function hexToRgb(hex: string): RGB {
   const cleaned = hex.trim().replace("#", "");
   const full = cleaned.length === 3 ? cleaned.split("").map((c) => c + c).join("") : cleaned;
@@ -292,6 +315,11 @@ export class Canvas2DRenderer implements Renderer {
   // allocation every frame.
   private backdropGradient: CanvasGradient | null = null;
   private vignetteGradient: CanvasGradient | null = null;
+  // The faint structural grid, built once as a single Path2D of stage-space
+  // 32px lines (see makeBackdropGrid) and just re-stroked each frame — no
+  // per-frame path allocation, same "build once in init" model as the two
+  // gradients above.
+  private backdropGrid: Path2D | null = null;
 
   // `prefers-reduced-motion: reduce` gate for the one purely decorative,
   // continuous-per-frame effect this file adds: the FAST creep motion
@@ -363,6 +391,7 @@ export class Canvas2DRenderer implements Renderer {
     this.tilesPx = toFloatPairs(TILES);
     this.backdropGradient = this.makeBackdropGradient(ctx);
     this.vignetteGradient = this.makeVignetteGradient(ctx);
+    this.backdropGrid = this.makeBackdropGrid();
     this.reducedMotion =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -494,15 +523,17 @@ export class Canvas2DRenderer implements Renderer {
     const cy = STAGE_H / 2;
     const r = Math.hypot(cx, cy);
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    // Map fix (2026-09-19): stop 0 used to be pure bg-elevated, the exact
-    // tone drawTiles' old fill sat on top of — ~1.0 contrast at the board
-    // centre, which is why tiles were invisible there until hover. Lifting
-    // the centre only halfway toward bg-surface keeps "a lit stage" while
-    // leaving headroom for the tile grid (drawTiles) to be the brightest
-    // thing drawn on open ground, at centre AND edge alike.
-    g.addColorStop(0, rgbaOf(mixRgb(this.palette.bgElevatedRgb, this.palette.bgSurfaceRgb, 0.5), 1));
+    // Phase 2 (S1): deepen the lit-stage floor and pull focus to centre. The
+    // centre lifts BACKDROP_CENTER_LIFT of the way from bg-surface toward
+    // bg-elevated (a stronger centre-lift than the old halfway stop), holds
+    // bg-surface at the mid ring, then falls to bg-base pushed BACKDROP_EDGE_
+    // DEEPEN toward black at the rim (a darker edge than plain bg-base). The
+    // ceiling stays at bg-elevated — the tile grid (a later task) is drawn far
+    // brighter (toward text-secondary), so it still reads as the brightest
+    // thing on open ground at both centre and edge.
+    g.addColorStop(0, rgbaOf(mixRgb(this.palette.bgSurfaceRgb, this.palette.bgElevatedRgb, BACKDROP_CENTER_LIFT), 1));
     g.addColorStop(0.5, this.palette.bgSurface);
-    g.addColorStop(1, this.palette.bgBase);
+    g.addColorStop(1, rgbaOf(mixRgb(this.palette.bgBaseRgb, BLACK, BACKDROP_EDGE_DEEPEN), 1));
     return g;
   }
 
@@ -514,23 +545,51 @@ export class Canvas2DRenderer implements Renderer {
     // Pure black falloff, not a palette hue — a vignette darkens whatever
     // is under it rather than tinting it, same idea as a photographic
     // vignette; it's the one place this file draws a color that isn't
-    // sourced from the theme, by design.
+    // sourced from the theme, by design. Phase 2 (S1) strengthens the peak
+    // corner darkening via BACKDROP_VIGNETTE_ALPHA (up from the old 0.5).
     g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.5)");
+    g.addColorStop(1, `rgba(0,0,0,${BACKDROP_VIGNETTE_ALPHA})`);
     return g;
+  }
+
+  // Faint structural grid, built once (STAGE_W/STAGE_H are compile-time
+  // constants) as a single Path2D of BACKDROP_GRID_PITCH-spaced lines and just
+  // re-stroked every frame in drawBackdrop — no per-frame path building, the
+  // same "build once in init()" model the two gradients above use. Path2D is a
+  // browser API; guard so the jsdom test path (where init() already threw on
+  // the null 2D context before reaching here) and any exotic embedding without
+  // Path2D degrade to "no grid" rather than throwing.
+  private makeBackdropGrid(): Path2D | null {
+    if (typeof Path2D === "undefined") return null;
+    const path = new Path2D();
+    for (let x = BACKDROP_GRID_PITCH; x < STAGE_W; x += BACKDROP_GRID_PITCH) {
+      path.moveTo(x, 0);
+      path.lineTo(x, STAGE_H);
+    }
+    for (let y = BACKDROP_GRID_PITCH; y < STAGE_H; y += BACKDROP_GRID_PITCH) {
+      path.moveTo(0, y);
+      path.lineTo(STAGE_W, y);
+    }
+    return path;
   }
 
   private drawBackdrop(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = this.backdropGradient ?? this.palette.bgSurface;
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
 
-    // Map fix (2026-09-19): the old faint structural grid (pitch
-    // TILE_SIZE*2, borderSubtle@0.4) was drawn here as a depth/scale cue
-    // for an otherwise-empty board. Now that drawTiles paints a real,
-    // clearly-visible TILE_SIZE grid over every open area, a second grid
-    // underneath it only doubles up (its 64px pitch is a multiple of the
-    // tiles' own 32px lattice) and competes for attention — dropped so the
-    // real buildable-tile grid is the only grid the board reads.
+    // Phase 2 (S1): a whisper-faint 32px structural grid, drawn between the
+    // floor and the vignette — arena texture to read scale against, kept well
+    // below the build-tile grid (BACKDROP_GRID_ALPHA ~0.09) so it never
+    // competes. Neutral border-subtle tone only (no hue). Cached as a Path2D
+    // in makeBackdropGrid and just re-stroked here, so it costs one stroke per
+    // frame, not a rebuilt path; the vignette below then darkens it too.
+    if (this.backdropGrid) {
+      ctx.save();
+      ctx.strokeStyle = rgbaOf(this.palette.borderSubtleRgb, BACKDROP_GRID_ALPHA);
+      ctx.lineWidth = 1;
+      ctx.stroke(this.backdropGrid);
+      ctx.restore();
+    }
 
     if (this.vignetteGradient) {
       ctx.fillStyle = this.vignetteGradient;

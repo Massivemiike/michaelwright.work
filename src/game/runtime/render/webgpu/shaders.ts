@@ -19,16 +19,40 @@ struct VsOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
 }`;
 
 export const BACKDROP_WGSL = /* wgsl */ `
-struct BgColors { center: vec4f, mid: vec4f, edge: vec4f };
+// Phase 2 (S1) backdrop. The center/mid/edge/grid COLORS arrive via the
+// uniform (uploaded from WebGpuRenderer.ts, which mirrors CENTER_LIFT/
+// EDGE_DEEPEN toward bg-elevated / black); the vignette strength and the grid
+// pitch/alpha live here as WGSL consts. Both mirror the Canvas2D twin
+// (Canvas2DRenderer.ts BACKDROP_* consts) — keep the numbers in sync across
+// both backends or they drift apart. Grid is a neutral tone; emit stays 0 so
+// the backdrop never blooms.
+struct BgColors { center: vec4f, mid: vec4f, edge: vec4f, grid: vec4f };
 @group(0) @binding(0) var<uniform> bg: BgColors;
 ${FULLSCREEN_VS}
+const STAGE: vec2f = vec2f(840.0, 680.0); // content.ts STAGE_W / STAGE_H
+const GRID_PITCH: f32 = 32.0;             // px between grid lines (BACKDROP_GRID_PITCH)
+const GRID_ALPHA: f32 = 0.09;             // whisper-faint grid (BACKDROP_GRID_ALPHA)
+const VIGNETTE: f32 = 0.62;               // peak corner darkening (BACKDROP_VIGNETTE_ALPHA)
 struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 @fragment fn fs(@location(0) uv: vec2f) -> FragOut {
   let d = clamp(distance(uv, vec2f(0.5, 0.5)) / 0.7071, 0.0, 1.0);
   var c: vec3f;
   if (d < 0.5) { c = mix(bg.center.rgb, bg.mid.rgb, d / 0.5); }
   else { c = mix(bg.mid.rgb, bg.edge.rgb, (d - 0.5) / 0.5); }
-  let vig = 1.0 - smoothstep(0.5, 1.0, d) * 0.5; // photographic vignette
+
+  // Faint 32px structural grid, mapped from device-uv into approximate stage
+  // space. The fullscreen pass covers the whole device canvas (incl. the
+  // letterbox bars), so cells are approximate, not aligned to the Canvas2D
+  // grid — spec S1 accepts this for a whisper grid. This is a UNIFORM
+  // fullscreen pass, so fwidth stays in uniform control flow (the f6f3787
+  // rule) and yields crisp ~1px lines at any resolution. Drawn over the floor,
+  // under the vignette — same order as the Canvas2D twin.
+  let cell = uv * STAGE / GRID_PITCH;
+  let gd = abs(fract(cell - vec2f(0.5)) - vec2f(0.5)) / max(fwidth(cell), vec2f(1e-4));
+  let gi = 1.0 - min(min(gd.x, gd.y), 1.0);
+  c = mix(c, bg.grid.rgb, gi * GRID_ALPHA);
+
+  let vig = 1.0 - smoothstep(0.5, 1.0, d) * VIGNETTE; // photographic vignette
   var o: FragOut;
   o.scene = vec4f(c * vig, 1.0);
   o.emit = vec4f(0.0, 0.0, 0.0, 1.0);

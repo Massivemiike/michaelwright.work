@@ -71,6 +71,14 @@ const MAX_SPRITES = 4096;       // tiles(186*2: fill+border)+towers+ghost+creeps
 const MAX_PARTICLES = 400;
 const HDR_FORMAT: GPUTextureFormat = "rgba16float";
 
+// Backdrop tunables (Phase 2 board art, S1) — mirror the Canvas2D twin
+// (Canvas2DRenderer.ts BACKDROP_*) and the WGSL consts in shaders.ts
+// BACKDROP_WGSL. These two feed the center/edge COLOR uniforms uploaded in
+// init(); the vignette strength + grid pitch/alpha live as WGSL consts. Keep
+// all three places' numbers in sync or the two backends drift apart.
+const BACKDROP_CENTER_LIFT = 0.7;  // centre lifted from bg-surface toward bg-elevated
+const BACKDROP_EDGE_DEEPEN = 0.35; // edge pushed past bg-base toward black
+
 interface HitFlash { x: number; y: number; tx: number; ty: number; kind: number; ageMs: number; }
 
 const FALLBACK = {
@@ -158,7 +166,7 @@ export class WebGpuRenderer implements Renderer {
 
   // Persistent GPU resources (init).
   private globalsBuf!: GPUBuffer;      // mat4 clip + vec4 params (80 bytes)
-  private backdropBuf!: GPUBuffer;     // 3x vec4 colors (48 bytes)
+  private backdropBuf!: GPUBuffer;     // 4x vec4 colors (64 bytes): center/mid/edge/grid
   private instanceBuf!: GPUBuffer;     // storage, MAX_SPRITES sprites
   private trackBuf!: GPUBuffer;        // vertex: [x,y,r,g,b] per vertex
   private trackVertCount = 0;
@@ -255,12 +263,21 @@ export class WebGpuRenderer implements Renderer {
 
     // Uniform + storage buffers.
     this.globalsBuf = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.backdropBuf = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const bg = new Float32Array(12);
-    const center = mix(this.palette.bgElevated, this.palette.bgSurface, 0.5);
+    // Backdrop color uniforms: center/mid/edge/grid (4x vec4f = 64 bytes).
+    // center and edge mirror the Canvas2D gradient stops — centre lifted
+    // BACKDROP_CENTER_LIFT of the way from bg-surface toward bg-elevated, edge
+    // pushed BACKDROP_EDGE_DEEPEN past bg-base toward black. grid is the
+    // neutral border-subtle tone the WGSL grid overlay tints toward; the
+    // vignette strength + grid pitch/alpha live as consts in BACKDROP_WGSL.
+    this.backdropBuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const bg = new Float32Array(16);
+    const center = mix(this.palette.bgSurface, this.palette.bgElevated, BACKDROP_CENTER_LIFT);
+    const edge = mix(this.palette.bgBase, BLACK, BACKDROP_EDGE_DEEPEN);
+    const grid = this.palette.borderSubtle;
     bg.set([center.r, center.g, center.b, 1], 0);
     bg.set([this.palette.bgSurface.r, this.palette.bgSurface.g, this.palette.bgSurface.b, 1], 4);
-    bg.set([this.palette.bgBase.r, this.palette.bgBase.g, this.palette.bgBase.b, 1], 8);
+    bg.set([edge.r, edge.g, edge.b, 1], 8);
+    bg.set([grid.r, grid.g, grid.b, 1], 12);
     device.queue.writeBuffer(this.backdropBuf, 0, bg);
     this.instanceBuf = device.createBuffer({ size: this.instanceData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.blurBufH = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
