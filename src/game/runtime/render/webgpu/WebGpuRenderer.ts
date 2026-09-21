@@ -43,6 +43,7 @@ import {
 import { BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL, BLIT_WGSL, BLUR_WGSL, COMPOSITE_WGSL } from "./shaders";
 import { loadAtlas } from "../loadAtlas";
 import { frameUv, hasFrame, type AtlasManifest } from "../atlas";
+import { spawnDeathBurst, spawnMuzzle, advanceParticles, particleDraw, type Particle, type ParticleTint } from "../particles";
 
 // Bundle-budget marker — thrown on pipeline-build failure so the string is
 // load-bearing (survives minification) in this dynamically-imported chunk.
@@ -63,7 +64,11 @@ export interface GpuBundle {
 }
 
 const HIT_LIFETIME_MS = 240;
-const MAX_SPRITES = 4096;       // tiles(186*2: fill+border)+towers+ghost+creeps*3(<=300)+bursts — ample headroom
+const MAX_SPRITES = 4096;       // tiles(186*2: fill+border)+towers+ghost+creeps*3(<=300)+bursts+particles — ample headroom
+// Hard cap on live FX particles — bounds per-frame cost (each is one extra
+// instanced quad) well inside MAX_SPRITES. A death burst is 6-8 particles, so
+// this holds ~50-65 concurrent deaths' worth before it stops spawning.
+const MAX_PARTICLES = 400;
 const HDR_FORMAT: GPUTextureFormat = "rgba16float";
 
 interface HitFlash { x: number; y: number; tx: number; ty: number; kind: number; ageMs: number; }
@@ -199,6 +204,14 @@ export class WebGpuRenderer implements Renderer {
   private hits: HitFlash[] = [];
   private lastFrameAtMs: number | null = null;
   private tilesPx: Float32Array = new Float32Array(0);
+
+  // Textured FX particles (death bursts + muzzle flashes) — render-only,
+  // shared pure logic in ../particles.ts. `lastCreepPos` maps a live creep id
+  // to its last-seen world position so a death (an id present last render but
+  // gone this render) is detected once, independent of render rate (see
+  // stepParticles).
+  private particles: Particle[] = [];
+  private lastCreepPos = new Map<number, [number, number]>();
 
   // Highlight/ghost state (same contract as Canvas2D).
   private highlightTowerIndex: number | null = null;
@@ -507,7 +520,13 @@ export class WebGpuRenderer implements Renderer {
 
   frame(prev: RenderSnapshot, curr: RenderSnapshot, alpha: number, hits: HitEvent[]): void {
     if (this.deviceLost || !this.canvas || !this.sceneTex || !this.emitTex || !this.downTex || !this.blurTemp) return;
-    this.advanceHits(hits);
+    // One wall-clock dt for both hit flashes and particles (they age off real
+    // elapsed time, not sim ticks — like the existing hit system).
+    const now = nowMs();
+    const dt = this.lastFrameAtMs === null ? 0 : Math.max(0, now - this.lastFrameAtMs);
+    this.lastFrameAtMs = now;
+    this.advanceHits(hits, dt);
+    this.stepParticles(curr, hits, dt);
     const count = this.packFrame(prev, curr, alpha);
     const device = this.device;
     device.queue.writeBuffer(this.instanceBuf, 0, this.instanceData, 0, count * SPRITE_FLOATS);
@@ -659,16 +678,99 @@ export class WebGpuRenderer implements Renderer {
       o = writeSprite(out, o, h.tx, h.ty, rr, rr, pal.accent, inv * 0.9, SHAPE_RING, 0.8 * inv);
     }
 
+    // Textured FX particles (death bursts + muzzle flashes) — one emissive
+    // tinted atlas quad each, drawn last (over everything). Only spawned when
+    // fxReady(), and frameUvFor is defined whenever the atlas is loaded, so a
+    // missing individual frame just skips that particle. High emissive feeds
+    // the bloom pass so the glows/sparks bloom like the hit cores do.
+    if (frameUvFor) {
+      for (const p of this.particles) {
+        if (!cap()) break;
+        const uv = frameUvFor(p.frame);
+        if (!uv) continue;
+        const tt = p.lifeMs > 0 ? p.ageMs / p.lifeMs : 1;
+        const d = particleDraw(p, tt);
+        if (d.alpha <= 0) continue;
+        const tint = this.particleTint(p.tint);
+        o = writeSprite(out, o, p.x, p.y, d.size, d.size, tint, d.alpha, SHAPE_CIRCLE, 1.4, d.rot, uv, true);
+      }
+    }
+
     return o / SPRITE_FLOATS;
   }
 
-  private advanceHits(incoming: HitEvent[]): void {
-    const now = nowMs();
-    const dt = this.lastFrameAtMs === null ? 0 : Math.max(0, now - this.lastFrameAtMs);
-    this.lastFrameAtMs = now;
+  // `dt` (wall-clock ms since the last frame) is computed once in frame() and
+  // shared with stepParticles so both effects age off the exact same clock.
+  private advanceHits(incoming: HitEvent[], dt: number): void {
     for (const h of incoming) this.hits.push({ x: h.x, y: h.y, tx: h.tx, ty: h.ty, kind: h.kind, ageMs: 0 });
     if (dt > 0) for (const h of this.hits) h.ageMs += dt;
     if (this.hits.length > 0) this.hits = this.hits.filter((h) => h.ageMs < HIT_LIFETIME_MS);
+  }
+
+  // Whether the atlas is loaded AND actually carries all four FX frames — the
+  // gate for spawning/drawing particles at all (else the SDF fallback path
+  // draws no particles, matching "never a blank board" and the plan's "skip
+  // particles entirely" when the art is unavailable).
+  private fxReady(): boolean {
+    const m = this.atlasManifest;
+    return (
+      this.atlasReady && m !== null &&
+      hasFrame(m, "fx-glow") && hasFrame(m, "fx-star") &&
+      hasFrame(m, "fx-muzzle") && hasFrame(m, "fx-smoke")
+    );
+  }
+
+  // Spawns death bursts + muzzle flashes and ages the particle list by `dt`.
+  //
+  // Death detection is render-rate-independent: prev/curr snapshots are stable
+  // between sim ticks, so `lastCreepPos` (rebuilt every render from curr) holds
+  // exactly the ids that were alive at the previous render. Any id in it but
+  // NOT in curr this render = a creep that died (or left) since — spawn ONE
+  // burst at its last-known position, then rebuild the map so the next render
+  // no longer has that id and never re-spawns it. Skipped on gameOver so the
+  // end-of-run creep wipe doesn't fire dozens of bursts at once.
+  private stepParticles(curr: RenderSnapshot, hits: HitEvent[], dt: number): void {
+    if (!this.fxReady()) return;
+
+    if (!curr.gameOver) {
+      const currIds = new Set<number>();
+      for (let i = 0; i < curr.creepCount; i++) currIds.add(curr.creepId[i]);
+      for (const [id, pos] of this.lastCreepPos) {
+        if (!currIds.has(id) && this.particles.length < MAX_PARTICLES) {
+          this.particles.push(...spawnDeathBurst(pos[0], pos[1]));
+        }
+      }
+    }
+
+    // Rebuild lastCreepPos from curr (always — so a new run / gameOver resets
+    // it and stale ids can't linger to false-trigger later).
+    this.lastCreepPos.clear();
+    for (let i = 0; i < curr.creepCount; i++) {
+      this.lastCreepPos.set(curr.creepId[i], [curr.creepXY[i * 2], curr.creepXY[i * 2 + 1]]);
+    }
+
+    // Muzzle flash per incoming hit: the fx-muzzle art points "up" (-y), so
+    // aim it along the tower->creep vector with +pi/2 (0 = +x).
+    for (const h of hits) {
+      if (this.particles.length >= MAX_PARTICLES) break;
+      const ang = Math.atan2(h.ty - h.y, h.tx - h.x) + Math.PI / 2;
+      this.particles.push(...spawnMuzzle(h.x, h.y, ang));
+    }
+
+    this.particles = advanceParticles(this.particles, dt);
+    if (this.particles.length > MAX_PARTICLES) this.particles.length = MAX_PARTICLES;
+  }
+
+  // Maps a particle's `tint` to a concrete palette RGB (0..1). Mirrors the
+  // Canvas2D mapping so both backends read on-brand.
+  private particleTint(tint: ParticleTint): Rgb {
+    const p = this.palette;
+    switch (tint) {
+      case "core": return mix(p.accentHover, WHITE, 0.4); // white-hot flash center
+      case "spark": return p.textPrimary;                 // white sparks
+      case "smoke": return mix(p.textSecondary, p.blue, 0.35); // desaturated grey/blue
+      case "muzzle": return p.accentHover;                // hot muzzle flame
+    }
   }
 
   destroy(): void {
@@ -703,6 +805,8 @@ export class WebGpuRenderer implements Renderer {
     this.canvas = null;
     this.hits = [];
     this.lastFrameAtMs = null;
+    this.particles = [];
+    this.lastCreepPos.clear();
   }
 }
 
