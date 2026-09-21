@@ -41,6 +41,7 @@ import type { TowerHit } from "@/game/titles/circle-td/rules";
 import { createRenderer } from "@/game/runtime/render/createRenderer";
 import type { Renderer, HitEvent } from "@/game/runtime/render/Renderer";
 import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
+import { SIM_VERSION } from "@/game/sim/types";
 import { makeLoop, type GameLoop } from "@/game/runtime/loop";
 import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "@/game/runtime/input/pointer";
 import { createSnapshotStore } from "@/game/runtime/hud/snapshotStore";
@@ -649,7 +650,15 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
           <TowerPalette bank={snapshot.bank} selectedType={uiState.towerType} inputModel={paletteInputModel} />
         </div>
         {snapshot.gameOver && (
-          <GameOver score={snapshot.score} wave={snapshot.wave} onPlayAgain={() => window.location.reload()} />
+          <GameOver
+            score={snapshot.score}
+            wave={snapshot.wave}
+            onPlayAgain={() => window.location.reload()}
+            mode={mode}
+            seed={seed}
+            simVersion={SIM_VERSION}
+            commands={inputModelRef.current?.inputLog ?? []}
+          />
         )}
       </div>
     </div>
