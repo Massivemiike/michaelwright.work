@@ -266,12 +266,15 @@ wave 100 essentially all income was interest and killing paid nothing, which is 
 collapsed the decision space. Scaling restores the real choice at every wave:
 
 ```
-bounty(n) = max(1, floor( HP(n) / γ ))
+bounty(maxHp) = max(1, min(BOUNTY_CAP, floor( maxHp / γ )))
 ```
 
-**Initial value: γ = 400**, to be tuned. At wave 10 this pays $1/kill; at wave 100, $43/kill,
-or about $1,290 for a fully cleared wave. Kill income is then also O(n²), consistent with the
-capped interest, so the two income sources stay in proportion as the game climbs.
+Shipped values (all INVENTED, re-tuned 2026-09-19; see
+`docs/superpowers/2026-09-18-circle-td-balance-tuning.md`): γ = 5, and a hard per-kill ceiling
+**BOUNTY_CAP = 25** (spec-new — it did not exist at spec time). The cap leaves early payouts
+untouched (floor(maxHp/5) stays under 25 until ~wave 6) while flattening the late game so a
+single kill can never fund the ~3.15M-bank glut. Bounty is paid by the KILLED creep's own
+maxHp, not the current wave. `α = ALPHA_BP/10000 = 0.02` is unchanged.
 
 ### 5.3 What we invent
 
@@ -436,16 +439,20 @@ Rules, all enforced by lint rule and by the cross-engine test in §10:
 
 ```ts
 type Replay = {
-  seed: string;          // daily seed or random, as issued
+  seed: number;          // int32 daily seed (numeric, not string) — see dailySeed.ts
   simVersion: number;    // see §8.4
   mode: "daily" | "free";
   commands: Array<{
     tick: number;
-    type: "place" | "upgrade" | "sell" | "start";
-    payload: unknown;    // tile coords, tower id, tower type
+    type: "start" | "place" | "upgrade" | "sell";
+    tower?: number;      // flat optional fields (NOT a `payload: unknown`)
+    tile?: number;
   }>;
 };
 ```
+
+Wire format matches shipped code; the earlier `seed: string` / `payload: unknown` sketch is
+superseded.
 
 Only discrete player actions are recorded. Game speed is deliberately excluded (§7 rule 6).
 A long run is a few hundred commands — single-digit kilobytes, comfortable in `jsonb`.
@@ -471,6 +478,15 @@ a multi-hour run verifies in well under a second. A submission exceeding any lim
 rejected without being simulated.
 
 ### 8.3 Storage
+
+Plan 3B ships a HASH+SCORE-ONLY schema (owner decision): the DB stores a state `hash` + a
+`replay_hash` (command-log digest for dedupe) + score/wave/initials — there is NO
+`replay jsonb` column, so there is no watch-replay or post-hoc re-audit; verification happens
+only at submit time. Public reads go through a column-limited view (`game_scores_public`,
+excludes seed + both hashes) with base-table SELECT revoked. See
+`supabase/migrations/0001_leaderboard.sql`.
+
+The block below is the original illustrative DDL, kept as historical context:
 
 ```sql
 create table game_scores (
