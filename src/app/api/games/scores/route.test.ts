@@ -39,15 +39,15 @@ const req = (b: unknown) =>
 // Faithful mirror of the route's real Supabase call chains. Filter/modifier
 // methods (.eq/.order) return the same chainable — exactly as PostgREST's
 // PostgrestFilterBuilder returns `this` — so the mock is robust to how many
-// times the route chains them (rankDaily uses 4 .eq(), rankAllTime 3;
-// topDaily 4, topAllTime 3). Terminals resolve to the shape the route
-// destructures: .single() → { data, error }, .or() → { count, error },
-// .limit() → { data, error }.
+// times the route chains them (rankDaily uses 4 .eq() then .gt(), rankAllTime
+// 3 .eq() then .gt(); topDaily 4 .eq(), topAllTime 3). Terminals resolve to the
+// shape the route destructures: .single() → { data, error }, .gt() →
+// { count, error }, .limit() → { data, error }.
 function scoresTable() {
-  // rank query: from("game_scores").select("*",{count,head}).eq()...or()
+  // rank query: from("game_scores").select("*",{count,head}).eq()...gt()
   const rankChain: Record<string, unknown> = {};
   rankChain.eq = () => rankChain;
-  rankChain.or = () => Promise.resolve({ count: 0, error: null });
+  rankChain.gt = () => Promise.resolve({ count: 0, error: null });
   // dedupe read (only hit on 23505): .select("created_at").eq()...single()
   rankChain.single = () =>
     Promise.resolve({ data: { created_at: "2026-09-19T00:00:00Z" }, error: null });

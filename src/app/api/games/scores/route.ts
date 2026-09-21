@@ -109,24 +109,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const ins = await supabase.from("game_scores").insert(row).select("id, created_at").single();
 
     let duplicate = false;
-    let insertedCreatedAt: string | null = ins.data?.created_at ?? null;
     if (ins.error) {
-      // 23505 = unique_violation → this exact log was already submitted.
+      // 23505 = unique_violation → this exact log was already submitted; still
+      // a 200 with duplicate:true (the run is already on the board). The old
+      // created_at re-read here fed the rank helpers' now-dropped tie term, so
+      // it's gone; any other insert error is a real failure.
       if ((ins.error as { code?: string }).code === "23505") {
         duplicate = true;
-        const existing = await supabase.from("game_scores")
-          .select("created_at")
-          .eq("game_slug", sub.gameSlug).eq("sim_version", SIM_VERSION)
-          .eq("seed", String(sub.seed)).eq("replay_hash", replayHash).single();
-        insertedCreatedAt = existing.data?.created_at ?? null;
       } else {
         return NextResponse.json({ error: "Could not save score" }, { status: 500 });
       }
     }
 
-    // 10. Ranks (count-of-better + 1) and top-N boards for the response.
-    const dailyRank = await rankDaily(supabase, sub.gameSlug, dailyDate, verified.score, insertedCreatedAt);
-    const allTimeRank = await rankAllTime(supabase, sub.gameSlug, verified.score, insertedCreatedAt);
+    // 10. Ranks (strictly-greater-score count + 1) and top-N boards.
+    const dailyRank = await rankDaily(supabase, sub.gameSlug, dailyDate, verified.score);
+    const allTimeRank = await rankAllTime(supabase, sub.gameSlug, verified.score);
     const daily = await topDaily(supabase, sub.gameSlug, dailyDate);
     const allTime = await topAllTime(supabase, sub.gameSlug);
 
@@ -140,19 +137,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 // --- helpers (service-role reads; boards read the column-limited view) ---
 
-async function rankDaily(sb: ReturnType<typeof getServiceClient>, slug: string, dailyDate: string, score: number, createdAt: string | null): Promise<number> {
-  const q = sb.from("game_scores").select("*", { count: "exact", head: true })
-    .eq("game_slug", slug).eq("sim_version", SIM_VERSION).eq("mode", "daily").eq("daily_date", dailyDate) as unknown;
-  const tie = createdAt ? `and(score.eq.${score},created_at.lt.${createdAt})` : `and(score.eq.${score},created_at.lt.now())`;
-  const { count } = await (q as { or: (f: string) => Promise<{ count: number | null }> }).or(`score.gt.${score},${tie}`);
+// Plan-authorized strictly-greater-score fallback (Task 6 Step 7 note):
+// competition ranking where same-score submitters share a rank — standard, and
+// the board index already orders ties by created_at asc, so display order is
+// unaffected. This drops the old fragile `created_at.lt.<ISO>` tie term whose
+// embedded-ISO PostgREST `.or()` filter, if rejected, returned count=undefined
+// → (undefined ?? 0)+1 → EVERY submitter told rank #1. A query error now yields
+// a null rank ("unranked/unknown") instead of that false #1.
+async function rankDaily(sb: ReturnType<typeof getServiceClient>, slug: string, dailyDate: string, score: number): Promise<number | null> {
+  const { count, error } = await sb.from("game_scores").select("*", { count: "exact", head: true })
+    .eq("game_slug", slug).eq("sim_version", SIM_VERSION).eq("mode", "daily").eq("daily_date", dailyDate)
+    .gt("score", score);
+  if (error) return null;
   return (count ?? 0) + 1;
 }
 
-async function rankAllTime(sb: ReturnType<typeof getServiceClient>, slug: string, score: number, createdAt: string | null): Promise<number> {
-  const q = sb.from("game_scores").select("*", { count: "exact", head: true })
-    .eq("game_slug", slug).eq("sim_version", SIM_VERSION).eq("mode", "daily") as unknown;
-  const tie = createdAt ? `and(score.eq.${score},created_at.lt.${createdAt})` : `and(score.eq.${score},created_at.lt.now())`;
-  const { count } = await (q as { or: (f: string) => Promise<{ count: number | null }> }).or(`score.gt.${score},${tie}`);
+async function rankAllTime(sb: ReturnType<typeof getServiceClient>, slug: string, score: number): Promise<number | null> {
+  const { count, error } = await sb.from("game_scores").select("*", { count: "exact", head: true })
+    .eq("game_slug", slug).eq("sim_version", SIM_VERSION).eq("mode", "daily")
+    .gt("score", score);
+  if (error) return null;
   return (count ?? 0) + 1;
 }
 
