@@ -31,6 +31,9 @@ import {
   START_BANK,
   ALIVE_CAP_NORMAL,
 } from "@/game/titles/circle-td/content";
+import { getDailyBoard, getAllTimeBoard } from "@/lib/leaderboard/queries";
+import { LEADERBOARD_PUBLIC } from "@/lib/leaderboard/config";
+import Leaderboard from "@/components/game/Leaderboard";
 
 export const metadata = buildMetadata({
   title: "Circle TD",
@@ -38,6 +41,15 @@ export const metadata = buildMetadata({
     "Circle TD — a from-scratch, deterministic recreation of the 2007 Flash tower-defense classic. No exits, no lives: the run ends when the creep population overruns you. Free to play, right in the browser.",
   path: "/games/circle-td",
 });
+
+// ISR: this page is prerendered at build time and regenerated in the
+// background at most once every 60s with fresh board data (see
+// node_modules/next/dist/docs/01-app/02-guides/caching-without-cache-
+// components.md — Cache Components is not enabled here, so this route
+// segment `revalidate` config is what governs it). With
+// LEADERBOARD_PUBLIC false, no board is read/rendered, so this has no
+// visible effect yet.
+export const revalidate = 60;
 
 // 30 Hz fixed-timestep sim (see src/game/runtime/loop.ts) — ticks to
 // seconds for the wave-cadence line below.
@@ -85,7 +97,9 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function CircleTdPage() {
+export default async function CircleTdPage() {
+  const daily = LEADERBOARD_PUBLIC ? await getDailyBoard("circle-td") : [];
+  const allTime = LEADERBOARD_PUBLIC ? await getAllTimeBoard("circle-td") : [];
   return (
     <div style={{ minHeight: "100vh", paddingTop: 66, position: "relative", zIndex: 10 }}>
       {/* Hero / poster */}
@@ -217,6 +231,13 @@ export default function CircleTdPage() {
                 to defend.
               </p>
             </div>
+
+            {LEADERBOARD_PUBLIC && (
+              <div>
+                {sectionLabel(<Gamepad2 size={13} />, "Today's board")}
+                <Leaderboard daily={daily} allTime={allTime} />
+              </div>
+            )}
           </div>
         </SectionReveal>
       </div>

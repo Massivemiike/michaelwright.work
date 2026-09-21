@@ -12,6 +12,9 @@ import { Gamepad2, ArrowRight } from "lucide-react";
 import SectionReveal from "@/components/sections/SectionReveal";
 import { games, type Game } from "@/data/games.data";
 import { buildMetadata } from "@/lib/metadata";
+import { getDailyBoard } from "@/lib/leaderboard/queries";
+import { LEADERBOARD_PUBLIC } from "@/lib/leaderboard/config";
+import type { LeaderboardRow } from "@/lib/leaderboard/types";
 
 export const metadata = buildMetadata({
   title: "Games",
@@ -19,6 +22,13 @@ export const metadata = buildMetadata({
     "A small arcade of from-scratch recreations of classic Flash-era games — deterministic simulations, built and played entirely in the browser.",
   path: "/games",
 });
+
+// ISR: prerendered at build time, regenerated in the background at most
+// once every 60s with a fresh top-3 preview (see node_modules/next/dist/
+// docs/01-app/02-guides/caching-without-cache-components.md). With
+// LEADERBOARD_PUBLIC false, no preview is read/rendered, so this has no
+// visible effect yet.
+export const revalidate = 60;
 
 function badgeStyle(playable: boolean): CSSProperties {
   return {
@@ -36,7 +46,7 @@ function badgeStyle(playable: boolean): CSSProperties {
   };
 }
 
-function GameCard({ game, index }: { game: Game; index: number }) {
+function GameCard({ game, index, preview }: { game: Game; index: number; preview?: LeaderboardRow[] }) {
   const playable = game.status === "playable";
 
   const card = (
@@ -96,6 +106,18 @@ function GameCard({ game, index }: { game: Game; index: number }) {
           ))}
         </div>
 
+        {preview && preview.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", marginBottom: "0.9rem" }}>
+            <span style={{ fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", fontSize: "0.625rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "#3C3F52" }}>Today&rsquo;s top</span>
+            {preview.map((r) => (
+              <div key={`${r.rank}-${r.initials}`} style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono-var,'JetBrains Mono'),monospace", fontSize: "0.75rem", color: "#787F96" }}>
+                <span style={{ color: "#F0F2F8", letterSpacing: "0.08em" }}>#{r.rank} {r.initials}</span>
+                <span>{r.score.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {playable && (
           <div
             style={{
@@ -130,7 +152,8 @@ function GameCard({ game, index }: { game: Game; index: number }) {
   );
 }
 
-export default function GamesPage() {
+export default async function GamesPage() {
+  const circleDaily = LEADERBOARD_PUBLIC ? await getDailyBoard("circle-td", 3) : [];
   return (
     <div style={{ minHeight: "100vh", paddingTop: 66, position: "relative", zIndex: 10 }}>
       {/* Header */}
@@ -189,7 +212,12 @@ export default function GamesPage() {
           }}
         >
           {games.map((game, i) => (
-            <GameCard key={game.slug} game={game} index={i} />
+            <GameCard
+              key={game.slug}
+              game={game}
+              index={i}
+              preview={game.slug === "circle-td" ? circleDaily : undefined}
+            />
           ))}
         </div>
       </div>
