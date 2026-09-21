@@ -56,14 +56,25 @@ struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 export const SPRITE_WGSL = /* wgsl */ `
 struct Globals { clip: mat4x4f, params: vec4f };
 @group(0) @binding(0) var<uniform> g: Globals;
-struct Instance { center: vec2f, half: vec2f, color: vec4f, params: vec4f };
+// std430 storage layout (matches pack.ts's 16-float record exactly):
+// center(2)+half(2) pack into 16B, then color(16B), params(16B), uv(16B).
+// params.x=shape id, .y=emissive, .z=rot(radians), .w=textured flag(0/1).
+// uv = u0,v0,u1,v1 atlas rect (0 when untextured).
+struct Instance { center: vec2f, half: vec2f, color: vec4f, params: vec4f, uv: vec4f };
 @group(0) @binding(1) var<storage, read> instances: array<Instance>;
+// Sprite atlas (Phase 1 texture art) + its sampler. Bound to a 1x1 white
+// placeholder until the real atlas finishes loading, so SDF sprites (textured
+// flag 0) sample nothing meaningful and render exactly as before.
+@group(0) @binding(2) var atlasTex: texture_2d<f32>;
+@group(0) @binding(3) var atlasSamp: sampler;
 struct VsOut {
   @builtin(position) pos: vec4f,
   @location(0) local: vec2f,
   @location(1) color: vec4f,
   @location(2) shape: f32,
   @location(3) emissive: f32,
+  @location(4) uvCoord: vec2f,
+  @location(5) textured: f32,
 };
 @vertex fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VsOut {
   var corners = array<vec2f, 6>(
@@ -85,6 +96,12 @@ struct VsOut {
   o.color = inst.color;
   o.shape = inst.params.x;
   o.emissive = inst.params.y;
+  // Per-corner atlas UV: map the quad corner c in [-1,1] to [0,1], then lerp
+  // between the frame's (u0,v0) and (u1,v1). Corner (-1,-1) -> (u0,v0), the
+  // frame's top-left, which lines up with the quad's up-left corner (y-down
+  // stage space) so the sprite is upright, no vertical flip needed.
+  o.uvCoord = mix(inst.uv.xy, inst.uv.zw, (c * vec2f(1.0, 1.0) + 1.0) / 2.0);
+  o.textured = inst.params.w;
   return o;
 }
 fn sdCircle(p: vec2f) -> f32 { return length(p) - 1.0; }
@@ -108,6 +125,20 @@ fn sdHex(pin: vec2f) -> f32 {
 }
 struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 @fragment fn fs(in: VsOut) -> FragOut {
+  var o: FragOut;
+  // Textured path (atlas sprite): sample the frame, tint by in.color, and
+  // output premultiplied — texel.a * color.a is the coverage, tint =
+  // color.rgb * texel.rgb. Bright sprite parts still feed the bloom target.
+  if (in.textured > 0.5) {
+    let texel = textureSample(atlasTex, atlasSamp, in.uvCoord);
+    let a = texel.a * in.color.a;
+    if (a <= 0.0) { discard; }
+    let rgb = in.color.rgb * texel.rgb;
+    o.scene = vec4f(rgb * a, a);
+    o.emit = vec4f(rgb * a * in.emissive, a);
+    return o;
+  }
+  // SDF path (unchanged): procedural shape by shape id.
   let p = in.local;
   let s = in.shape;
   var d: f32;
@@ -122,7 +153,6 @@ struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
   let cov = 1.0 - smoothstep(-aa, aa, d);
   if (cov <= 0.0) { discard; }
   let a = in.color.a * cov;
-  var o: FragOut;
   o.scene = vec4f(in.color.rgb * a, a);                     // premultiplied
   o.emit = vec4f(in.color.rgb * a * in.emissive, a);        // additive-friendly
   return o;

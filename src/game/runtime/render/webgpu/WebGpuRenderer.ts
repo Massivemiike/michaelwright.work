@@ -38,9 +38,11 @@ import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit
 import { tessellateTrack } from "./tessellateTrack";
 import {
   SPRITE_FLOATS, SHAPE_RING, SHAPE_SQUARE, SHAPE_SQUARE_LINE, SHAPE_CIRCLE,
-  writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette,
+  writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette, type FrameUvFor,
 } from "./pack";
 import { BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL, BLIT_WGSL, BLUR_WGSL, COMPOSITE_WGSL } from "./shaders";
+import { loadAtlas } from "../loadAtlas";
+import { frameUv, hasFrame, type AtlasManifest } from "../atlas";
 
 // Bundle-budget marker — thrown on pipeline-build failure so the string is
 // load-bearing (survives minification) in this dynamically-imported chunk.
@@ -163,11 +165,23 @@ export class WebGpuRenderer implements Renderer {
   private blurPipeline!: GPURenderPipeline;
   private compositePipeline!: GPURenderPipeline;
   private globalsBind!: GPUBindGroup;   // globals only (track)
-  private spriteBind!: GPUBindGroup;    // globals + instances (sprite)
+  private spriteBind!: GPUBindGroup;    // globals + instances + atlas tex/sampler (sprite)
   private backdropBind!: GPUBindGroup;
   private trackBundle!: GPURenderBundle;
   private blurBufH!: GPUBuffer;
   private blurBufV!: GPUBuffer;
+
+  // Sprite atlas (Phase 1 texture art). Until the async load resolves,
+  // spriteBind samples `placeholderTex` (1x1 white) and every sprite is
+  // untextured (SDF), so the game renders immediately and correctly. On a
+  // successful load `atlasTex` holds the uploaded sheet, spriteBind is rebuilt
+  // to sample it, and `atlasReady` flips true so packFrame starts emitting
+  // textured tower/creep bodies. Any load/upload failure leaves this all off
+  // => SDF stays forever ("never a blank board").
+  private placeholderTex: GPUTexture | null = null;
+  private atlasTex: GPUTexture | null = null;
+  private atlasManifest: AtlasManifest | null = null;
+  private atlasReady = false;
 
   // Size-dependent (resize).
   private sceneTex: GPUTexture | null = null;
@@ -257,10 +271,24 @@ export class WebGpuRenderer implements Renderer {
 
     // Bind groups that never change (buffers are persistent).
     this.globalsBind = device.createBindGroup({ layout: this.trackPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.globalsBuf } }] });
-    this.spriteBind = device.createBindGroup({
-      layout: this.spritePipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: this.globalsBuf } }, { binding: 1, resource: { buffer: this.instanceBuf } }],
+    // 1x1 white placeholder atlas texture so the sprite bind group is valid
+    // from the first frame — before (and if) the real atlas ever loads. The
+    // sprite shader only samples it when a sprite's textured flag is set, and
+    // nothing sets that flag until atlasReady, so this white texel is never
+    // actually read on the SDF path; it just satisfies the bind-group layout.
+    // writeTexture (not copyExternalImageToTexture) uploads the texel, so
+    // TEXTURE_BINDING | COPY_DST is sufficient here.
+    this.placeholderTex = device.createTexture({
+      size: { width: 1, height: 1 }, format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
+    device.queue.writeTexture(
+      { texture: this.placeholderTex }, new Uint8Array([255, 255, 255, 255]),
+      { bytesPerRow: 4, rowsPerImage: 1 }, { width: 1, height: 1 }
+    );
+    // spriteBind reuses this.sampler (linear, clamp-to-edge — built above for
+    // the post pipelines) as the atlas sampler at binding 3.
+    this.spriteBind = this.makeSpriteBind(this.placeholderTex.createView());
     this.backdropBind = device.createBindGroup({ layout: this.backdropPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.backdropBuf } }] });
 
     // Static track render bundle (spec §9.1 "a render bundle covers the
@@ -306,6 +334,72 @@ export class WebGpuRenderer implements Renderer {
       this.deviceLost = true;
       console.warn("WebGpuRenderer: device lost (no auto-reinit in v1)", info.message);
     });
+
+    // Kick the atlas load WITHOUT awaiting — init() (and the first frame) must
+    // not block on the network. The game renders SDF sprites until this
+    // resolves; on success it rebuilds spriteBind + flips atlasReady, on
+    // failure it stays SDF. Deliberately fire-and-forget (void).
+    void this.loadAtlasIntoTexture();
+  }
+
+  // Builds the sprite bind group against `texView` as the atlas texture
+  // (binding 2) with the shared linear sampler (binding 3). Called once in
+  // init() with the 1x1 placeholder, then again from loadAtlasIntoTexture()
+  // with the real atlas view once it's uploaded.
+  private makeSpriteBind(texView: GPUTextureView): GPUBindGroup {
+    return this.device.createBindGroup({
+      layout: this.spritePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.globalsBuf } },
+        { binding: 1, resource: { buffer: this.instanceBuf } },
+        { binding: 2, resource: texView },
+        { binding: 3, resource: this.sampler },
+      ],
+    });
+  }
+
+  // Async, non-blocking (fired from init without await). Fetches+decodes the
+  // atlas, uploads it to an rgba8unorm GPUTexture, rebuilds spriteBind to
+  // sample it, and flips atlasReady. Bails silently on any failure (or if the
+  // renderer was destroyed / the device lost while the fetch was in flight),
+  // leaving the SDF path in place.
+  private async loadAtlasIntoTexture(): Promise<void> {
+    const res = await loadAtlas(
+      "/games/circle-td/sprites/atlas.png",
+      "/games/circle-td/sprites/atlas.json"
+    );
+    if (!res || this.destroyed || this.deviceLost) {
+      // res itself may hold a decoded ImageBitmap even on the destroyed/lost
+      // path; free it rather than leak it.
+      res?.bitmap.close?.();
+      return;
+    }
+    try {
+      const { bitmap, manifest } = res;
+      const tex = this.device.createTexture({
+        size: { width: bitmap.width, height: bitmap.height },
+        format: "rgba8unorm",
+        // copyExternalImageToTexture writes via the GPU's blit path, which the
+        // WebGPU spec requires to have COPY_DST | RENDER_ATTACHMENT on the
+        // destination (TEXTURE_BINDING is then needed to sample it). Without
+        // RENDER_ATTACHMENT the copy fails validation and the atlas would
+        // never bind — so the flag IS needed here despite the plan's note.
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.device.queue.copyExternalImageToTexture(
+        { source: bitmap },
+        { texture: tex },
+        { width: bitmap.width, height: bitmap.height }
+      );
+      bitmap.close?.();
+      this.atlasTex = tex;
+      this.atlasManifest = manifest;
+      this.spriteBind = this.makeSpriteBind(tex.createView());
+      this.atlasReady = true;
+    } catch (err) {
+      console.warn("WebGpuRenderer: atlas upload failed — staying on SDF sprites", err);
+      res.bitmap.close?.();
+    }
   }
 
   private buildPipelines(): void {
@@ -465,6 +559,17 @@ export class WebGpuRenderer implements Renderer {
     let o = 0;
     const cap = () => o / SPRITE_FLOATS < MAX_SPRITES - 8;
 
+    // Atlas resolver, only once the sheet is uploaded. Maps a frame name to
+    // its UV rect (or null when the sheet lacks it) so packTowers/packCreeps
+    // emit textured bodies; undefined while unloaded => they stay SDF. Tints
+    // are the exact palette colors the SDF path already uses (red-family
+    // towerColors, blue-family creepPalette), so sprites come out on-brand.
+    const manifest = this.atlasManifest;
+    const frameUvFor: FrameUvFor | undefined =
+      this.atlasReady && manifest
+        ? (name: string) => (hasFrame(manifest, name) ? frameUv(manifest.width, manifest.height, manifest.frames[name]) : null)
+        : undefined;
+
     // Idle build tiles: FILLED neutral blocks with a subtle border — the
     // same "proper map block" look the shipping Canvas2D backend draws
     // (Canvas2DRenderer.drawTiles: a text-secondary-mixed fill at 0.82 alpha
@@ -500,7 +605,7 @@ export class WebGpuRenderer implements Renderer {
     }
 
     // Tower bodies.
-    o = packTowers(out, o, Math.min(curr.towerCount, MAX_SPRITES - 8 - o / SPRITE_FLOATS | 0), curr.towerXY, curr.towerType, curr.towerLevel, pal.towerColors, this.highlightTowerIndex ?? -1);
+    o = packTowers(out, o, Math.min(curr.towerCount, MAX_SPRITES - 8 - o / SPRITE_FLOATS | 0), curr.towerXY, curr.towerType, curr.towerLevel, pal.towerColors, this.highlightTowerIndex ?? -1, frameUvFor);
 
     // Placement ghost / hover outline.
     if (this.highlightTile >= 0 && this.highlightTile * 2 + 1 < this.tilesPx.length && cap()) {
@@ -526,7 +631,7 @@ export class WebGpuRenderer implements Renderer {
     const creeps: InterpCreep[] = interpolateById(prev, curr, alpha);
     const room = Math.floor((MAX_SPRITES - 8 - o / SPRITE_FLOATS) / 3);
     const slice = creeps.length > room ? creeps.slice(0, room) : creeps;
-    o = packCreeps(out, o, slice, pal.creepPalette);
+    o = packCreeps(out, o, slice, pal.creepPalette, frameUvFor);
 
     // Shooting FX (instanced quads / "particles"): a tower->creep tracer beam
     // that snaps out and fades fast, plus a white-hot impact core + expanding
@@ -574,6 +679,13 @@ export class WebGpuRenderer implements Renderer {
     this.destroyed = true;
     for (const t of [this.sceneTex, this.emitTex, this.downTex, this.blurTemp]) t?.destroy();
     this.sceneTex = this.emitTex = this.downTex = this.blurTemp = null;
+    // Atlas + placeholder textures (guard nulls — a load may never have
+    // resolved, and destroy() is idempotent under StrictMode's double-mount).
+    this.atlasTex?.destroy();
+    this.placeholderTex?.destroy();
+    this.atlasTex = this.placeholderTex = null;
+    this.atlasManifest = null;
+    this.atlasReady = false;
     // Finding 1: do NOT unconfigure the canvas context here. Under React
     // StrictMode both setup passes run createRenderer to completion on the
     // SAME <canvas>, and getContext('webgpu') hands back the SAME

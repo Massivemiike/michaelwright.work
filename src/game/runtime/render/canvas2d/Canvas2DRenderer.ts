@@ -31,10 +31,13 @@
 import type { Renderer, RendererCaps, HitEvent } from "../Renderer";
 import { interpolateById } from "../Renderer";
 import { computeFit, screenToWorld as sharedScreenToWorld, type Fit } from "../transform";
+import { loadAtlas } from "../loadAtlas";
+import { hasFrame, type AtlasManifest, type Frame } from "../atlas";
 import type { RenderSnapshot } from "@/game/sim/engine";
 import { toFloat } from "@/game/sim/math/fixed";
 import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
 import { STAGE_H, STAGE_W, TILE_SIZE, TILES, TOWERS, TRACK, TRACK_WIDTH } from "@/game/titles/circle-td/content";
+import { towerFrame, creepFrame } from "@/game/titles/circle-td/sprites";
 
 interface RGB {
   r: number;
@@ -307,6 +310,16 @@ export class Canvas2DRenderer implements Renderer {
   private hits: HitFlash[] = [];
   private lastFrameAtMs: number | null = null;
 
+  // Sprite atlas (Phase 1 texture art), loaded async at init. Null until it
+  // resolves (and forever on any failure) => the SDF drawing below is used as
+  // the fallback. `tintCanvas`/`tintCtx` are a single reusable offscreen used
+  // to multiply-tint each frame before blitting it to the main context (see
+  // tintedFrame) — allocated lazily on first textured draw, never per frame.
+  private atlasBitmap: ImageBitmap | null = null;
+  private atlasManifest: AtlasManifest | null = null;
+  private tintCanvas: HTMLCanvasElement | null = null;
+  private tintCtx: CanvasRenderingContext2D | null = null;
+
   // Selection/hover state is a Task 6 concern (input handling); this just
   // gives Task 6 somewhere to put it without changing the Renderer
   // interface. `null` (the default) draws no range ring at all.
@@ -342,6 +355,23 @@ export class Canvas2DRenderer implements Renderer {
       typeof window !== "undefined" && typeof window.matchMedia === "function"
         ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
         : false;
+
+    // Kick the atlas load WITHOUT awaiting — init must not block on the
+    // network; the game draws SDF shapes until (and unless) this resolves.
+    // If the renderer was destroyed before it resolves (this.ctx cleared),
+    // drop the decoded bitmap instead of stashing it on a dead renderer.
+    void loadAtlas(
+      "/games/circle-td/sprites/atlas.png",
+      "/games/circle-td/sprites/atlas.json"
+    ).then((res) => {
+      if (!res) return;
+      if (this.ctx) {
+        this.atlasBitmap = res.bitmap;
+        this.atlasManifest = res.manifest;
+      } else {
+        res.bitmap.close?.();
+      }
+    });
   }
 
   resize(cssW: number, cssH: number, dpr: number): void {
@@ -418,6 +448,14 @@ export class Canvas2DRenderer implements Renderer {
     this.lastFrameAtMs = null;
     this.creepTrails.clear();
     this.frameAliveIds.clear();
+    // Release the decoded atlas + the reusable tint offscreen (guard nulls;
+    // the load may never have resolved). Clearing ctx above also makes the
+    // in-flight loadAtlas().then drop its bitmap instead of stashing it here.
+    this.atlasBitmap?.close?.();
+    this.atlasBitmap = null;
+    this.atlasManifest = null;
+    this.tintCanvas = null;
+    this.tintCtx = null;
   }
 
   // --- backdrop ---
@@ -565,6 +603,55 @@ export class Canvas2DRenderer implements Renderer {
     }
   }
 
+  // --- sprite atlas (Phase 1 texture art) ---
+
+  // Renders one atlas frame, multiply-tinted by `tint`, into the reusable
+  // offscreen and returns it (caller blits it scaled to the unit's on-screen
+  // size). Tint approach that preserves BOTH luminance and transparency:
+  //   1. draw the frame (white shape on transparent)
+  //   2. 'multiply' the flat tint over it — colors the shape, but also floods
+  //      the transparent background with opaque tint
+  //   3. 'destination-in' the frame again — keeps the tinted pixels only where
+  //      the sprite has alpha, restoring transparency (and its AA edge)
+  // 'multiply' (not 'source-atop') is used so real Kenney art's internal
+  // shading survives later; on the white placeholder it just yields the flat
+  // tint. Returns null if the offscreen 2D context is unavailable.
+  private tintedFrame(frame: Frame, tint: RGB): HTMLCanvasElement | null {
+    const bitmap = this.atlasBitmap;
+    if (!bitmap) return null;
+    let tc = this.tintCanvas;
+    if (!tc) {
+      tc = document.createElement("canvas");
+      this.tintCanvas = tc;
+      this.tintCtx = tc.getContext("2d");
+    }
+    const tctx = this.tintCtx;
+    if (!tctx) return null;
+    if (tc.width !== frame.w || tc.height !== frame.h) {
+      tc.width = frame.w;
+      tc.height = frame.h;
+    }
+    tctx.globalCompositeOperation = "source-over";
+    tctx.clearRect(0, 0, frame.w, frame.h);
+    tctx.drawImage(bitmap, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+    tctx.globalCompositeOperation = "multiply";
+    tctx.fillStyle = rgbaOf(tint, 1);
+    tctx.fillRect(0, 0, frame.w, frame.h);
+    tctx.globalCompositeOperation = "destination-in";
+    tctx.drawImage(bitmap, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+    tctx.globalCompositeOperation = "source-over";
+    return tc;
+  }
+
+  // The frame for a unit if the atlas is loaded AND actually has it, else null
+  // — the single gate every textured-draw path checks before falling back to
+  // its SDF drawing.
+  private frameFor(name: string): Frame | null {
+    const m = this.atlasManifest;
+    if (!this.atlasBitmap || !m || !hasFrame(m, name)) return null;
+    return m.frames[name];
+  }
+
   // --- towers ---
 
   private drawTowers(ctx: CanvasRenderingContext2D, curr: RenderSnapshot): void {
@@ -624,6 +711,25 @@ export class Canvas2DRenderer implements Renderer {
     const baseR = 7 + footprint * 2.5 + clampedType * 0.4;
     const r = baseR + clampedLevel * 0.5;
     const bodyRgb = towerColorFor(clampedType, this.palette.accentRgb, this.palette.accentHoverRgb);
+
+    // Textured path: blit the tinted atlas frame scaled to the shape's
+    // diameter (2r), keeping the same accent-family tint + glow the SDF path
+    // uses. globalAlpha (set by the caller for the placement ghost) still
+    // applies to drawImage, so the ghost preview gets the sprite too. Level
+    // pips still draw on top. Falls through to the SDF shape below on any miss.
+    const towerF = this.frameFor(towerFrame(clampedType));
+    if (towerF) {
+      const tinted = this.tintedFrame(towerF, bodyRgb);
+      if (tinted) {
+        ctx.save();
+        ctx.shadowColor = rgbaOf(bodyRgb, 0.7);
+        ctx.shadowBlur = selected ? 20 : 11;
+        ctx.drawImage(tinted, x - r, y - r, r * 2, r * 2);
+        ctx.restore();
+        if (clampedLevel > 0) this.drawLevelPips(ctx, x, y, r, clampedLevel);
+        return;
+      }
+    }
 
     ctx.save();
     ctx.shadowColor = rgbaOf(bodyRgb, 0.7);
@@ -756,40 +862,55 @@ export class Canvas2DRenderer implements Renderer {
       // "core" on a hollow shape.
       const bodyRgb = isHard ? shadeOf(this.palette.blueRgb, 0.55) : this.palette.blueRgb;
 
-      ctx.save();
-      ctx.shadowColor = rgbaOf(this.palette.blueRgb, 0.6);
-      ctx.shadowBlur = isFast ? 13 : 8;
-
-      ctx.beginPath();
-      if (isAir) {
-        // Hollow diamond ring reads as "off the ground"; land creeps below
-        // are solid filled circles. HARD gets a heavier ring line.
-        diamondPath(ctx, c.x, c.y, baseR * 1.35);
-        ctx.strokeStyle = rgbaOf(bodyRgb, 1);
-        ctx.lineWidth = isHard ? 2.6 : 1.6;
-        ctx.stroke();
+      // Textured path: only the BODY becomes a tinted atlas sprite (the hp bar
+      // below stays SDF). Sized to the same footprint the SDF body uses (air
+      // is the larger diamond, baseR*1.35). Falls back to the SDF body block
+      // on any miss.
+      const creepF = this.frameFor(creepFrame(c.flags));
+      const tinted = creepF ? this.tintedFrame(creepF, bodyRgb) : null;
+      if (tinted) {
+        const half = isAir ? baseR * 1.35 : baseR;
+        ctx.save();
+        ctx.shadowColor = rgbaOf(this.palette.blueRgb, 0.6);
+        ctx.shadowBlur = isFast ? 13 : 8;
+        ctx.drawImage(tinted, c.x - half, c.y - half, half * 2, half * 2);
+        ctx.restore();
       } else {
-        ctx.arc(c.x, c.y, baseR, 0, Math.PI * 2);
-        ctx.fillStyle = rgbaOf(bodyRgb, isFast ? 1 : 0.85);
-        ctx.fill();
-        if (isHard) {
-          // Heavier outer ring atop the darker core fill.
-          ctx.lineWidth = 2.2;
-          ctx.strokeStyle = rgbaOf(this.palette.blueRgb, 0.9);
-          ctx.stroke();
-        }
-      }
-      ctx.shadowBlur = 0;
+        ctx.save();
+        ctx.shadowColor = rgbaOf(this.palette.blueRgb, 0.6);
+        ctx.shadowBlur = isFast ? 13 : 8;
 
-      if (isFast) {
-        // Brighter hot core — a small dot mixed toward white, on top of
-        // the body already drawn above, no glow of its own (kept crisp).
         ctx.beginPath();
-        ctx.arc(c.x, c.y, Math.max(1.5, baseR * 0.4), 0, Math.PI * 2);
-        ctx.fillStyle = rgbaOf(mixRgb(this.palette.blueRgb, WHITE, 0.6), 0.95);
-        ctx.fill();
+        if (isAir) {
+          // Hollow diamond ring reads as "off the ground"; land creeps below
+          // are solid filled circles. HARD gets a heavier ring line.
+          diamondPath(ctx, c.x, c.y, baseR * 1.35);
+          ctx.strokeStyle = rgbaOf(bodyRgb, 1);
+          ctx.lineWidth = isHard ? 2.6 : 1.6;
+          ctx.stroke();
+        } else {
+          ctx.arc(c.x, c.y, baseR, 0, Math.PI * 2);
+          ctx.fillStyle = rgbaOf(bodyRgb, isFast ? 1 : 0.85);
+          ctx.fill();
+          if (isHard) {
+            // Heavier outer ring atop the darker core fill.
+            ctx.lineWidth = 2.2;
+            ctx.strokeStyle = rgbaOf(this.palette.blueRgb, 0.9);
+            ctx.stroke();
+          }
+        }
+        ctx.shadowBlur = 0;
+
+        if (isFast) {
+          // Brighter hot core — a small dot mixed toward white, on top of
+          // the body already drawn above, no glow of its own (kept crisp).
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, Math.max(1.5, baseR * 0.4), 0, Math.PI * 2);
+          ctx.fillStyle = rgbaOf(mixRgb(this.palette.blueRgb, WHITE, 0.6), 0.95);
+          ctx.fill();
+        }
+        ctx.restore();
       }
-      ctx.restore();
 
       this.drawHpBar(ctx, c.x, c.y - baseR - 6, Math.max(14, baseR * 2.4), c.hp01);
     }

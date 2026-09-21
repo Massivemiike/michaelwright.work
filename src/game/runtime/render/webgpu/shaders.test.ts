@@ -20,6 +20,15 @@ describe("WGSL shader exports", () => {
     expect(SPRITE_WGSL).toContain("var<storage, read> instances");
     expect(SPRITE_WGSL).toContain("instance_index");
   });
+  it("SPRITE_WGSL binds the sprite atlas texture + sampler and carries per-instance uv (Phase 1 texture art)", () => {
+    // Instance grew a uv: vec4f (16 floats), matching pack.ts's SPRITE_FLOATS.
+    expect(SPRITE_WGSL).toContain("uv: vec4f");
+    // Atlas texture + sampler at bindings 2 and 3.
+    expect(SPRITE_WGSL).toContain("@group(0) @binding(2) var atlasTex: texture_2d<f32>");
+    expect(SPRITE_WGSL).toContain("@group(0) @binding(3) var atlasSamp: sampler");
+    // Fragment shader has a textured branch that samples the atlas.
+    expect(SPRITE_WGSL).toContain("textureSample(atlasTex, atlasSamp");
+  });
   it("scene-writing shaders declare a two-target MRT fragment output", () => {
     for (const src of [BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL]) {
       expect(src).toContain("@location(0)");
