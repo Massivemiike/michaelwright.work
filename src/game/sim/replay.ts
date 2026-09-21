@@ -7,9 +7,9 @@
 // here must stay pure per the purity guard: integer math and deterministic
 // RNG only — no non-deterministic time/randomness sources, no host globals,
 // no filesystem access.
-import { makeSim } from "@/game/titles/circle-td";
 import { TOWERS, SELL_REFUND_PCT, TILE_COUNT } from "@/game/titles/circle-td/content";
 import { addTower, removeTower, type SimState, type Towers } from "./state";
+import type { TitleDef } from "./title";
 
 export interface Command {
   tick: number;
@@ -149,13 +149,17 @@ export interface ReplayResult {
   maxTowerLevel: number;
 }
 
-export const runReplay = (replay: Replay): ReplayResult => {
-  const sim = makeSim({ seed: replay.seed, mode: replay.mode });
+export const runReplay = (
+  replay: Replay,
+  title: TitleDef,
+  maxTicks: number = CEILING
+): ReplayResult => {
+  const sim = title.makeSim({ seed: replay.seed, mode: replay.mode });
   const byTick = groupByTick(replay.commands);
 
-  while (!sim.state.gameOver && sim.state.tick < CEILING) {
+  while (!sim.state.gameOver && sim.state.tick < maxTicks) {
     const cmds = byTick.get(sim.state.tick) || [];
-    for (const c of cmds) applyCommand(sim.state, c);
+    for (const c of cmds) title.applyCommand(sim.state, c);
     sim.tick();
   }
 
@@ -205,5 +209,23 @@ export function hashState(s: SimState): string {
   for (let i = 0; i < t.count; i++)
     for (const col of [t.type, t.tile, t.level, t.cooldown, t.targetId]) h = fold(h, col[i]);
 
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+// Deterministic 8-char FNV-1a digest over the command LOG (not the sim
+// state) — the dedupe key for unique(game_slug,sim_version,seed,replay_hash).
+// Pure integer ops only, so it matches across JS engines the same way
+// hashState does.
+const CMD_TYPE_CODE: Record<Command["type"], number> = { start: 0, place: 1, upgrade: 2, sell: 3 };
+
+export function hashCommands(commands: readonly Command[]): string {
+  let h = 0x811c9dc5;
+  h = fold(h, commands.length);
+  for (const c of commands) {
+    h = fold(h, c.tick);
+    h = fold(h, CMD_TYPE_CODE[c.type]);
+    h = fold(h, c.tower ?? -1);
+    h = fold(h, c.tile ?? -1);
+  }
   return (h >>> 0).toString(16).padStart(8, "0");
 }

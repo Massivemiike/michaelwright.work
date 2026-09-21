@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { runReplay, applyCommand, hashState, type Replay } from "./replay";
 import { makeSim } from "@/game/titles/circle-td";
+import { circleTdTitle } from "@/game/titles/circle-td/title";
 import { TOWERS, TILE_COUNT } from "@/game/titles/circle-td/content";
 
 describe("replay + hash", () => {
@@ -15,8 +16,8 @@ describe("replay + hash", () => {
         { tick: 90, type: "upgrade", tile: 20 },
       ],
     };
-    const a = runReplay(replay);
-    const b = runReplay(replay);
+    const a = runReplay(replay, circleTdTitle);
+    const b = runReplay(replay, circleTdTitle);
     expect(a.hash).toBe(b.hash);
     expect(a.score).toBe(b.score);
   });

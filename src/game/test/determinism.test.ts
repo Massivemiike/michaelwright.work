@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { applyCommand, runReplay, upgradeCost, type Command, type Replay } from "@/game/sim/replay";
 import { SIM_VERSION } from "@/game/sim/types";
 import { makeSim } from "@/game/titles/circle-td";
+import { circleTdTitle } from "@/game/titles/circle-td/title";
 import { TILES, TILE_COUNT, TOWERS, TRACK, trackLength, posAt } from "@/game/titles/circle-td/content";
 import { towerRangeSq } from "@/game/titles/circle-td/rules";
 import { mul, fromInt } from "@/game/sim/math/fixed";
@@ -149,7 +150,7 @@ function buildGoldenReplay(): Replay {
 describe("determinism golden gate", () => {
   it("plays a real defense (kills, upgrades, a sell) and reproduces the committed hash", () => {
     const replay = buildGoldenReplay();
-    const result = runReplay(replay);
+    const result = runReplay(replay, circleTdTitle);
 
     // Inertness self-checks — run unconditionally, including in UPDATE_GOLDEN=1
     // regeneration mode, so a future edit that accidentally makes this replay
