@@ -153,6 +153,12 @@ fn sdHex(pin: vec2f) -> f32 {
   p = p - vec2f(clamp(p.x, -k.z, k.z), 1.0);
   return length(p) * sign(p.y);
 }
+// Rounded box SDF (iq). b = half-extents, r = corner radius, both in the same
+// local units (the quad spans [-1,1], so b = vec2f(1.0) fills the sprite and r
+// is a fraction of the half-extent). Used for the Phase-2 (S3) build-tile
+// HUD-pads. TILE_ROUND_RADIUS below (0.30) is the corner radius; keep it in
+// sync with Canvas2DRenderer.ts TILE_CORNER_FRAC or the two backends drift.
+fn sdRoundBox(p: vec2f, b: vec2f, r: f32) -> f32 { let q = abs(p) - b + vec2f(r); return min(max(q.x, q.y), 0.0) + length(max(q, vec2f(0.0))) - r; }
 struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 @fragment fn fs(in: VsOut) -> FragOut {
   // WGSL forbids derivative-taking builtins (textureSample, fwidth) inside
@@ -170,8 +176,10 @@ struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
   else if (s < 2.5) { d = sdDiamond(p); }
   else if (s < 3.5) { d = sdBox(p, vec2f(1.0)); }
   else if (s < 4.5) { d = sdHex(p); }
-  else if (s < 5.5) { d = abs(sdCircle(p)) - 0.08; }        // ring
-  else { d = abs(sdBox(p, vec2f(1.0))) - 0.08; }            // hollow square
+  else if (s < 5.5) { d = abs(sdCircle(p)) - 0.08; }         // 5 ring (hollow circle)
+  else if (s < 6.5) { d = abs(sdBox(p, vec2f(1.0))) - 0.08; } // 6 hollow square
+  else if (s < 7.5) { d = sdRoundBox(p, vec2f(1.0), 0.30); }  // 7 rounded HUD-pad fill
+  else { d = abs(sdRoundBox(p, vec2f(1.0), 0.30)) - 0.08; }   // 8 rounded HUD-pad border (hollow)
   let aa = fwidth(d) + 1e-4;
   let cov = 1.0 - smoothstep(-aa, aa, d);
 

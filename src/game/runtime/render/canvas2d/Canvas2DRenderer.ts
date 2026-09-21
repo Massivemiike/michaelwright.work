@@ -162,6 +162,26 @@ const TRACK_CENTER_MIX = 0.35; // borderMuted -> textPrimary for center strip
 const TRACK_EDGE_ALPHA = 0.95; // rim stroke + glow alpha
 const TRACK_CENTER_ALPHA = 0.5; // center strip alpha (faint)
 
+// Build-tile HUD-pad tunables (Phase 2 board art, S3) — mirror the WebGPU twin
+// (WebGpuRenderer.ts TILE_*). Each buildable tile is an inset ROUNDED pad: a
+// fill a step above the floor, a thin raised top-edge highlight, and a thin
+// rounded border, with the dark inter-tile gutter kept (half = TILE_SIZE*0.44)
+// so they read as a grid. Neutral brightness steps only (NEVER a hue). The
+// corner radius (TILE_CORNER_FRAC, fraction of half) mirrors the WGSL
+// sdRoundBox r=0.30 — keep the two in sync. Keep the rest in sync with the
+// WebGPU twin or the two backends drift apart.
+const TILE_CORNER_FRAC = 0.3; // roundRect corner radius as a fraction of half (mirrors WGSL sdRoundBox r=0.30)
+const TILE_FILL_MIX = 0.9; // bgElevated -> textSecondary for the pad fill
+const TILE_FILL_LIFT = 0.06; // then nudge the fill toward textPrimary (raised)
+const TILE_FILL_ALPHA = 0.82; // pad fill alpha
+const TILE_BORDER_ALPHA = 0.85; // rounded border alpha
+const TILE_BORDER_PX = 1; // rounded border stroke width
+const TILE_HILITE_MIX = 0.5; // fill -> textPrimary for the top-edge highlight
+const TILE_HILITE_ALPHA = 0.5; // top-highlight alpha (subtle, low)
+const TILE_HILITE_WIDTH_FRAC = 0.68; // highlight bar half-width as a fraction of half (clears the rounded corners)
+const TILE_HILITE_HALF_Y = 1; // highlight bar half-height (px) — a thin line
+const TILE_HILITE_OFFSET_PX = 3; // highlight bar centre, px below the pad's top edge
+
 function hexToRgb(hex: string): RGB {
   const cleaned = hex.trim().replace("#", "");
   const full = cleaned.length === 3 ? cleaned.split("").map((c) => c + c).join("") : cleaned;
@@ -705,23 +725,60 @@ export class Canvas2DRenderer implements Renderer {
   // brand's one-accent rule reserves that for the hovered tile/live things),
   // tuned to measure >=3:1 WCAG contrast against the backdrop at BOTH the
   // board centre and the edge (see fix1-map-report.md for the numbers).
+  //
+  // Phase 2 (S3): the tiles become inset ROUNDED HUD-PADS — a roundRect fill a
+  // step above the floor, a thin raised top-edge highlight line, and a thin
+  // rounded border — the Canvas2D twin of the WebGPU three-sprite pad
+  // (WebGpuRenderer tile loop: SHAPE_ROUND_SQUARE fill + top-highlight
+  // SHAPE_SQUARE + SHAPE_ROUND_SQUARE_LINE border). half (TILE_SIZE*0.44) is
+  // unchanged so the ~4px inter-tile gutter still reads as a grid; the corner
+  // radius (TILE_CORNER_FRAC*half) mirrors the WGSL sdRoundBox r. Colors are
+  // neutral brightness steps (never a hue). roundRect is used when available,
+  // falling back to square rects on any context that lacks it (never a throw).
   private drawTiles(ctx: CanvasRenderingContext2D): void {
     const half = TILE_SIZE * 0.44;
+    const radius = half * TILE_CORNER_FRAC;
+    const hasRoundRect = typeof ctx.roundRect === "function";
     // Affordability signal: when a tower type is armed and unaffordable at
     // the current bank, every tile dims to read "you can't build right now"
     // — reusing state the renderer already tracks for the hover ghost
     // (setHighlight), no interface change needed.
     const armedUnaffordable = this.highlightTowerType >= 0 && !this.highlightAffordable;
     const dim = armedUnaffordable ? 0.6 : 1;
-    const fillRgb = mixRgb(this.palette.bgElevatedRgb, this.palette.textSecondaryRgb, 0.9);
-    ctx.fillStyle = rgbaOf(fillRgb, 0.82 * dim);
-    ctx.strokeStyle = rgbaOf(this.palette.textSecondaryRgb, 0.85 * dim);
-    ctx.lineWidth = 1;
+    // Fill: bg-elevated toward text-secondary, then a touch toward text-primary
+    // for a lifted/raised read. Highlight: that fill mixed further toward
+    // text-primary. Border: text-secondary.
+    const fillRgb = mixRgb(mixRgb(this.palette.bgElevatedRgb, this.palette.textSecondaryRgb, TILE_FILL_MIX), this.palette.textPrimaryRgb, TILE_FILL_LIFT);
+    const hiliteRgb = mixRgb(fillRgb, this.palette.textPrimaryRgb, TILE_HILITE_MIX);
+    const fillStyle = rgbaOf(fillRgb, TILE_FILL_ALPHA * dim);
+    const strokeStyle = rgbaOf(this.palette.textSecondaryRgb, TILE_BORDER_ALPHA * dim);
+    const hiliteStyle = rgbaOf(hiliteRgb, TILE_HILITE_ALPHA * dim);
+    const hiliteHalfX = half * TILE_HILITE_WIDTH_FRAC;
     for (let i = 0; i < this.tilesPx.length; i += 2) {
       const x = this.tilesPx[i];
       const y = this.tilesPx[i + 1];
-      ctx.fillRect(x - half, y - half, half * 2, half * 2);
-      ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+      // Rounded fill.
+      ctx.fillStyle = fillStyle;
+      if (hasRoundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x - half, y - half, half * 2, half * 2, radius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x - half, y - half, half * 2, half * 2);
+      }
+      // Thin raised top-edge highlight (short flat bar just inside the top edge).
+      ctx.fillStyle = hiliteStyle;
+      ctx.fillRect(x - hiliteHalfX, y - half + TILE_HILITE_OFFSET_PX - TILE_HILITE_HALF_Y, hiliteHalfX * 2, TILE_HILITE_HALF_Y * 2);
+      // Rounded border.
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = TILE_BORDER_PX;
+      if (hasRoundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x - half, y - half, half * 2, half * 2, radius);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x - half, y - half, half * 2, half * 2);
+      }
     }
   }
 

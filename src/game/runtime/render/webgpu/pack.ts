@@ -33,6 +33,8 @@ export const SHAPE_SQUARE = 3;
 export const SHAPE_HEX = 4;
 export const SHAPE_RING = 5;        // hollow circle (range highlight)
 export const SHAPE_SQUARE_LINE = 6; // hollow square (tile / hover outline)
+export const SHAPE_ROUND_SQUARE = 7;      // rounded HUD-pad fill (Phase 2 build tile)
+export const SHAPE_ROUND_SQUARE_LINE = 8; // rounded HUD-pad border, hollow (Phase 2 build tile)
 
 export interface Rgb { r: number; g: number; b: number; }
 

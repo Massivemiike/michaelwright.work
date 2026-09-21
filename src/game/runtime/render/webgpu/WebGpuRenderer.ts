@@ -38,6 +38,7 @@ import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit
 import { buildTrackBands, TRACK_BAND_STRIDE } from "./trackBands";
 import {
   SPRITE_FLOATS, SHAPE_RING, SHAPE_SQUARE, SHAPE_SQUARE_LINE, SHAPE_CIRCLE,
+  SHAPE_ROUND_SQUARE, SHAPE_ROUND_SQUARE_LINE,
   writeSprite, packTowers, packCreeps, type Rgb, type CreepPalette, type FrameUvFor,
 } from "./pack";
 import { BACKDROP_WGSL, TRACK_WGSL, SPRITE_WGSL, BLIT_WGSL, BLUR_WGSL, COMPOSITE_WGSL } from "./shaders";
@@ -95,6 +96,24 @@ const TRACK_EDGE_MIX_OUTER = 0.85;   // borderMuted -> textPrimary for OUTER rim
 const TRACK_EDGE_MIX_INNER = 0.55;   // borderMuted -> textPrimary for INNER rim
 const TRACK_DARK_MIX = 0.2;          // bgBase -> black for the recessed lane
 const TRACK_CENTER_MIX = 0.35;       // borderMuted -> textPrimary for center strip
+
+// Build-tile HUD-pad tunables (Phase 2 board art, S3) — mirror the Canvas2D
+// twin (Canvas2DRenderer.ts TILE_*). Each buildable tile is an inset ROUNDED
+// pad: a fill a step above the floor (bgElevated mixed toward textSecondary,
+// then nudged toward textPrimary for a lifted/raised read), a thin raised
+// top-edge highlight, and a thin rounded border. Neutral brightness steps only
+// (NEVER a hue). The pad's corner radius lives in the WGSL (sdRoundBox r=0.30)
+// and in Canvas2D's TILE_CORNER_FRAC — keep those two in sync. Keep the rest of
+// these in sync with the Canvas2D twin or the two backends drift apart.
+const TILE_FILL_MIX = 0.9;           // bgElevated -> textSecondary for the pad fill
+const TILE_FILL_LIFT = 0.06;         // then nudge the fill toward textPrimary (raised)
+const TILE_FILL_ALPHA = 0.82;        // pad fill alpha
+const TILE_BORDER_ALPHA = 0.85;      // rounded border alpha
+const TILE_HILITE_MIX = 0.5;         // fill -> textPrimary for the top-edge highlight
+const TILE_HILITE_ALPHA = 0.5;       // top-highlight alpha (subtle, low)
+const TILE_HILITE_WIDTH_FRAC = 0.68; // highlight bar half-width as a fraction of tileHalf (clears the rounded corners)
+const TILE_HILITE_HALF_Y = 1;        // highlight bar half-height (px) — a thin line
+const TILE_HILITE_OFFSET_PX = 3;     // highlight bar centre, px below the pad's top edge
 
 interface HitFlash { x: number; y: number; tx: number; ty: number; kind: number; ageMs: number; }
 
@@ -636,26 +655,34 @@ export class WebGpuRenderer implements Renderer {
         ? (name: string) => (hasFrame(manifest, name) ? frameUv(manifest.width, manifest.height, manifest.frames[name]) : null)
         : undefined;
 
-    // Idle build tiles: FILLED neutral blocks with a subtle border — the
-    // same "proper map block" look the shipping Canvas2D backend draws
-    // (Canvas2DRenderer.drawTiles: a text-secondary-mixed fill at 0.82 alpha
-    // + a text-secondary border at 0.85), NOT the hollow outline this used to
-    // draw. Two sprites per tile — a FILLED SHAPE_SQUARE under a
-    // SHAPE_SQUARE_LINE border — mirror Canvas2D's fillRect + strokeRect,
-    // both at half = TILE_SIZE*0.44 so the block, its border, and the hover
-    // ghost / range ring below all register on the same ~28px cell. The fill
-    // (bgElevated mixed 0.9 toward text-secondary) is the same palette tone
-    // Canvas2D tuned to >=3:1 contrast at board centre AND edge; dimming uses
-    // the same armed-unaffordable rule as Canvas2D.
+    // Idle build tiles: inset ROUNDED HUD-PADS (Phase 2 S3) — a fill a step
+    // above the floor, a thin raised top-edge highlight, and a thin rounded
+    // border, with the dark inter-tile gutter kept (half = TILE_SIZE*0.44,
+    // ~28px pad on the 32px lattice) so they still read as a grid. Three
+    // sprites per tile mirror the Canvas2D twin (drawTiles: roundRect fill +
+    // top-highlight line + roundRect border): a rounded fill (SHAPE_ROUND_
+    // SQUARE), a short top-highlight SHAPE_SQUARE near the top edge, and a
+    // rounded border (SHAPE_ROUND_SQUARE_LINE). 3 x 186 = 558 sprites, well
+    // under cap(). The fill lifts bgElevated toward text-secondary then a
+    // touch toward text-primary; the border is text-secondary; the highlight
+    // is the fill mixed further toward text-primary at low alpha with zero
+    // emissive (a raised edge, not a glow). All three carry the same
+    // armed-unaffordable 0.6 dim as Canvas2D. Neutral brightness steps only.
     const armedUnaffordable = this.highlightTowerType >= 0 && !this.highlightAffordable;
     const dim = armedUnaffordable ? 0.6 : 1;
-    const tileFill = mix(pal.bgElevated, pal.textSecondary, 0.9);
+    const tileFill = mix(mix(pal.bgElevated, pal.textSecondary, TILE_FILL_MIX), pal.textPrimary, TILE_FILL_LIFT);
+    const tileHilite = mix(tileFill, pal.textPrimary, TILE_HILITE_MIX);
     const tileHalf = TILE_SIZE * 0.44;
+    const hiliteHalfX = tileHalf * TILE_HILITE_WIDTH_FRAC;
     for (let i = 0; i < this.tilesPx.length && cap(); i += 2) {
       const tx = this.tilesPx[i];
       const ty = this.tilesPx[i + 1];
-      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, tileFill, 0.82 * dim, SHAPE_SQUARE, 0);
-      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, pal.textSecondary, 0.85 * dim, SHAPE_SQUARE_LINE, 0);
+      // Rounded fill.
+      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, tileFill, TILE_FILL_ALPHA * dim, SHAPE_ROUND_SQUARE, 0);
+      // Thin raised top-edge highlight (short flat bar just inside the top edge).
+      o = writeSprite(out, o, tx, ty - tileHalf + TILE_HILITE_OFFSET_PX, hiliteHalfX, TILE_HILITE_HALF_Y, tileHilite, TILE_HILITE_ALPHA * dim, SHAPE_SQUARE, 0);
+      // Rounded border.
+      o = writeSprite(out, o, tx, ty, tileHalf, tileHalf, pal.textSecondary, TILE_BORDER_ALPHA * dim, SHAPE_ROUND_SQUARE_LINE, 0);
     }
 
     // Selected tower range ring (drawn under bodies).
