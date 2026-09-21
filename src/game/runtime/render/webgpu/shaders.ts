@@ -71,7 +71,14 @@ struct VsOut {
     vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   let c = corners[vi];
   let inst = instances[ii];
-  let world = inst.center + c * inst.half;
+  // params.z is a rotation angle (radians); 0 for every axis-aligned sprite,
+  // non-zero only for beams (a thin box oriented tower->creep).
+  let off = c * inst.half;
+  let rot = inst.params.z;
+  let cr = cos(rot);
+  let sr = sin(rot);
+  let roff = vec2f(off.x * cr - off.y * sr, off.x * sr + off.y * cr);
+  let world = inst.center + roff;
   var o: VsOut;
   o.pos = g.clip * vec4f(world, 0.0, 1.0);
   o.local = c;

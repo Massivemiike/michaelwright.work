@@ -66,20 +66,37 @@ const DEFAULT_MODE: SimConfig["mode"] = "free";
 // every single render() call.
 const NO_HITS: HitEvent[] = [];
 
-// Final-review finding #6: maps the sim's tile-indexed TowerHits (rules.ts)
-// into the renderer's world-space HitEvents (Renderer.ts) — the one place
-// those two deliberately-differently-named types (see rules.ts's TowerHit
-// comment) meet. Pure and DOM-free (module-scope constants only), so it's
-// unit-testable with no canvas/React involved — see GameClient.test.tsx.
-// `kind` carries the firing tower's type through so a future renderer can
-// vary the flash by tower (e.g. a bigger burst for Splash) without this
-// mapping needing to change.
-export function mapTowerHitsToRenderHits(hits: readonly TowerHit[]): HitEvent[] {
-  return hits.map((h) => ({
-    x: toFloat(TILES[h.tile * 2]),
-    y: toFloat(TILES[h.tile * 2 + 1]),
-    kind: h.towerType,
-  }));
+// Maps the sim's tile-indexed TowerHits (rules.ts) into the renderer's
+// world-space HitEvents (Renderer.ts) — the one place those two
+// deliberately-differently-named types (see rules.ts's TowerHit comment) meet.
+// The source (x,y) is the firing tower's tile; the target (tx,ty) is the
+// struck creep's world position, looked up by the stable creepId from the
+// snapshot(s) so the renderer can draw a tower->creep tracer + impact. `curr`
+// (post-tick) is preferred; `prev` is the fallback for a creep that was killed
+// this tick and is already gone from curr; when neither has it, tx/ty collapse
+// to the tower (beam is then zero-length). Pure and DOM-free (module-scope
+// constants only), so it's unit-testable with no canvas/React — see
+// GameClient.test.tsx. `kind` carries the firing tower's type through.
+function creepPosById(snap: RenderSnapshot | undefined, out: Map<number, [number, number]>): void {
+  if (!snap) return;
+  for (let i = 0; i < snap.creepCount; i++) {
+    if (!out.has(snap.creepId[i])) out.set(snap.creepId[i], [snap.creepXY[i * 2], snap.creepXY[i * 2 + 1]]);
+  }
+}
+export function mapTowerHitsToRenderHits(
+  hits: readonly TowerHit[],
+  curr?: RenderSnapshot,
+  prev?: RenderSnapshot
+): HitEvent[] {
+  const posById = new Map<number, [number, number]>();
+  creepPosById(curr, posById); // curr wins (added first; prev only fills gaps)
+  creepPosById(prev, posById);
+  return hits.map((h) => {
+    const x = toFloat(TILES[h.tile * 2]);
+    const y = toFloat(TILES[h.tile * 2 + 1]);
+    const p = posById.get(h.creepId);
+    return { x, y, kind: h.towerType, tx: p ? p[0] : x, ty: p ? p[1] : y };
+  });
 }
 
 // Task 7: a wave is "imminent" once we're within this many ticks of the
@@ -363,7 +380,7 @@ export default function GameClient({ seed = DEFAULT_SEED, mode = DEFAULT_MODE }:
           render(alpha) {
             const snapshots = snapshotsRef.current;
             if (!snapshots) return;
-            const renderHits = pendingHits.length > 0 ? mapTowerHitsToRenderHits(pendingHits) : NO_HITS;
+            const renderHits = pendingHits.length > 0 ? mapTowerHitsToRenderHits(pendingHits, snapshots.curr, snapshots.prev) : NO_HITS;
             renderer.frame(snapshots.prev, snapshots.curr, alpha, renderHits);
             pendingHits = [];
             // Task 7: offer the HUD store a fresh snapshot every frame —

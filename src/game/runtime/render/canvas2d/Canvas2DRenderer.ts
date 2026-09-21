@@ -72,6 +72,8 @@ interface Palette {
 interface HitFlash {
   x: number;
   y: number;
+  tx: number;
+  ty: number;
   kind: number;
   ageMs: number;
 }
@@ -873,7 +875,7 @@ export class Canvas2DRenderer implements Renderer {
     const dtMs = this.lastFrameAtMs === null ? 0 : Math.max(0, now - this.lastFrameAtMs);
     this.lastFrameAtMs = now;
 
-    for (const h of incoming) this.hits.push({ x: h.x, y: h.y, kind: h.kind, ageMs: 0 });
+    for (const h of incoming) this.hits.push({ x: h.x, y: h.y, tx: h.tx, ty: h.ty, kind: h.kind, ageMs: 0 });
     if (dtMs > 0) {
       for (const h of this.hits) h.ageMs += dtMs;
     }
@@ -892,17 +894,34 @@ export class Canvas2DRenderer implements Renderer {
       const inv = Math.max(0, 1 - t);
       if (inv <= 0) continue;
 
+      // Tower->creep tracer beam: snaps out, fades fast (gone by ~35% of the
+      // burst). accentHover reads over the dark board and against blue creeps.
+      const beamInv = t >= 0.35 ? 0 : 1 - t / 0.35;
+      if (beamInv > 0 && (h.tx !== h.x || h.ty !== h.y)) {
+        ctx.save();
+        ctx.shadowColor = this.palette.accentGlow;
+        ctx.shadowBlur = 8 * beamInv;
+        ctx.strokeStyle = rgbaOf(this.palette.accentHoverRgb, 0.85 * beamInv);
+        ctx.lineWidth = 1 + 2 * beamInv;
+        ctx.beginPath();
+        ctx.moveTo(h.x, h.y);
+        ctx.lineTo(h.tx, h.ty);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Impact at the struck creep: white-hot core (glow) + expanding ring.
       ctx.save();
       ctx.shadowColor = this.palette.accentGlow;
       ctx.shadowBlur = 16 * inv;
       ctx.beginPath();
-      ctx.arc(h.x, h.y, 1 + 2.5 * inv, 0, Math.PI * 2);
-      ctx.fillStyle = rgbaOf(this.palette.accentHoverRgb, inv);
+      ctx.arc(h.tx, h.ty, 1 + 2.5 * inv, 0, Math.PI * 2);
+      ctx.fillStyle = rgbaOf(this.palette.textPrimaryRgb, inv);
       ctx.fill();
       ctx.restore();
 
       ctx.beginPath();
-      ctx.arc(h.x, h.y, 3 + t * 14, 0, Math.PI * 2); // small outward burst
+      ctx.arc(h.tx, h.ty, 3 + t * 12, 0, Math.PI * 2); // outward burst at the creep
       ctx.strokeStyle = rgbaOf(this.palette.accentRgb, inv * 0.9);
       ctx.lineWidth = 2;
       ctx.stroke();

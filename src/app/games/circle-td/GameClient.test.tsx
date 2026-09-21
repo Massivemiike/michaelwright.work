@@ -27,6 +27,7 @@ import GameClient, { mapTowerHitsToRenderHits } from "./GameClient";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
 import { TILES } from "@/game/titles/circle-td/content";
 import { toFloat } from "@/game/sim/math/fixed";
+import { makeRenderSnapshot } from "@/game/sim/engine";
 import type { TowerHit } from "@/game/titles/circle-td/rules";
 
 // jsdom implements neither — GameClient's ResizeObserver is created only
@@ -75,6 +76,31 @@ describe("mapTowerHitsToRenderHits", () => {
     expect(rendered[1].kind).toBe(2);
     expect(rendered[0].x).toBeCloseTo(toFloat(TILES[1 * 2]));
     expect(rendered[1].x).toBeCloseTo(toFloat(TILES[5 * 2]));
+  });
+
+  it("sets tx/ty to the struck creep's world position (looked up by creepId)", () => {
+    const snap = makeRenderSnapshot(1, 0);
+    snap.creepId[0] = 42;
+    snap.creepXY[0] = 123;
+    snap.creepXY[1] = 456;
+    const hit: TowerHit = { towerType: 0, tile: 2, creepId: 42, killed: false };
+
+    const [r] = mapTowerHitsToRenderHits([hit], snap);
+
+    expect(r.x).toBeCloseTo(toFloat(TILES[2 * 2])); // source = the firing tower's tile
+    expect(r.y).toBeCloseTo(toFloat(TILES[2 * 2 + 1]));
+    expect(r.tx).toBe(123); // target = the struck creep's world position
+    expect(r.ty).toBe(456);
+  });
+
+  it("falls back tx/ty to the tower when the creep is gone (killed this tick)", () => {
+    const snap = makeRenderSnapshot(0, 0);
+    const hit: TowerHit = { towerType: 0, tile: 2, creepId: 99, killed: true };
+
+    const [r] = mapTowerHitsToRenderHits([hit], snap);
+
+    expect(r.tx).toBeCloseTo(toFloat(TILES[2 * 2])); // no creep -> collapses to the tower
+    expect(r.ty).toBeCloseTo(toFloat(TILES[2 * 2 + 1]));
   });
 });
 

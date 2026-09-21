@@ -64,7 +64,7 @@ const HIT_LIFETIME_MS = 240;
 const MAX_SPRITES = 4096;       // tiles(186*2: fill+border)+towers+ghost+creeps*3(<=300)+bursts — ample headroom
 const HDR_FORMAT: GPUTextureFormat = "rgba16float";
 
-interface HitFlash { x: number; y: number; kind: number; ageMs: number; }
+interface HitFlash { x: number; y: number; tx: number; ty: number; kind: number; ageMs: number; }
 
 const FALLBACK = {
   bgBase: "#08080C", bgSurface: "#0F0F15", bgElevated: "#16161F",
@@ -528,15 +528,30 @@ export class WebGpuRenderer implements Renderer {
     const slice = creeps.length > room ? creeps.slice(0, room) : creeps;
     o = packCreeps(out, o, slice, pal.creepPalette);
 
-    // Hit bursts as instanced quads (particles): glow core + expanding ring.
+    // Shooting FX (instanced quads / "particles"): a tower->creep tracer beam
+    // that snaps out and fades fast, plus a white-hot impact core + expanding
+    // accent ring at the struck creep. The beam is a thin SHAPE_SQUARE rotated
+    // to point at the target (params.z angle); its accentHover hue reads over
+    // the dark board and against the blue creeps, unlike the old red-on-red
+    // flash that sat on the (also-red) tower and was invisible.
     for (const h of this.hits) {
       if (!cap()) break;
       const t = h.ageMs / HIT_LIFETIME_MS;
       const inv = t >= 1 ? 0 : 1 - t;
       if (inv <= 0) continue;
-      o = writeSprite(out, o, h.x, h.y, 2 + 3 * inv, 2 + 3 * inv, pal.accentHover, inv, SHAPE_CIRCLE, 1.2 * inv);
-      const rr = 3 + t * 14;
-      o = writeSprite(out, o, h.x, h.y, rr, rr, pal.accent, inv * 0.9, SHAPE_RING, 0.8 * inv);
+      const dx = h.tx - h.x, dy = h.ty - h.y;
+      const len = Math.hypot(dx, dy);
+      const beamInv = t >= 0.35 ? 0 : 1 - t / 0.35; // tracer gone by ~35% of lifetime
+      if (len > 2 && beamInv > 0) {
+        const ang = Math.atan2(dy, dx);
+        o = writeSprite(out, o, (h.x + h.tx) / 2, (h.y + h.ty) / 2, len / 2, 0.5 + 1.1 * beamInv, pal.accentHover, 0.85 * beamInv, SHAPE_SQUARE, 1.5 * beamInv, ang);
+        if (!cap()) break;
+      }
+      // Impact at the creep: white-hot core (bloom) + expanding accent ring.
+      o = writeSprite(out, o, h.tx, h.ty, 1.5 + 3 * inv, 1.5 + 3 * inv, pal.textPrimary, inv, SHAPE_CIRCLE, 1.5 * inv);
+      if (!cap()) break;
+      const rr = 3 + t * 12;
+      o = writeSprite(out, o, h.tx, h.ty, rr, rr, pal.accent, inv * 0.9, SHAPE_RING, 0.8 * inv);
     }
 
     return o / SPRITE_FLOATS;
@@ -546,7 +561,7 @@ export class WebGpuRenderer implements Renderer {
     const now = nowMs();
     const dt = this.lastFrameAtMs === null ? 0 : Math.max(0, now - this.lastFrameAtMs);
     this.lastFrameAtMs = now;
-    for (const h of incoming) this.hits.push({ x: h.x, y: h.y, kind: h.kind, ageMs: 0 });
+    for (const h of incoming) this.hits.push({ x: h.x, y: h.y, tx: h.tx, ty: h.ty, kind: h.kind, ageMs: 0 });
     if (dt > 0) for (const h of this.hits) h.ageMs += dt;
     if (this.hits.length > 0) this.hits = this.hits.filter((h) => h.ageMs < HIT_LIFETIME_MS);
   }

@@ -29,9 +29,17 @@ export interface RendererCaps {
 // a splash impact from a single-target one — typed here so the Renderer
 // signature is final even though nothing produces real HitEvents yet.
 export interface HitEvent {
+  // Source of the shot — the firing tower's world position.
   x: number;
   y: number;
   kind: number;
+  // Target of the shot — the struck creep's world position, so a renderer can
+  // draw an actual tower->creep tracer + an impact flash at the creep. Equals
+  // (x, y) when the target position is unknown (e.g. the creep was killed this
+  // tick and is gone from the snapshot), in which case the beam is zero-length
+  // and only the muzzle/impact at the tower shows.
+  tx: number;
+  ty: number;
 }
 
 export interface Renderer {

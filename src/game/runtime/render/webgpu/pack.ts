@@ -31,14 +31,18 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
 }
 
 // Writes one sprite into `out` at float offset `o`; returns the next offset.
+// `rot` (radians, default 0) rotates the quad about its center in the sprite
+// vertex shader (params.z) — used to draw a beam as a thin rotated box. The
+// SDF fragment works in un-rotated local space, so rotation only orients the
+// quad; every existing caller omits it and gets the axis-aligned behavior.
 export function writeSprite(
   out: Float32Array, o: number,
   cx: number, cy: number, halfX: number, halfY: number,
-  color: Rgb, alpha: number, shape: number, emissive: number
+  color: Rgb, alpha: number, shape: number, emissive: number, rot: number = 0
 ): number {
   out[o] = cx; out[o + 1] = cy; out[o + 2] = halfX; out[o + 3] = halfY;
   out[o + 4] = color.r; out[o + 5] = color.g; out[o + 6] = color.b; out[o + 7] = alpha;
-  out[o + 8] = shape; out[o + 9] = emissive; out[o + 10] = 0; out[o + 11] = 0;
+  out[o + 8] = shape; out[o + 9] = emissive; out[o + 10] = rot; out[o + 11] = 0;
   return o + SPRITE_FLOATS;
 }
 
