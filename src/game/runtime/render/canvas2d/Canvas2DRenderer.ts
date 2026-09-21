@@ -149,12 +149,16 @@ const BACKDROP_GRID_ALPHA = 0.09;
 // plus a faint center light-strip. Colors are brightness steps of the
 // border/text neutrals (mix(borderMuted -> textPrimary)) — NEVER the enemy
 // blue, NEVER a new hue. The rim glow is a shadowBlur bloom whose brightness
-// tracks the (brighter OUTER) rim color, matching how the WebGPU rim feeds its
-// bloom pass. Keep these in sync with the WebGPU twin or the backends drift.
+// tracks the (brighter OUTER) rim color. NOTE: TRACK_EDGE_MIX_* deliberately
+// differ from the WebGPU twin — see the note on those consts below.
 const TRACK_EDGE_PX = 3; // visible bright rim width on each side of the channel
 const TRACK_CENTER_PX = 2; // faint center light-strip width
 const TRACK_EDGE_GLOW = 8; // shadowBlur px for the rim bloom (both loops)
 const TRACK_CENTER_GLOW = 3; // shadowBlur px for the faint center strip
+// DELIBERATELY brighter than the WebGPU twin (0.72/0.45): Canvas2D adds glow via
+// shadowBlur (which spreads but doesn't brighten the stroke core), whereas the
+// WebGPU rim gets additive emissive bloom. The higher base here compensates so
+// both land at the same perceived rim brightness. Keep the OTHER TRACK_* in sync.
 const TRACK_EDGE_MIX_OUTER = 0.85; // borderMuted -> textPrimary for OUTER rim
 const TRACK_EDGE_MIX_INNER = 0.55; // borderMuted -> textPrimary for INNER rim
 const TRACK_DARK_MIX = 0.2; // bgBase -> black for the recessed lane

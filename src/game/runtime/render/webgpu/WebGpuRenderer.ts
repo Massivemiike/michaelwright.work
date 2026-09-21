@@ -87,11 +87,15 @@ const BACKDROP_EDGE_DEEPEN = 0.35; // edge pushed past bg-base toward black
 // neutrals (NEVER the enemy blue, NEVER a new hue): mix(borderMuted ->
 // textPrimary). OUTER is brighter than INNER purely via that mix ratio; the
 // emissive is a single constant so the bloom radius is uniform across loops.
-// Keep these in sync with the Canvas2D twin or the two backends drift apart.
+// Keep these in sync with the Canvas2D twin EXCEPT TRACK_EDGE_MIX_* (see below).
 const TRACK_EDGE_PX = 3;              // visible bright rim width on each side
 const TRACK_CENTER_PX = 2;           // faint center light-strip width
 const TRACK_EDGE_EMISSIVE = 0.5;     // rim bloom — modest so it stays in-palette
 const TRACK_CENTER_EMISSIVE = 0.15;  // center strip glow — barely there
+// DELIBERATELY dimmer than the Canvas2D twin (0.85/0.55): the WebGPU rim also
+// receives additive emissive bloom (TRACK_EDGE_EMISSIVE) on top, so its base
+// colour is toned down to land at the same perceived brightness. Do NOT re-sync
+// these to Canvas2D's values (commit 813b6bf) — that reblows the rim to white.
 const TRACK_EDGE_MIX_OUTER = 0.72;   // borderMuted -> textPrimary for OUTER rim (steel, not blown-white)
 const TRACK_EDGE_MIX_INNER = 0.45;   // borderMuted -> textPrimary for INNER rim
 const TRACK_DARK_MIX = 0.2;          // bgBase -> black for the recessed lane
