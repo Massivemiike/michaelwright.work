@@ -6,7 +6,7 @@
 // re-simulates it server-side and returns both boards; the client never
 // sends a score it computed itself and never holds a Supabase key. Free
 // runs are local-only: a personal best kept in localStorage, never posted.
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { formatScore, formatWave } from "@/game/runtime/hud/format";
 import type { Command } from "@/game/sim/replay";
 import type { BoardResponse } from "@/lib/leaderboard/types";
@@ -41,7 +41,11 @@ export default function GameOver({ score, wave, onPlayAgain, mode, seed, simVers
   // Free play: compute the personal best once at render (no network).
   const [freeBest] = useState(() => (mode === "free" ? readFreeBest() : 0));
   const freeIsNewBest = mode === "free" && score > freeBest;
-  if (mode === "free" && freeIsNewBest) writeFreeBest(score);
+  // Persist a new best as a commit-phase effect, not in the render body —
+  // render must stay pure under reactCompiler:true.
+  useEffect(() => {
+    if (freeIsNewBest) writeFreeBest(score);
+  }, [freeIsNewBest, score]);
 
   async function submit() {
     if (!/^[A-Za-z]{3}$/.test(initials)) { setErrorMsg("Enter exactly 3 letters."); return; }
