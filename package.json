@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:cross-engine": "playwright test --config=playwright.cross-engine.config.ts",
     "check:bundle-budget": "node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "@types/react-dom": "^19",
     "@webgpu/types": "^0.1.60",
     "babel-plugin-react-compiler": "1.0.0",
+    "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^5",

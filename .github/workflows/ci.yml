@@ -43,7 +43,9 @@ jobs:
       # Deliberately NOT run here: `BALANCE_SWEEP=1 npm test`, the gated
       # slow balance sweep (~4 min) — that's a separate scheduled/manual
       # job, not a per-commit check. Cross-engine Playwright determinism
-      # (WebGPU vs Canvas2D) is Plan 3 and doesn't exist yet.
+      # (golden replay reproduced in Chromium/Firefox/WebKit, Plan 3B Task
+      # 8) is a separate Playwright-driven check in the browser-smokes job
+      # below, not part of this fast Vitest step.
       - name: Test
         run: npm test
 
@@ -62,7 +64,7 @@ jobs:
         run: npm run check:bundle-budget
 
   browser-smokes:
-    name: WebGPU render + Canvas2D fallback smokes (Playwright)
+    name: WebGPU render + Canvas2D fallback smokes + cross-engine determinism (Playwright)
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
@@ -79,7 +81,7 @@ jobs:
         run: npm ci
 
       # Browsers + OS deps for chromium (WebGPU render smoke), webkit and
-      # firefox (Canvas2D fallback smoke).
+      # firefox (Canvas2D fallback smoke, cross-engine determinism gate).
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
 
@@ -89,3 +91,16 @@ jobs:
       # 3B may optimize by sharing the build-and-test artifact.
       - name: Run render + fallback smokes
         run: npx playwright test
+
+      # Plan 3B Task 8: asserts the committed golden replay
+      # (src/game/test/determinism.golden.json) reproduces the Node golden
+      # hash in Chromium, Firefox AND WebKit — the correctness anchor the
+      # leaderboard rests on. Reuses this job's already-installed browsers
+      # instead of a separate job that would duplicate the install step.
+      # Runs under its own playwright.cross-engine.config.ts (no webServer —
+      # this spec never touches the Next.js app; it launches each engine
+      # directly and injects an esbuild bundle of the pure sim into a blank
+      # page), so it doesn't pay for another build+start on top of the one
+      # above.
+      - name: Cross-engine determinism gate (golden hash)
+        run: npx playwright test --config=playwright.cross-engine.config.ts
