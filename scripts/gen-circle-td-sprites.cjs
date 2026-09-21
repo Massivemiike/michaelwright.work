@@ -2,15 +2,16 @@
 // Grayscale on transparent (white cores, light grey structure, cool-grey
 // bodies, near-black outlines) so the renderer's per-type tint colors them
 // (red-family towers, blue-family creeps) and the bright cores feed the bloom.
-// 9 frames in a 3x3 grid of 128px cells. Writes atlas.png + atlas.json.
-const { createCanvas } = require("@napi-rs/canvas");
+// 9 unit frames + 4 FX frames (composited/downscaled from the Kenney particle
+// pack) in a 4x4 grid of 128px cells. Writes atlas.png + atlas.json.
+const { createCanvas, loadImage } = require("@napi-rs/canvas");
 const fs = require("fs");
 const path = require("path");
 
 // Run from the repo root: `npm i -D @napi-rs/canvas` then `node scripts/gen-circle-td-sprites.cjs`.
 const REPO = process.argv[2] || process.cwd();
 const OUT = path.join(REPO, "public/games/circle-td/sprites");
-const S = 128, COLS = 3, ROWS = 3;
+const S = 128, COLS = 4, ROWS = 4;
 const cv = createCanvas(S * COLS, S * ROWS);
 const g = cv.getContext("2d");
 g.lineJoin = "round";
@@ -203,19 +204,37 @@ function creepHard() {
   g.beginPath(); g.arc(0, 20, 6, 0, Math.PI * 2); g.fill(); g.restore();
 }
 
-const cells = [
+const VECTOR_CELLS = [
   ["tower-fast", towerFast], ["tower-air", towerAir], ["tower-slow", towerSlow],
   ["tower-splash", towerSplash], ["tower-damage", towerDamage], ["creep-normal", creepNormal],
   ["creep-fast", creepFast], ["creep-air", creepAir], ["creep-hard", creepHard],
 ];
+// FX frames composited (downscaled 512->128) from the Kenney particle pack.
+// The raw kit is gitignored; only this derived atlas ships. Left white-ish so
+// the renderer tints each effect. name -> file under "PNG (Transparent)".
+const FX_DIR = path.join(REPO, "public/games/circle-td/kenney_particle-pack/PNG (Transparent)");
+const FX_CELLS = [
+  ["fx-glow", "circle_05.png"], ["fx-star", "star_07.png"],
+  ["fx-muzzle", "muzzle_02.png"], ["fx-smoke", "smoke_05.png"],
+];
 const manifest = { width: S * COLS, height: S * ROWS, frames: {} };
-cells.forEach(([name, fn], i) => {
-  const col = i % COLS, row = (i / COLS) | 0;
-  withCell(col, row, fn);
-  manifest.frames[name] = { x: col * S, y: row * S, w: S, h: S };
-});
+const place = (i) => ({ col: i % COLS, row: (i / COLS) | 0 });
 
-fs.mkdirSync(OUT, { recursive: true });
-fs.writeFileSync(path.join(OUT, "atlas.png"), cv.toBuffer("image/png"));
-fs.writeFileSync(path.join(OUT, "atlas.json"), JSON.stringify(manifest, null, 2) + "\n");
-console.log("wrote original atlas", manifest.width + "x" + manifest.height, Object.keys(manifest.frames).join(", "));
+(async () => {
+  VECTOR_CELLS.forEach(([name, fn], i) => {
+    const { col, row } = place(i);
+    withCell(col, row, fn);
+    manifest.frames[name] = { x: col * S, y: row * S, w: S, h: S };
+  });
+  for (let k = 0; k < FX_CELLS.length; k++) {
+    const [name, file] = FX_CELLS[k];
+    const { col, row } = place(VECTOR_CELLS.length + k);
+    const img = await loadImage(path.join(FX_DIR, file));
+    g.drawImage(img, col * S, row * S, S, S);
+    manifest.frames[name] = { x: col * S, y: row * S, w: S, h: S };
+  }
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, "atlas.png"), cv.toBuffer("image/png"));
+  fs.writeFileSync(path.join(OUT, "atlas.json"), JSON.stringify(manifest, null, 2) + "\n");
+  console.log("wrote atlas", manifest.width + "x" + manifest.height, Object.keys(manifest.frames).join(", "));
+})();
