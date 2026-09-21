@@ -90,10 +90,10 @@ const BACKDROP_EDGE_DEEPEN = 0.35; // edge pushed past bg-base toward black
 // Keep these in sync with the Canvas2D twin or the two backends drift apart.
 const TRACK_EDGE_PX = 3;              // visible bright rim width on each side
 const TRACK_CENTER_PX = 2;           // faint center light-strip width
-const TRACK_EDGE_EMISSIVE = 0.6;     // rim bloom — modest so it stays in-palette
+const TRACK_EDGE_EMISSIVE = 0.5;     // rim bloom — modest so it stays in-palette
 const TRACK_CENTER_EMISSIVE = 0.15;  // center strip glow — barely there
-const TRACK_EDGE_MIX_OUTER = 0.85;   // borderMuted -> textPrimary for OUTER rim
-const TRACK_EDGE_MIX_INNER = 0.55;   // borderMuted -> textPrimary for INNER rim
+const TRACK_EDGE_MIX_OUTER = 0.72;   // borderMuted -> textPrimary for OUTER rim (steel, not blown-white)
+const TRACK_EDGE_MIX_INNER = 0.45;   // borderMuted -> textPrimary for INNER rim
 const TRACK_DARK_MIX = 0.2;          // bgBase -> black for the recessed lane
 const TRACK_CENTER_MIX = 0.35;       // borderMuted -> textPrimary for center strip
 
