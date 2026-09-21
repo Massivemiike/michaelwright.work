@@ -1,11 +1,13 @@
 // playwright.config.ts
 //
-// Reusable Playwright harness for Circle TD. 3A uses it for the WebGPU
-// render smoke (chromium) + Canvas2D fallback smoke (webkit/firefox); Plan
-// 3B REUSES this same config for the cross-engine determinism gate (add a
-// spec + an all-three-engine project). The webServer runs `next build &&
-// next start` — NEVER `next dev` (space-in-path Turbopack dev bug per
-// MEMORY) — and we test the local server, never curl a Vercel URL (429).
+// Playwright harness for Circle TD's 3A browser smokes: the WebGPU render
+// smoke (chromium) + Canvas2D fallback smoke (webkit/firefox), both of which
+// need a running app. Plan 3B's cross-engine determinism gate does NOT need a
+// dev server (it injects a bundled sim into a blank page), so it lives in its
+// own `playwright.cross-engine.config.ts` (no webServer) rather than reusing
+// this one. The webServer here runs `next build && next start` — NEVER
+// `next dev` (space-in-path Turbopack dev bug per MEMORY) — and we test the
+// local server, never curl a Vercel URL (429).
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
