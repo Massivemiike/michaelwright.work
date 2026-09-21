@@ -125,20 +125,13 @@ fn sdHex(pin: vec2f) -> f32 {
 }
 struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
 @fragment fn fs(in: VsOut) -> FragOut {
-  var o: FragOut;
-  // Textured path (atlas sprite): sample the frame, tint by in.color, and
-  // output premultiplied — texel.a * color.a is the coverage, tint =
-  // color.rgb * texel.rgb. Bright sprite parts still feed the bloom target.
-  if (in.textured > 0.5) {
-    let texel = textureSample(atlasTex, atlasSamp, in.uvCoord);
-    let a = texel.a * in.color.a;
-    if (a <= 0.0) { discard; }
-    let rgb = in.color.rgb * texel.rgb;
-    o.scene = vec4f(rgb * a, a);
-    o.emit = vec4f(rgb * a * in.emissive, a);
-    return o;
-  }
-  // SDF path (unchanged): procedural shape by shape id.
+  // WGSL forbids derivative-taking builtins (textureSample, fwidth) inside
+  // control flow that branches on a non-uniform value like in.textured. So we
+  // evaluate BOTH the atlas sample AND the SDF coverage unconditionally here,
+  // in uniform control flow, and only branch (no derivatives) for the final
+  // output. The shape if/else below has no derivatives and re-converges, so
+  // the fwidth after it stays uniform.
+  let texel = textureSample(atlasTex, atlasSamp, in.uvCoord);
   let p = in.local;
   let s = in.shape;
   var d: f32;
@@ -151,10 +144,23 @@ struct FragOut { @location(0) scene: vec4f, @location(1) emit: vec4f };
   else { d = abs(sdBox(p, vec2f(1.0))) - 0.08; }            // hollow square
   let aa = fwidth(d) + 1e-4;
   let cov = 1.0 - smoothstep(-aa, aa, d);
-  if (cov <= 0.0) { discard; }
-  let a = in.color.a * cov;
-  o.scene = vec4f(in.color.rgb * a, a);                     // premultiplied
-  o.emit = vec4f(in.color.rgb * a * in.emissive, a);        // additive-friendly
+
+  var o: FragOut;
+  if (in.textured > 0.5) {
+    // Atlas sprite: tint the sampled texel by in.color, premultiplied. Bright
+    // sprite parts still feed the bloom (emit) target.
+    let a = texel.a * in.color.a;
+    if (a <= 0.0) { discard; }
+    let rgb = in.color.rgb * texel.rgb;
+    o.scene = vec4f(rgb * a, a);
+    o.emit = vec4f(rgb * a * in.emissive, a);
+  } else {
+    // SDF shape (output unchanged from the pre-texture version).
+    if (cov <= 0.0) { discard; }
+    let a = in.color.a * cov;
+    o.scene = vec4f(in.color.rgb * a, a);                   // premultiplied
+    o.emit = vec4f(in.color.rgb * a * in.emissive, a);      // additive-friendly
+  }
   return o;
 }`;
 
