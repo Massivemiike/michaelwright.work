@@ -6,7 +6,7 @@
 import type { Fx } from "@/game/sim/types";
 import { fromFloat, fromInt, mul } from "@/game/sim/math/fixed";
 import type { Creeps, SimState } from "@/game/sim/state";
-import { addCreep, CREEP_AIR, CREEP_FAST, removeCreep } from "@/game/sim/state";
+import { addCreep, CREEP_AIR, CREEP_FAST, removeCreep, MAX_CREEPS } from "@/game/sim/state";
 import { TARGET_AIR, TARGET_LAND, TILES, TOWERS, TRACK, posAt, trackLength, WAVE_SIZE } from "./content";
 import { bounty, hp, waveFlags, typeMul } from "./balance";
 
@@ -86,9 +86,26 @@ const inTargetSet = (flags: number, targets: number): boolean => {
   return (targets & TARGET_LAND) !== 0;
 };
 
+// Per-tick creep world-position scratch (Fx / Q16.16). Rebuilt for [0,count)
+// at the top of every fireTowers() call before any read, and kept in sync
+// with the swap-with-last removals in the kill pass below, so a later
+// tower's targeting never reads a stale position. Replaces the old
+// O(towers×creeps) posAt() calls with O(creeps) per tick. fireTowers runs
+// fully synchronously within a single tick (no await), so this shared
+// buffer is never re-entered mid-run — safe for the one-run-at-a-time
+// server verification path too.
+const CREEP_PX = new Int32Array(MAX_CREEPS);
+const CREEP_PY = new Int32Array(MAX_CREEPS);
+
 export const fireTowers = (s: SimState): TowerHit[] => {
   const events: TowerHit[] = [];
   const c = s.creeps, t = s.towers;
+
+  // Precompute every live creep's world position once this tick.
+  for (let i = 0; i < c.count; i++) {
+    const p = creepPos(c, i);
+    CREEP_PX[i] = p.x; CREEP_PY[i] = p.y;
+  }
 
   for (let ti = 0; ti < t.count; ti++) {
     if (t.cooldown[ti] > 0) { t.cooldown[ti] -= 1; continue; }
@@ -102,8 +119,7 @@ export const fireTowers = (s: SimState): TowerHit[] => {
     let best = -1, bestDist = -1;
     for (let ci = 0; ci < c.count; ci++) {
       if (!inTargetSet(c.flags[ci], def.targets)) continue;
-      const p = creepPos(c, ci);
-      const dx = p.x - tx, dy = p.y - ty;
+      const dx = CREEP_PX[ci] - tx, dy = CREEP_PY[ci] - ty;
       const dSq = mul(dx, dx) + mul(dy, dy);
       if (dSq <= rSq && c.dist[ci] > bestDist) { best = ci; bestDist = c.dist[ci]; }
     }
@@ -111,7 +127,7 @@ export const fireTowers = (s: SimState): TowerHit[] => {
 
     t.cooldown[ti] = def.cooldownTicks;
     const primaryId = c.id[best];
-    const pp = creepPos(c, best); // BEFORE any removal
+    const ppx = CREEP_PX[best], ppy = CREEP_PY[best]; // BEFORE any removal
 
     const dmg = towerDamage(type, level);
     c.hp[best] -= dmg;
@@ -122,8 +138,7 @@ export const fireTowers = (s: SimState): TowerHit[] => {
       for (let k = 0; k < c.count; k++) {
         if (k === best) continue;
         if (!inTargetSet(c.flags[k], def.targets)) continue;
-        const p = creepPos(c, k);
-        const dx = p.x - pp.x, dy = p.y - pp.y;
+        const dx = CREEP_PX[k] - ppx, dy = CREEP_PY[k] - ppy;
         const dSq = mul(dx, dx) + mul(dy, dy);
         if (dSq <= srSq) c.hp[k] -= dmg; // full damage, no falloff — INVENTED
       }
@@ -134,16 +149,16 @@ export const fireTowers = (s: SimState): TowerHit[] => {
       c.slowTicks[best] = SLOW_DURATION_TICKS;
     }
 
-    // Remove the dead and award bounty/score. Fresh scan by hp, no stale
-    // index from the targeting/splash passes above is reused here — the
-    // no-advance-on-remove pattern handles the swap-remove correctly even
-    // when several creeps die from the same splash hit.
+    // Remove the dead and award bounty/score. The position cache is
+    // swap-mirrored so it stays valid for the NEXT tower's targeting.
     let killed = false;
     for (let k = 0; k < c.count;) {
       if (c.hp[k] <= 0) {
-        s.bank += bounty(c.maxHp[k], s.gamma, s.bountyCap); // by the killed creep's own strength (Task 3), capped (BOUNTY_CAP)
+        s.bank += bounty(c.maxHp[k], s.gamma, s.bountyCap);
         s.score += 2; // SOURCED: 2 points per kill
         if (c.id[k] === primaryId) killed = true;
+        const last = c.count - 1;
+        CREEP_PX[k] = CREEP_PX[last]; CREEP_PY[k] = CREEP_PY[last]; // mirror removeCreep's swap
         removeCreep(c, k);
       } else {
         k++;
