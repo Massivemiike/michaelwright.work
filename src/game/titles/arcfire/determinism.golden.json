@@ -1,0 +1,109 @@
+{
+  "replay": {
+    "seed": 20260922,
+    "settings": {
+      "weaponsEach": 4,
+      "poolSize": 8,
+      "wind": true,
+      "guaranteeTags": [
+        "VOLLEY"
+      ]
+    },
+    "commands": [
+      {
+        "k": "pick",
+        "w": 0
+      },
+      {
+        "k": "pick",
+        "w": 1
+      },
+      {
+        "k": "pick",
+        "w": 2
+      },
+      {
+        "k": "pick",
+        "w": 3
+      },
+      {
+        "k": "pick",
+        "w": 4
+      },
+      {
+        "k": "pick",
+        "w": 5
+      },
+      {
+        "k": "pick",
+        "w": 6
+      },
+      {
+        "k": "pick",
+        "w": 7
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 1,
+        "angle": 40,
+        "power": 55
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 0,
+        "angle": 135,
+        "power": 60
+      },
+      {
+        "k": "turn",
+        "move": 1,
+        "w": 3,
+        "angle": 50,
+        "power": 65
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 2,
+        "angle": 125,
+        "power": 70
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 5,
+        "angle": 60,
+        "power": 75
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 4,
+        "angle": 140,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 7,
+        "angle": 45,
+        "power": 85
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 6,
+        "angle": 130,
+        "power": 55
+      }
+    ]
+  },
+  "hash": "63222780",
+  "scores": [
+    32,
+    84
+  ],
+  "winner": 1
+}

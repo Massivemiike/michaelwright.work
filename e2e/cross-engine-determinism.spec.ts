@@ -28,6 +28,10 @@ async function bundle(): Promise<string> {
   return out.outputFiles[0].text;
 }
 
+const arcfireGolden = JSON.parse(readFileSync("src/game/titles/arcfire/determinism.golden.json", "utf8")) as {
+  replay: unknown; hash: string;
+};
+
 const engines: Array<[string, BrowserType]> = [["chromium", chromium], ["firefox", firefox], ["webkit", webkit]];
 
 for (const [name, engine] of engines) {
@@ -39,6 +43,21 @@ for (const [name, engine] of engines) {
       await page.addScriptTag({ content: js });
       const hash = await page.evaluate((replay) => window.runGolden(replay as never), golden.replay);
       expect(hash, `${name} must reproduce the Node golden hash`).toBe(golden.hash);
+    } finally {
+      await browser.close();
+    }
+  });
+}
+
+for (const [name, engine] of engines) {
+  test(`${name} reproduces the Arcfire golden hash ${arcfireGolden.hash}`, async () => {
+    const js = await bundle();
+    const browser = await engine.launch();
+    try {
+      const page = await browser.newPage();
+      await page.addScriptTag({ content: js });
+      const hash = await page.evaluate((replay) => window.runArcfireGolden(replay as never), arcfireGolden.replay);
+      expect(hash, `${name} must reproduce the Arcfire golden hash`).toBe(arcfireGolden.hash);
     } finally {
       await browser.close();
     }
