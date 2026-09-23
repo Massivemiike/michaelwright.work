@@ -1,14 +1,14 @@
 // src/game/runtime/render/transform.ts
 //
-// The ONE place the Circle TD world<->screen transform lives, shared by
-// Canvas2DRenderer and WebGpuRenderer so pointer hit-testing (screenToWorld
-// -> tileAtWorld) can never drift between backends. Lives under
-// src/game/runtime/** (outside the sim purity guard AND exempt from the
-// lazy-boundary guard) so DOM types and Math.* are fair game here.
-import { STAGE_W, STAGE_H } from "@/game/titles/circle-td/content";
+// The ONE place the world<->screen transform lives, shared by every title's
+// Canvas2D and WebGPU renderers so pointer hit-testing (screenToWorld ->
+// tileAtWorld) can never drift between backends. Title-agnostic: each caller
+// passes its own stage size. Lives under src/game/runtime/** (outside the sim
+// purity guard AND exempt from the lazy-boundary guard) so DOM types and
+// Math.* are fair game here.
 
-// Letterbox+center fit of the fixed STAGE_W x STAGE_H stage into a device-
-// pixel backing store. Field-identical to Canvas2DRenderer's old private
+// Letterbox+center fit of a fixed stageW x stageH stage into a device-pixel
+// backing store. Field-identical to Canvas2DRenderer's old private
 // Transform, so both renderers can hold one of these.
 export interface Fit {
   scale: number;
@@ -19,10 +19,10 @@ export interface Fit {
 // Verbatim reproduction of Canvas2DRenderer.resize()'s fit math (lines
 // 350-366 as of HEAD 4ff3cd4). pxW/pxH are the device-pixel backing-store
 // dimensions (already round(cssW*dpr)).
-export function computeFit(pxW: number, pxH: number): Fit {
-  const scale = pxW > 0 && pxH > 0 ? Math.min(pxW / STAGE_W, pxH / STAGE_H) : 1;
-  const offsetX = (pxW - STAGE_W * scale) / 2;
-  const offsetY = (pxH - STAGE_H * scale) / 2;
+export function computeFit(pxW: number, pxH: number, stageW: number, stageH: number): Fit {
+  const scale = pxW > 0 && pxH > 0 ? Math.min(pxW / stageW, pxH / stageH) : 1;
+  const offsetX = (pxW - stageW * scale) / 2;
+  const offsetY = (pxH - stageH * scale) / 2;
   return { scale, offsetX, offsetY };
 }
 

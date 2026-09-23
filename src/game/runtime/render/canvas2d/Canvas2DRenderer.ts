@@ -467,7 +467,7 @@ export class Canvas2DRenderer implements Renderer {
     canvas.height = pxH;
     // Fit math now lives in the shared transform module (see
     // ../transform.ts) so WebGpuRenderer computes the identical letterbox.
-    this.transform = computeFit(pxW, pxH);
+    this.transform = computeFit(pxW, pxH, STAGE_W, STAGE_H);
   }
 
   // Part of the shared Renderer interface as of final-review finding #7 —

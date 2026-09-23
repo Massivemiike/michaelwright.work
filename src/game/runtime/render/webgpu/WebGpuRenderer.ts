@@ -33,7 +33,7 @@ import type { Renderer, RendererCaps, HitEvent, InterpCreep } from "../Renderer"
 import { interpolateById } from "../Renderer";
 import type { RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { toFloat } from "@/game/sim/math/fixed";
-import { TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
+import { STAGE_W, STAGE_H, TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
 import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit } from "../transform";
 import { buildTrackBands, TRACK_BAND_STRIDE } from "./trackBands";
 import {
@@ -553,7 +553,7 @@ export class WebGpuRenderer implements Renderer {
     const pxH = Math.max(1, Math.round(cssH * dpr));
     this.canvas.width = pxW;
     this.canvas.height = pxH;
-    this.fit = computeFit(pxW, pxH);
+    this.fit = computeFit(pxW, pxH, STAGE_W, STAGE_H);
     const m = worldToClip(this.fit, pxW, pxH);
     this.globalsData.set(m, 0);
     this.device.queue.writeBuffer(this.globalsBuf, 0, this.globalsData);

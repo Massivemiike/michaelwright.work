@@ -30,26 +30,32 @@ function mul(m: Float32Array, x: number, y: number): { x: number; y: number } {
 
 describe("computeFit", () => {
   it("scales 2x with no letterbox when the box is exactly 2x the stage", () => {
-    const f = computeFit(STAGE_W * 2, STAGE_H * 2);
+    const f = computeFit(STAGE_W * 2, STAGE_H * 2, STAGE_W, STAGE_H);
     expect(f.scale).toBeCloseTo(2);
     expect(f.offsetX).toBeCloseTo(0);
     expect(f.offsetY).toBeCloseTo(0);
   });
   it("letterboxes on the constrained axis and centers", () => {
     // Very wide box: height constrains -> vertical fit, horizontal bars.
-    const f = computeFit(STAGE_W * 4, STAGE_H * 2);
+    const f = computeFit(STAGE_W * 4, STAGE_H * 2, STAGE_W, STAGE_H);
     expect(f.scale).toBeCloseTo(2); // min(4,2) = 2
     expect(f.offsetX).toBeGreaterThan(0);
     expect(f.offsetY).toBeCloseTo(0);
   });
   it("returns scale 1 for a zero-size box", () => {
-    expect(computeFit(0, 0).scale).toBe(1);
+    expect(computeFit(0, 0, STAGE_W, STAGE_H).scale).toBe(1);
+  });
+  it("fits any title's stage, not just Circle TD's (Arcfire's 1200×500)", () => {
+    const f = computeFit(2400, 1200, 1200, 500);
+    expect(f.scale).toBeCloseTo(2); // min(2400/1200, 1200/500) = min(2, 2.4)
+    expect(f.offsetX).toBeCloseTo(0);
+    expect(f.offsetY).toBeCloseTo(100); // (1200 − 500×2) / 2
   });
 });
 
 describe("screenToWorld matches the old Canvas2D formula exactly", () => {
   it("agrees on a letterboxed, dpr-stretched canvas", () => {
-    const fit = computeFit(1680, 1360);
+    const fit = computeFit(1680, 1360, STAGE_W, STAGE_H);
     const canvas = fakeCanvas(1680, 1360, { left: 10, top: 20, width: 840, height: 680 });
     for (const [cx, cy] of [[10, 20], [430, 360], [850, 700]] as const) {
       const got = screenToWorld(cx, cy, canvas, fit);
@@ -66,7 +72,7 @@ describe("screenToWorld matches the old Canvas2D formula exactly", () => {
 
 describe("worldToClip", () => {
   it("maps stage corners into clip with a Y flip", () => {
-    const fit = computeFit(STAGE_W * 2, STAGE_H * 2); // scale 2, no offset
+    const fit = computeFit(STAGE_W * 2, STAGE_H * 2, STAGE_W, STAGE_H); // scale 2, no offset
     const m = worldToClip(fit, STAGE_W * 2, STAGE_H * 2);
     const tl = mul(m, 0, 0);
     const br = mul(m, STAGE_W, STAGE_H);
@@ -74,7 +80,7 @@ describe("worldToClip", () => {
     expect(br.x).toBeCloseTo(1);  expect(br.y).toBeCloseTo(-1);  // bottom-right -> clip (+1, -1)
   });
   it("keeps the fitted stage centered under letterboxing", () => {
-    const fit = computeFit(STAGE_W * 4, STAGE_H * 2);
+    const fit = computeFit(STAGE_W * 4, STAGE_H * 2, STAGE_W, STAGE_H);
     const m = worldToClip(fit, STAGE_W * 4, STAGE_H * 2);
     const center = mul(m, STAGE_W / 2, STAGE_H / 2);
     expect(center.x).toBeCloseTo(0);
