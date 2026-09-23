@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { sinFx, cosFx } from "@/game/sim/math/trig";
 
-const ROOTS = ["src/game/sim", "src/game/titles/circle-td"];
+const ROOTS = ["src/game/sim", "src/game/titles/circle-td", "src/game/titles/arcfire"];
 const BANNED = [
   /\bwindow\b/, /\bdocument\b/, /\bnavigator\b/, /\bperformance\b/,
   /\bnew Date\b/, /\bDate\.now\b/,
