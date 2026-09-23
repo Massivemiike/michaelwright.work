@@ -19,7 +19,7 @@
 import { useCallback, useEffect } from "react";
 import { TOWERS, SELL_REFUND_PCT } from "@/game/titles/circle-td/content";
 import { towerDamage } from "@/game/titles/circle-td/rules";
-import { totalInvested, upgradeCost } from "@/game/sim/replay";
+import { totalInvested, upgradeCost } from "@/game/titles/circle-td/replay";
 import { toFloat } from "@/game/sim/math/fixed";
 import { formatCost, formatDamage, formatRange, formatRefund, formatTargets } from "@/game/runtime/hud/format";
 

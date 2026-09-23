@@ -5,8 +5,8 @@
 // deliberately not here.
 import type { Fx } from "@/game/sim/types";
 import { fromFloat, fromInt, mul } from "@/game/sim/math/fixed";
-import type { Creeps, SimState } from "@/game/sim/state";
-import { addCreep, CREEP_AIR, CREEP_FAST, removeCreep, MAX_CREEPS } from "@/game/sim/state";
+import type { Creeps, SimState } from "@/game/titles/circle-td/state";
+import { addCreep, CREEP_AIR, CREEP_FAST, removeCreep, MAX_CREEPS } from "@/game/titles/circle-td/state";
 import { TARGET_AIR, TARGET_LAND, TILES, TOWERS, TRACK, posAt, trackLength, WAVE_SIZE } from "./content";
 import { bounty, hp, waveFlags, typeMul } from "./balance";
 

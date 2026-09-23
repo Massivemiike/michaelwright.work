@@ -8,7 +8,7 @@ import {
   deriveOffsets,
   type Offsets,
 } from "./balance";
-import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/titles/circle-td/state";
 import { makeRng, nextRange } from "@/game/sim/math/rng";
 
 describe("balance", () => {

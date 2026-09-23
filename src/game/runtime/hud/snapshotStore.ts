@@ -22,7 +22,7 @@
 // `performance` internally, so this stays plain-data and unit-testable
 // with a fake clock the same way loop.test.ts tests loop.ts), which the
 // sim itself is never allowed to touch. Still plain TS — no React, no DOM.
-import type { RenderSnapshot } from "@/game/sim/engine";
+import type { RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 
 export const HUD_HZ = 10;
 export const HUD_INTERVAL_MS = 1000 / HUD_HZ;

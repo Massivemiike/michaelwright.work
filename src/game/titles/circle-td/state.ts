@@ -1,5 +1,5 @@
-import type { Fx } from "./types";
-import type { Rng } from "./math/rng";
+import type { Fx } from "@/game/sim/types";
+import type { Rng } from "@/game/sim/math/rng";
 
 export const MAX_CREEPS = 512;
 export const MAX_TOWERS = 2048;

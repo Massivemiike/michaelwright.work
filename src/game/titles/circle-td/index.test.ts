@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { makeSim } from "./index";
 import { START_BANK, TILES, posAt, TRACK } from "./content";
 import { towerRangeSq } from "./rules";
-import { addCreep, addTower } from "@/game/sim/state";
+import { addCreep, addTower } from "@/game/titles/circle-td/state";
 import { fromInt, mul } from "@/game/sim/math/fixed";
 
 describe("Circle TD sim assembly", () => {

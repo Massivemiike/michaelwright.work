@@ -5,10 +5,10 @@
 // shape and allocator live in @/game/sim/engine (title-agnostic); this file
 // is where posAt/TRACK/TILES/toFloat get used to fill one in, since that's
 // all Circle-TD-specific geometry.
-import { makeCreeps, makeTowers, type SimState } from "@/game/sim/state";
+import { makeCreeps, makeTowers, type SimState } from "@/game/titles/circle-td/state";
 import { makeRng } from "@/game/sim/math/rng";
 import { toFloat } from "@/game/sim/math/fixed";
-import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
+import { makeRenderSnapshot, type RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { START_BANK, ALIVE_CAP_NORMAL, WAVE_INTERVAL_TICKS, TRACK, posAt, TILES } from "./content";
 import { deriveOffsets, interest, GAMMA, ALPHA_BP, BOUNTY_CAP } from "./balance";
 import { spawnWave, moveCreeps, fireTowers, type TowerHit } from "./rules";

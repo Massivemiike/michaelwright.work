@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { towerFrame, creepFrame } from "./sprites";
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/titles/circle-td/state";
 
 describe("towerFrame", () => {
   it("maps each tower type to its frame in TOWERS order", () => {

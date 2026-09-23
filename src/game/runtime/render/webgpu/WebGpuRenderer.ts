@@ -31,7 +31,7 @@
 // comment and this class's init() for the mechanics.
 import type { Renderer, RendererCaps, HitEvent, InterpCreep } from "../Renderer";
 import { interpolateById } from "../Renderer";
-import type { RenderSnapshot } from "@/game/sim/engine";
+import type { RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { toFloat } from "@/game/sim/math/fixed";
 import { TILE_SIZE, TRACK_WIDTH, TILES, TRACK, TOWERS } from "@/game/titles/circle-td/content";
 import { computeFit, screenToWorld as sharedScreenToWorld, worldToClip, type Fit } from "../transform";

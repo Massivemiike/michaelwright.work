@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import SelectedTowerPanel from "./SelectedTowerPanel";
 import { TOWERS } from "@/game/titles/circle-td/content";
-import { upgradeCost } from "@/game/sim/replay";
+import { upgradeCost } from "@/game/titles/circle-td/replay";
 
 const TILE = 5;
 const TYPE = 0; // Fast, cost 50

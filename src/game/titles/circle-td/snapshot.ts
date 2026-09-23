@@ -1,8 +1,8 @@
-// src/game/sim/engine.ts
+// src/game/titles/circle-td/snapshot.ts
 //
-// Generic, title-agnostic sim-engine plumbing. This file must never import
-// from src/game/titles/** — it only defines the shape a title's renderer
-// feed takes and a small allocator for it.
+// Circle TD's renderer feed: the RenderSnapshot shape its renderers draw from
+// and a small allocator for it. (Moved from src/game/sim/engine.ts when the
+// engine was generalized for a second title.)
 
 export interface RenderSnapshot {
   tick: number;

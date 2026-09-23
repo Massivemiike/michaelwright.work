@@ -1,6 +1,6 @@
 // src/game/runtime/render/Renderer.test.ts
 import { describe, it, expect } from "vitest";
-import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
+import { makeRenderSnapshot, type RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { interpolateById } from "./Renderer";
 
 // Hand-built snapshot fixture: only the creep-related fields matter for

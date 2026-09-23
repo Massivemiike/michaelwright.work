@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   makeCreeps, makeTowers, addCreep, addTower, CREEP_FAST, CREEP_AIR,
   type SimState,
-} from "@/game/sim/state";
+} from "@/game/titles/circle-td/state";
 import { makeRng } from "@/game/sim/math/rng";
 import { fromInt, mul } from "@/game/sim/math/fixed";
 import { spawnWave, moveCreeps, fireTowers, towerDamage, towerRangeSq, SLOW_DURATION_TICKS } from "./rules";

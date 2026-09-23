@@ -5,7 +5,7 @@
 // cross-engine spec can assert every engine reproduces the Node golden
 // hash. Lives under src/game/test/** (outside the purity roots), so the
 // `window` reference here is allowed.
-import { runReplay, type Replay } from "@/game/sim/replay";
+import { runReplay, type Replay } from "@/game/titles/circle-td/replay";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
 
 declare global {

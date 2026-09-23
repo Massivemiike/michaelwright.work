@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { verifyScore, MAX_VERIFY_COMMANDS, type VerifyInput } from "./verify";
 import type { ReplayOutcome, ReplayRejection, TitleDef } from "./title";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
-import { SIM_VERSION } from "@/game/sim/types";
-import { runReplay, type Command } from "./replay";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
+import { runReplay, type Command } from "@/game/titles/circle-td/replay";
 
 const SEED = 20260918;
 const baseOpts = { title: circleTdTitle, acceptableSeeds: [SEED] as number[] };

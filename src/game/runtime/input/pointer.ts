@@ -14,8 +14,8 @@
 // fully unit-testable with a plain `makeSim` (see pointer.test.ts), no
 // React/browser involved. GameClient.tsx (Task 5/6/7) is what wires real
 // PointerEvents/KeyboardEvents to these methods.
-import { applyCommand, type Command } from "@/game/sim/replay";
-import type { SimState } from "@/game/sim/state";
+import { applyCommand, type Command } from "@/game/titles/circle-td/replay";
+import type { SimState } from "@/game/titles/circle-td/state";
 import { toFloat } from "@/game/sim/math/fixed";
 import { TILE_COUNT, TILE_SIZE, TILES, TOWERS } from "@/game/titles/circle-td/content";
 

@@ -16,7 +16,7 @@
 // WebGPU backend (Plan 3) drops in behind the same interface — callers
 // (the Task 5 mount component) depend only on `Renderer`/`RendererCaps`,
 // never on a concrete class.
-import type { RenderSnapshot } from "@/game/sim/engine";
+import type { RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 
 export interface RendererCaps {
   kind: "canvas2d" | "webgpu";

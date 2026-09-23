@@ -27,7 +27,7 @@ import GameClient, { mapTowerHitsToRenderHits } from "./GameClient";
 import { NodeNetworkProvider } from "@/components/context/NodeNetworkContext";
 import { TILES } from "@/game/titles/circle-td/content";
 import { toFloat } from "@/game/sim/math/fixed";
-import { makeRenderSnapshot } from "@/game/sim/engine";
+import { makeRenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import type { TowerHit } from "@/game/titles/circle-td/rules";
 
 // jsdom implements neither — GameClient's ResizeObserver is created only

@@ -6,9 +6,9 @@
 // reports wave as the generic stat. makeSim/applyCommand stay exposed because
 // runReplay's direct callers (tests, the cross-engine harness) drive the loop
 // through them.
-import { SIM_VERSION } from "@/game/sim/types";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import type { TitleDef } from "@/game/sim/title";
-import { applyCommand, runReplay, type CircleTdSimDef, type Command } from "@/game/sim/replay";
+import { applyCommand, runReplay, type CircleTdSimDef, type Command } from "@/game/titles/circle-td/replay";
 import { makeSim } from "./index";
 
 export const CIRCLE_TD_SLUG = "circle-td";

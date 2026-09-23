@@ -13,7 +13,7 @@
 // src/game/runtime/** => outside the sim purity guard (Math.*/float allowed).
 import type { InterpCreep } from "../Renderer";
 import { TEX_TOWER_SCALE, TEX_CREEP_SCALE, type Uv } from "../atlas";
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/titles/circle-td/state";
 import { TOWERS } from "@/game/titles/circle-td/content";
 import { towerFrame, creepFrame } from "@/game/titles/circle-td/sprites";
 

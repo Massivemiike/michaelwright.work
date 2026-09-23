@@ -1,4 +1,4 @@
-// src/game/sim/replay.ts
+// src/game/titles/circle-td/replay.ts
 //
 // Command/replay format, applyCommand (the pure state-mutation half of a
 // replay), runReplay (constructs a sim and drives it through a scripted
@@ -7,6 +7,7 @@
 // here must stay pure per the purity guard: integer math and deterministic
 // RNG only — no non-deterministic time/randomness sources, no host globals,
 // no filesystem access.
+import { FNV_OFFSET, fnvFold, fnvHex } from "@/game/sim/hash";
 import { TOWERS, SELL_REFUND_PCT, TILE_COUNT } from "@/game/titles/circle-td/content";
 import { addTower, removeTower, type SimState, type Towers } from "./state";
 
@@ -178,20 +179,12 @@ export const runReplay = (
   return { score: sim.state.score, wave: sim.state.wave, hash: hashState(sim.state), maxTowerLevel };
 };
 
-// FNV-1a (32-bit), folded 8 bits at a time over each field's little-endian
-// bytes. Pure integer ops only (|0, >>>, Math.imul) so it hashes identically
-// across JS engines.
-function fold(h: number, x: number): number {
-  x = x | 0;
-  for (let b = 0; b < 4; b++) {
-    h ^= (x >>> (b * 8)) & 0xff;
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+// FNV-1a (32-bit) over each field's little-endian bytes, via the shared
+// engine-exact primitives in src/game/sim/hash.ts.
+const fold = fnvFold;
 
 export function hashState(s: SimState): string {
-  let h = 0x811c9dc5;
+  let h = FNV_OFFSET;
   for (const v of [
     s.tick,
     s.bank,
@@ -217,7 +210,7 @@ export function hashState(s: SimState): string {
   for (let i = 0; i < t.count; i++)
     for (const col of [t.type, t.tile, t.level, t.cooldown, t.targetId]) h = fold(h, col[i]);
 
-  return (h >>> 0).toString(16).padStart(8, "0");
+  return fnvHex(h);
 }
 
 // Deterministic 8-char FNV-1a digest over the command LOG (not the sim
@@ -227,7 +220,7 @@ export function hashState(s: SimState): string {
 const CMD_TYPE_CODE: Record<Command["type"], number> = { start: 0, place: 1, upgrade: 2, sell: 3 };
 
 export function hashCommands(commands: readonly Command[]): string {
-  let h = 0x811c9dc5;
+  let h = FNV_OFFSET;
   h = fold(h, commands.length);
   for (const c of commands) {
     h = fold(h, c.tick);
@@ -235,5 +228,5 @@ export function hashCommands(commands: readonly Command[]): string {
     h = fold(h, c.tower ?? -1);
     h = fold(h, c.tile ?? -1);
   }
-  return (h >>> 0).toString(16).padStart(8, "0");
+  return fnvHex(h);
 }

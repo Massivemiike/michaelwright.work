@@ -34,9 +34,9 @@ import { computeFit, screenToWorld as sharedScreenToWorld, type Fit } from "../t
 import { loadAtlas } from "../loadAtlas";
 import { hasFrame, TEX_TOWER_SCALE, TEX_CREEP_SCALE, type AtlasManifest, type Frame } from "../atlas";
 import { spawnDeathBurst, spawnMuzzle, advanceParticles, particleDraw, type Particle, type ParticleTint } from "../particles";
-import type { RenderSnapshot } from "@/game/sim/engine";
+import type { RenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { toFloat } from "@/game/sim/math/fixed";
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/titles/circle-td/state";
 import { STAGE_H, STAGE_W, TILE_SIZE, TILES, TOWERS, TRACK, TRACK_WIDTH } from "@/game/titles/circle-td/content";
 import { towerFrame, creepFrame } from "@/game/titles/circle-td/sprites";
 

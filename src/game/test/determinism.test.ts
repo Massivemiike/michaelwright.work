@@ -19,8 +19,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { applyCommand, runReplay, upgradeCost, type Command, type Replay } from "@/game/sim/replay";
-import { SIM_VERSION } from "@/game/sim/types";
+import { applyCommand, runReplay, upgradeCost, type Command, type Replay } from "@/game/titles/circle-td/replay";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import { makeSim } from "@/game/titles/circle-td";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
 import { TILES, TILE_COUNT, TOWERS, TRACK, trackLength, posAt } from "@/game/titles/circle-td/content";

@@ -7,7 +7,7 @@
 // color lives here. Pure: string/array/bitwise only — no banned tokens, so it
 // passes the sim purity guard even though it sits under the guarded
 // src/game/titles/circle-td root.
-import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_FAST, CREEP_HARD } from "@/game/titles/circle-td/state";
 
 // TOWERS declaration order (content.ts): Fast, Air, Slow, Splash, Damage.
 const TOWER_FRAMES = ["tower-fast", "tower-air", "tower-slow", "tower-splash", "tower-damage"] as const;

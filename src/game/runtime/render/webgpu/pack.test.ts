@@ -6,7 +6,7 @@ import {
 } from "./pack";
 import type { Uv } from "../atlas";
 import type { InterpCreep } from "../Renderer";
-import { CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_AIR, CREEP_HARD } from "@/game/titles/circle-td/state";
 
 const RED: Rgb = { r: 1, g: 0, b: 0 };
 const UV: Uv = { u0: 0.1, v0: 0.2, u1: 0.3, v1: 0.4 };

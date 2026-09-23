@@ -8,7 +8,7 @@
 // infinite survival. NOT run per-commit; the scheduled CI job runs it.
 import { describe, it, expect } from "vitest";
 import { makeSim } from "@/game/titles/circle-td";
-import { applyCommand } from "@/game/sim/replay";
+import { applyCommand } from "@/game/titles/circle-td/replay";
 import { TILES, TILE_COUNT, TRACK, trackLength, posAt, TOWERS } from "@/game/titles/circle-td/content";
 import { towerRangeSq } from "@/game/titles/circle-td/rules";
 import { mul, fromInt } from "@/game/sim/math/fixed";

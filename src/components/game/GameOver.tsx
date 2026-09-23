@@ -8,7 +8,7 @@
 // runs are local-only: a personal best kept in localStorage, never posted.
 import { useEffect, useState, type CSSProperties } from "react";
 import { formatScore, formatWave } from "@/game/runtime/hud/format";
-import type { Command } from "@/game/sim/replay";
+import type { Command } from "@/game/titles/circle-td/replay";
 import type { BoardResponse } from "@/lib/leaderboard/types";
 import Leaderboard from "./Leaderboard";
 

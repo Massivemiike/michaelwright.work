@@ -23,8 +23,8 @@
 // src/game/titles/circle-td) — so importing @/game/runtime/** and
 // @/game/titles/** here is fine, and it uses no banned tokens anyway.
 import { describe, it, expect } from "vitest";
-import { runReplay, hashState, upgradeCost, type Command } from "@/game/sim/replay";
-import { SIM_VERSION } from "@/game/sim/types";
+import { runReplay, hashState, upgradeCost, type Command } from "@/game/titles/circle-td/replay";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import { makeSim } from "@/game/titles/circle-td";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
 import { InputModel } from "@/game/runtime/input/pointer";

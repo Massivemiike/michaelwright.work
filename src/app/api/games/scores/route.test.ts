@@ -16,8 +16,8 @@ vi.mock("@/lib/dailySeed", async (orig) => {
 
 import { POST } from "./route";
 import { dailySeed } from "@/lib/dailySeed";
-import { SIM_VERSION } from "@/game/sim/types";
-import { runReplay, hashCommands, type Command } from "@/game/sim/replay";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
+import { runReplay, hashCommands, type Command } from "@/game/titles/circle-td/replay";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
 
 // Captures the exact row the route hands to game_scores.insert(), so the

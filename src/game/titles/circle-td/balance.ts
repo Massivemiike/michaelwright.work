@@ -1,5 +1,5 @@
 import { nextRange, type Rng } from "@/game/sim/math/rng";
-import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/sim/state";
+import { CREEP_FAST, CREEP_AIR, CREEP_HARD } from "@/game/titles/circle-td/state";
 import { WAVE_SIZE } from "./content";
 
 export const ALPHA_BP = 110; // INVENTED — interest-cap coefficient in basis points (110 = 1.1% = 0.011). Lowered from 200 (2%) in the 2026-09-21 scarcity re-tune: at cap=25/alpha=200 the capped economy still peaked ~60k bank (owner playtest: 58k at wave 44, fast-only) — the interest cap (alpha * totalWaveHp, which grows quadratically with wave) was the dominant late income. 1.1% roughly halves per-wave interest so money stays scarce. See docs/superpowers/2026-09-18-circle-td-balance-tuning.md "Scarcity re-tune (2026-09-21)".

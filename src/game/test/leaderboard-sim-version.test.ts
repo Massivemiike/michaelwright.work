@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SIM_VERSION } from "@/game/sim/types";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import { LEADERBOARD_SIM_VERSION } from "@/lib/leaderboard/config";
 
 describe("leaderboard sim version mirror", () => {

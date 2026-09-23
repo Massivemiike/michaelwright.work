@@ -7,7 +7,7 @@
 // within HUD_INTERVAL_MS of the last accepted one; only ever call the
 // snapshot producer when a push is actually accepted).
 import { describe, it, expect } from "vitest";
-import { makeRenderSnapshot } from "@/game/sim/engine";
+import { makeRenderSnapshot } from "@/game/titles/circle-td/snapshot";
 import { createSnapshotStore, HUD_INTERVAL_MS } from "./snapshotStore";
 
 const snap = (bank: number) => {

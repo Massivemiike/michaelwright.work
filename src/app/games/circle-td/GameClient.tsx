@@ -40,8 +40,8 @@ import { makeSim, type CircleTdSim, type SimConfig } from "@/game/titles/circle-
 import type { TowerHit } from "@/game/titles/circle-td/rules";
 import { createRenderer } from "@/game/runtime/render/createRenderer";
 import type { Renderer, HitEvent } from "@/game/runtime/render/Renderer";
-import { makeRenderSnapshot, type RenderSnapshot } from "@/game/sim/engine";
-import { SIM_VERSION } from "@/game/sim/types";
+import { makeRenderSnapshot, type RenderSnapshot } from "@/game/titles/circle-td/snapshot";
+import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import { makeLoop, type GameLoop } from "@/game/runtime/loop";
 import { InputModel, tileAtWorld, towerIndexAtTile, DEFAULT_TOWER_TYPE } from "@/game/runtime/input/pointer";
 import { createSnapshotStore } from "@/game/runtime/hud/snapshotStore";
