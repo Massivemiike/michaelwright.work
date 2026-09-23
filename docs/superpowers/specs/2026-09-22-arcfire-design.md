@@ -63,23 +63,24 @@ Today `src/game/sim/` is labeled generic but is Circle-TD-shaped: `replay.ts` im
 1. **Move the Circle TD specifics into `src/game/titles/circle-td/`:** `SimState`/`Creeps`/`Towers`, its `Command` + `applyCommand` + replay loop, `hashState`, and `RenderSnapshot`. `src/game/sim/` keeps only `math/*`, the FNV-1a primitives, `title.ts`, `registry.ts`, and a generic `verify.ts`.
 2. **Generic title contract** (`sim/title.ts`):
    ```ts
-   export interface ReplayInput<Cmd> { seed: number; mode: "daily" | "free"; commands: Cmd[] }
+   export interface ReplayInput<Cmd> { seed: number; mode: "daily" | "free"; commands: readonly Cmd[] }
    export interface ReplayOutcome { score: number; stat: number; hash: string }
-   export type ReplayRejection = "invalid_command" | "not_a_win" | "too_long";
+   export type ReplayRejection = "invalid_command_shape" | "invalid_command" | "not_a_win" | "too_long";
+   export interface ReplayLimits { maxTicks: number }
    export interface TitleDef<Cmd = unknown> {
      readonly slug: string;
      readonly simVersion: number;
-     replay(input: ReplayInput<Cmd>): ReplayOutcome | { rejected: ReplayRejection };
+     replay(input: ReplayInput<Cmd>, limits: ReplayLimits): ReplayOutcome | { rejected: ReplayRejection };
    }
    ```
-   Circle TD's binding wraps its existing loop (`score` = score, `stat` = wave). Arcfire's returns `score` = margin, `stat` = the human's points.
+   Circle TD's binding validates each command's tick against `limits.maxTicks` (`invalid_command_shape`, as today), then wraps its existing loop (`score` = score, `stat` = wave). Arcfire's returns `score` = margin, `stat` = the human's points.
 3. **Generic `verifyScore`** keeps the version/mode/limits/seed-acceptance checks and delegates the run to `title.replay`, using `title.simVersion` instead of the global `SIM_VERSION`.
 4. **`computeFit(pxW, pxH, stageW, stageH)`** takes stage dimensions; each title passes its own.
 5. **Regression gate:** Circle TD's determinism golden `5167b43d`, its replay/verify/route tests, and its in-browser behavior must be byte-for-byte unchanged. The refactor lands first, alone, and is verified before any Arcfire code.
 
 ### 1.3 The turn contract
 
-`resolveTurn(state, command) -> { state', timeline }` is **pure and deterministic**. It resolves one whole turn (optional move, then the shot) to completion. The same function serves:
+`resolveTurn(state, command) -> timeline` is **deterministic** and touches nothing but the `MatchState` it is given, which it advances in place. It resolves one whole turn (optional move, then the shot) to completion. Callers that must keep the original state (AI search, previews) resolve a `cloneMatch` copy. The same function serves:
 - **gameplay**: the renderer plays the `timeline` back at display rate, fully decoupled from the sim;
 - **AI search**: the AI calls it on candidate commands;
 - **verification**: the server replays the command log;
@@ -107,14 +108,21 @@ The sim and AI run in a **Web Worker** (the main thread owns rendering, the HUD,
 
 ## 3 · Sim model
 
-All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), randomness comes only from the seeded `mulberry32` (`math/rng.ts`), and angles use `sinFx`/`cosFx` (`math/trig.ts`, 4096 steps; degrees convert to an index via `(deg * 4096) / 360` in integer math). There are no floats, no `Math.*` beyond what the purity guard allows, and no host globals.
+All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), randomness comes only from the seeded `mulberry32` (`math/rng.ts`), and aim angles use a **baked** table of Q16.16 cos/sin integer literals for whole degrees 0–180 (`titles/arcfire/aimTable.ts`). Arcfire does not use `math/trig.ts`: that table is built from floating-point sine at load, and engines aren't required to round it identically, so one off-by-one entry could make a browser and the verifier fly different trajectories. There are no floats, no `Math.*` beyond what the purity guard allows, and no host globals.
 
 ### 3.1 Terrain
 
 - **Persistent state = heightfield:** `height: Int32Array(1200)`, the surface y per 1-px column (y-down; 500 is the floor).
 - **During a shot**, each column may hold several solid **spans** (tunnels, floating dirt): `spans[x] = [top0, bot0, top1, bot1, …]`, capped at 8 per column. Carve (circle, line) and add (ball, wall, mound) edit spans directly, and projectiles collide with spans exactly.
 - **Settle** runs once, after the whole shot resolves: in every column, floating spans fall and merge onto the span below or the floor, collapsing back to one span, i.e. the heightfield. The timeline records the pre- and post-settle heightfields plus each falling span so the renderer can animate the pour.
-- **Generation:** seeded rolling hills, the sum of three fixed-point sine octaves with seeded phases and amplitudes. The surface is clamped to [120, 420]. Tank spawn columns are flattened ±24 px.
+- **Generation:** seeded rolling hills, integer-only:
+  - 9 control points (one every 150 px) drawn from the match RNG in [160, 380];
+  - linear interpolation between them;
+  - three radius-24 box-blur passes;
+  - a clamp to [120, 420];
+  - tank spawn columns flattened ±24 px.
+
+  No trig is involved, so every engine produces the same hills.
 
 ### 3.2 Ballistics
 
@@ -275,7 +283,7 @@ Behind `BALANCE_SWEEP=1` (the same pattern as Circle TD's balance sweep), determ
     | { k: "turn"; move: -1 | 0 | 1; w: number; angle: number; power: number }; // w = roster index
   ```
   There are ≤ 21 commands. The server replays the match and **regenerates every AI pick and shot**; any invalid human command rejects the run (`invalid_command`). Only the server-computed margin and points are stored.
-- **Route changes** (`src/app/api/games/scores/route.ts`): `scoreSubmissionSchema` becomes a zod **discriminated union on `gameSlug`** (Circle TD's schema unchanged; an Arcfire command schema added). `expectedSimVersion = title.simVersion`. The daily seed comes from a new `dailySeedFor(slug, now)` in `src/lib/dailySeed.ts`: Circle TD keeps its existing `dailySeed(now)` (existing rows are keyed by it), and Arcfire uses `hashToSeed("arcfire:" + utcDateString(now))`. Ranks and boards are already filtered by `game_slug`.
+- **Route changes** (`src/app/api/games/scores/route.ts`): `scoreSubmissionSchema` becomes a zod **discriminated union on `gameSlug`** (Circle TD's schema unchanged; an Arcfire command schema added). The verifier already checks each title's own `title.simVersion` (Plan 1 removed the global `expectedSimVersion`). The daily seed comes from a new `dailySeedFor(slug, now)` in `src/lib/dailySeed.ts`: Circle TD keeps its existing `dailySeed(now)` (existing rows are keyed by it), and Arcfire uses `hashToSeed("arcfire:" + utcDateString(now))`. Ranks and boards are already filtered by `game_slug`.
 - **Config:** `LEADERBOARD_PUBLIC` becomes a per-slug map (both `false` until each game's launch gate passes), and `LEADERBOARD_SIM_VERSION` becomes a per-slug mirror with a sync test per title.
 - **Migration `0002_arcfire_leaderboard.sql`** (run manually in the Supabase SQL editor, like 0001): add a per-slug daily rank index `(game_slug, sim_version, daily_date, score desc, created_at)` for mode='daily', plus a column comment documenting `wave` as the title-defined secondary stat. No other schema change.
 - **Games index:** add an `arcfire` entry to `src/data/games.data.ts`; the daily preview becomes per-slug and shows only when that slug's board is public.
