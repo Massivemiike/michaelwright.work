@@ -9,7 +9,6 @@
 // no filesystem access.
 import { TOWERS, SELL_REFUND_PCT, TILE_COUNT } from "@/game/titles/circle-td/content";
 import { addTower, removeTower, type SimState, type Towers } from "./state";
-import type { TitleDef } from "./title";
 
 export interface Command {
   tick: number;
@@ -149,9 +148,18 @@ export interface ReplayResult {
   maxTowerLevel: number;
 }
 
+/**
+ * The Circle TD sim surface runReplay drives; circleTdTitle provides it.
+ * tick()'s return is title-specific (TowerHit[]) and ignored here.
+ */
+export interface CircleTdSimDef {
+  makeSim(config: { seed: number; mode: "daily" | "free" }): { state: SimState; tick(): unknown };
+  applyCommand(state: SimState, cmd: Command): void;
+}
+
 export const runReplay = (
   replay: Replay,
-  title: TitleDef,
+  title: CircleTdSimDef,
   maxTicks: number = CEILING
 ): ReplayResult => {
   const sim = title.makeSim({ seed: replay.seed, mode: replay.mode });

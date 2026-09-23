@@ -93,7 +93,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 8. Recompute (server-authoritative). Never trust a client score.
     const verified = verifyScore(
       { gameSlug: sub.gameSlug, simVersion: sub.simVersion, seed: sub.seed, mode: sub.mode, commands: sub.commands },
-      { title, expectedSimVersion: SIM_VERSION, acceptableSeeds: acceptable, maxTicks: MAX_TICKS }
+      { title, acceptableSeeds: acceptable, maxTicks: MAX_TICKS }
     );
     if (!verified.ok) {
       return NextResponse.json({ error: "Verification failed", reason: verified.reason }, { status: 400 });
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const row = {
       game_slug: sub.gameSlug, sim_version: SIM_VERSION, mode: "daily",
       seed: String(sub.seed), daily_date: dailyDate, initials,
-      score: verified.score, wave: verified.wave, hash: verified.hash, replay_hash: replayHash,
+      score: verified.score, wave: verified.stat, hash: verified.hash, replay_hash: replayHash,
     };
     const ins = await supabase.from("game_scores").insert(row).select("id, created_at").single();
 

@@ -1,24 +1,39 @@
 // src/game/sim/title.ts
 //
-// Title-agnostic engine contracts. A TitleDef lets replay.ts / verify.ts /
-// the verification route rebuild a title's sim from a game_slug WITHOUT
-// replay.ts hard-importing a specific title's makeSim. Type-only imports
-// (erased at runtime) so this stays a leaf under the sim purity roots with
-// no runtime dependency cycle.
-import type { SimState } from "./state";
-import type { Command } from "./replay";
+// The title-agnostic engine contract. The verification core (verify.ts), the
+// registry and the scores route only ever see a TitleDef: a slug, a sim
+// version, and a pure replay() that re-runs a submitted command log and
+// returns the authoritative result. Each title owns its command format, its
+// state and its replay loop behind that one function. Type-only file.
 
-// The minimal sim surface runReplay drives: a mutable SimState and a tick().
-// tick()'s return is title-specific (circle-td returns TowerHit[]); the
-// replay engine ignores it, so it is typed `unknown` here.
-export interface TitleSim {
-  state: SimState;
-  tick(): unknown;
+export interface ReplayInput<Cmd> {
+  seed: number;
+  mode: "daily" | "free";
+  commands: readonly Cmd[];
 }
 
-export interface TitleDef {
+/**
+ * The authoritative result of a replay. `stat` is the title's secondary
+ * leaderboard stat, stored in the `wave` column: Circle TD's wave, Arcfire's
+ * points.
+ */
+export interface ReplayOutcome {
+  score: number;
+  stat: number;
+  hash: string;
+}
+
+export type ReplayRejection = "invalid_command_shape" | "invalid_command" | "not_a_win" | "too_long";
+
+/** Bounds the verifier imposes on a replay. maxTicks caps a tick-driven title's run length. */
+export interface ReplayLimits {
+  maxTicks: number;
+}
+
+export interface TitleDef<Cmd = unknown> {
   readonly slug: string;
   readonly simVersion: number;
-  makeSim(config: { seed: number; mode: "daily" | "free" }): TitleSim;
-  applyCommand(state: SimState, cmd: Command): void;
+  // Method syntax on purpose: its parameters are checked bivariantly, which
+  // is what lets a TitleDef<Command> sit in the registry's Record<string, TitleDef>.
+  replay(input: ReplayInput<Cmd>, limits: ReplayLimits): ReplayOutcome | { rejected: ReplayRejection };
 }

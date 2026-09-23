@@ -8,13 +8,13 @@
 // Clock-derived daily-seed authority is injected as `acceptableSeeds` so
 // this core never constructs a Date.
 //
-// Trust model: the server IGNORES any client-claimed score. verifyScore
-// RECOMPUTES the run with runReplay and returns those authoritative values;
-// the route inserts result.score / result.wave, never a client figure.
-import { runReplay, type Command, type Replay } from "./replay";
-import type { TitleDef } from "./title";
+// Title-agnostic: the run itself is delegated to the title's replay(). Trust
+// model: the server IGNORES any client-claimed score. verifyScore RECOMPUTES
+// the run and returns the authoritative values; the route inserts
+// result.score / result.stat, never a client figure.
+import type { ReplayRejection, TitleDef } from "./title";
 
-export const MAX_VERIFY_TICKS = 5_000_000; // matches replay.ts CEILING; the DoS bound is run LENGTH, not command count
+export const MAX_VERIFY_TICKS = 5_000_000; // the DoS bound is run LENGTH, not command count
 export const MAX_VERIFY_COMMANDS = 20_000;
 
 export interface VerifyInput {
@@ -22,12 +22,11 @@ export interface VerifyInput {
   simVersion: number;
   seed: number;
   mode: "daily" | "free";
-  commands: Command[];
+  commands: readonly unknown[];
 }
 
 export interface VerifyOptions {
   title: TitleDef;
-  expectedSimVersion: number;
   acceptableSeeds: readonly number[] | null;
   maxCommands?: number;
   maxTicks?: number;
@@ -37,38 +36,28 @@ export type VerifyRejection =
   | "sim_version_mismatch"
   | "wrong_mode"
   | "too_many_commands"
-  | "invalid_command_shape"
-  | "bad_seed";
+  | "bad_seed"
+  | ReplayRejection;
 
 export type VerifyResult =
-  | { ok: true; score: number; wave: number; hash: string; maxTowerLevel: number }
+  | { ok: true; score: number; stat: number; hash: string }
   | { ok: false; reason: VerifyRejection };
 
 export function verifyScore(input: VerifyInput, opts: VerifyOptions): VerifyResult {
   const maxCommands = opts.maxCommands ?? MAX_VERIFY_COMMANDS;
   const maxTicks = opts.maxTicks ?? MAX_VERIFY_TICKS;
 
-  // --- All limits enforced BEFORE building or ticking a sim ---
-  if (input.simVersion !== opts.expectedSimVersion) return { ok: false, reason: "sim_version_mismatch" };
+  // --- Cheap limits first, BEFORE the title builds or runs a sim ---
+  if (input.simVersion !== opts.title.simVersion) return { ok: false, reason: "sim_version_mismatch" };
   if (input.mode !== "daily") return { ok: false, reason: "wrong_mode" }; // free play is local-only/unranked
   if (input.commands.length > maxCommands) return { ok: false, reason: "too_many_commands" };
-  for (const cmd of input.commands) {
-    if (!Number.isInteger(cmd.tick) || cmd.tick < 0 || cmd.tick >= maxTicks) {
-      return { ok: false, reason: "invalid_command_shape" };
-    }
-  }
   if (opts.acceptableSeeds && !opts.acceptableSeeds.includes(input.seed)) {
     return { ok: false, reason: "bad_seed" };
   }
 
-  // --- Recompute (server-authoritative). runReplay is bounded by maxTicks;
-  // applyCommand no-ops any illegal command, so a hostile log can't crash. ---
-  const replay: Replay = {
-    seed: input.seed,
-    simVersion: input.simVersion,
-    mode: input.mode,
-    commands: input.commands,
-  };
-  const result = runReplay(replay, opts.title, maxTicks);
-  return { ok: true, score: result.score, wave: result.wave, hash: result.hash, maxTowerLevel: result.maxTowerLevel };
+  // --- Recompute (server-authoritative). The title validates its own
+  // command shapes, then runs bounded by maxTicks. ---
+  const out = opts.title.replay({ seed: input.seed, mode: input.mode, commands: input.commands }, { maxTicks });
+  if ("rejected" in out) return { ok: false, reason: out.rejected };
+  return { ok: true, score: out.score, stat: out.stat, hash: out.hash };
 }
