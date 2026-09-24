@@ -148,6 +148,10 @@ describe("addInterval", () => {
     addInterval(t, 9, 170, 175); // below them all: closes the gap to [150,160)
     expect(spansOf(t, 9)[7]).toEqual([150, 175]);
     expect(t.spanCount[9]).toBe(8);
+    const u = withEmptyColumn(300, 9);
+    for (let k = 0; k < 8; k++) addInterval(u, 9, 10 + 20 * k, 20 + 20 * k);
+    addInterval(u, 9, 84, 86); // between [70,80) and [90,100), touching neither: extended DOWN to absorb [90,100)
+    expect(spansOf(u, 9)).toEqual([[10, 20], [30, 40], [50, 60], [70, 80], [84, 100], [110, 120], [130, 140], [150, 160]]);
   });
   it("is a union against a pixel model (300 random columns × 14 random adds / removes)", () => {
     const rng = makeRng(20260923);

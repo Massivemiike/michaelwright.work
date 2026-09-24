@@ -10,11 +10,14 @@ import { resolveTurn, resolveTurnPoints, resolveWeapon, type TurnInput } from ".
 import { cloneMatch, type MatchState } from "../state";
 import { createMatch } from "../match";
 import { hashMatch } from "../hash";
-import { isSolid } from "../terrain";
+import {
+  isSolid, makeTerrain, spansFromHeight, carveCircle, carveCapsule, removeInterval, addInterval, groundBelow, surfaceTop, settle,
+} from "../terrain";
+import { idiv, isqrt } from "../imath";
 import { hitCircles } from "../tanks";
 import { ROSTER, ROSTER_INDEX } from "./roster";
 import { beamDir } from "./primitives";
-import { MAX_TURN_STEPS, WORLD_H, TANK_HIT_DY } from "../constants";
+import { MAX_TURN_STEPS, WORLD_W, WORLD_H, TANK_HIT_DY } from "../constants";
 import { CORPUS_SEED, CORPUS_SETTINGS } from "@/game/test/arcfire/corpus";
 import { flatBattle, setHeights } from "@/game/test/arcfire/fixtures";
 import type { Timeline, TimelineEvent } from "../timeline";
@@ -35,6 +38,45 @@ function eventsOf<K extends TimelineEvent["kind"]>(tl: Timeline, kind: K): Extra
   return tl.events.filter((e): e is Extract<TimelineEvent, { kind: K }> => e.kind === kind);
 }
 
+/**
+ * Replay a Timeline's terrain events, in order, on the pre-shot heights and
+ * settle (design §6.2: what Plan 3 animates the dirt from). The rules are
+ * primitives.ts's, fed only from event fields: blast = a disc; dig and beam =
+ * a width/2 capsule; quake = the furrow; build = ball/wall/level over the
+ * event's `width` columns from x - floor(width / 2), clipped to the world.
+ */
+function replayTerrain(before: Int32Array, tl: Timeline): Int32Array {
+  const t = makeTerrain();
+  t.height.set(before);
+  spansFromHeight(t);
+  for (const e of tl.events) {
+    if (e.kind === "blast") carveCircle(t, e.x, e.y, e.radius);
+    else if (e.kind === "dig" || e.kind === "beam") carveCapsule(t, e.x0, e.y0, e.x1, e.y1, idiv(e.width, 2));
+    else if (e.kind === "quake") {
+      for (let cx = Math.max(0, e.x - e.reach + 1); cx <= Math.min(WORLD_W - 1, e.x + e.reach - 1); cx++) {
+        const depth = idiv(e.furrow * (e.reach - Math.abs(cx - e.x)), e.reach);
+        const top = surfaceTop(t, cx);
+        if (depth > 0 && top < WORLD_H) removeInterval(t, cx, top, top + depth);
+      }
+    } else if (e.kind === "build") {
+      const left = e.x - idiv(e.width, 2);
+      for (let cx = Math.max(0, left); cx < Math.min(WORLD_W, left + e.width); cx++) {
+        if (e.shape === "ball") {
+          const h = isqrt(e.size * e.size - (cx - e.x) * (cx - e.x));
+          addInterval(t, cx, e.y - h, e.y + h + 1);
+        } else if (e.shape === "wall") {
+          const top = surfaceTop(t, cx);
+          addInterval(t, cx, top - e.size, top);
+        } else {
+          removeInterval(t, cx, 0, e.y);
+          addInterval(t, cx, e.y, groundBelow(t, cx, e.y));
+        }
+      }
+    }
+  }
+  return settle(t, false).heights;
+}
+
 describe("every roster weapon", () => {
   it("emits events sorted by step, each naming a valid shell", () => {
     for (let w = 0; w < ROSTER.length; w++) {
@@ -46,6 +88,35 @@ describe("every roster weapon", () => {
         }
       }
     }
+  });
+  it("puts every terrain edit in the Timeline: its events replayed on the pre-shot heights give the settled heights (§6.2)", () => {
+    const bases: MatchState[] = [];
+    for (const shooter of [0, 1]) {
+      const hills = createMatch(CORPUS_SEED, CORPUS_SETTINGS);
+      hills.phase = "battle";
+      hills.shooter = shooter;
+      const flat = flatBattle();
+      flat.shooter = shooter;
+      bases.push(hills, flat);
+    }
+    const bad: string[] = [];
+    const kinds = new Set<string>();
+    for (let w = 0; w < ROSTER.length; w++) {
+      for (const base of bases) {
+        for (const [angle, power] of [[0, 100], [45, 60], [90, 0], [135, 60], [180, 100]]) {
+          const m = cloneMatch(base);
+          const before = m.terrain.height.slice();
+          const tl = resolveTurn(m, { move: 0, weapon: w, angle, power });
+          for (const e of tl.events) if (["blast", "dig", "beam", "quake"].includes(e.kind)) kinds.add(e.kind);
+          for (const e of eventsOf(tl, "build")) kinds.add(`build:${e.shape}`);
+          const got = replayTerrain(before, tl);
+          const x = got.findIndex((h, i) => h !== tl.settle.heights[i]);
+          if (x >= 0) bad.push(`${ROSTER[w].id} p${m.shooter} ${angle}/${power}: column ${x} replays to ${got[x]}, settled ${tl.settle.heights[x]}`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+    expect([...kinds].sort()).toEqual(["beam", "blast", "build:ball", "build:level", "build:wall", "dig", "quake"]); // every edit kind was replayed
   });
 });
 
@@ -132,6 +203,19 @@ describe("delay", () => {
     const fuses = eventsOf(tl, "fuse");
     expect(fuses.length).toBe(1);
     expect(fuses[0].at).toBeGreaterThan(tl.steps);
+  });
+  it("delays due at step s fire before any shell moves at step s (§3.2 rules 2-3)", () => {
+    // A 2-shell volley at 45/60 whose impacts only arm a delayed crater: shell 0 lands at step 111 at
+    // (893, 400); on untouched ground shell 1 lands at step 130 at (885, 400), inside that crater's reach.
+    const volley = (steps: number): Timeline => fireDef(flatBattle(),
+      synth({ on: "impact", effects: [{ delay: { steps, then: [{ blast: { radius: 60, damage: 1 } }] } }] }, { kind: "shell", count: 2, spreadDeg: 10 }),
+      45, 60);
+    const end = (tl: Timeline, i: number): number[] => [tl.shells[i].start + tl.shells[i].points.length / 2 - 1, ...tl.shells[i].points.slice(-2)];
+    const late = volley(20); // shell 0's crater is due at 131: shell 1 has already landed on the surface
+    expect([end(late, 0), end(late, 1)]).toEqual([[111, 893, 400], [130, 885, 400]]);
+    const due = volley(19); // due at 130, the step shell 1 lands: carved first, so shell 1 flies on into the crater
+    expect(eventsOf(due, "blast")[0]).toMatchObject({ step: 130, shell: 0, x: 893, y: 400 });
+    expect(end(due, 1)).toEqual([139, 923, 452]);
   });
 });
 
@@ -292,6 +376,31 @@ describe("roll", () => {
     expect(eventsOf(tl, "out").map((o) => o.x)).toEqual([1200]);
     expect(eventsOf(tl, "blast")).toEqual([]);
   });
+  it("on level ground rolls in its travel direction: player 1's Tumbler rolls left until it enters player 0's hitbox", () => {
+    const m = flatBattle();
+    m.shooter = 1;
+    const tl = fire(m, "tumbler", 135, 45);
+    const [r] = eventsOf(tl, "roll");
+    const xs = r.path.filter((_, i) => i % 2 === 0);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]).toBe(xs[i - 1] - 1);
+    expect([xs[0], xs[xs.length - 1], r.dur]).toEqual([347, 308, 13]);
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[308, 400, 13]]);
+    expect(tl.points).toEqual([0, 39]);
+  });
+  it("landed against a tank it stops at once: a one-point path and a lag-0 blast", () => {
+    // tanks 300 / 700 on 400, and a cliff (top 300) from x 709: the shell clears the enemy's hitbox and strikes
+    // the cliff face; it lands at (708, 399), inside the hitbox, without having struck it
+    const tl = fire(setHeights(flatBattle(), (x) => (x >= 709 ? 300 : 400)), "tumbler", 20, 64);
+    expect(eventsOf(tl, "roll").map((r) => [r.path, r.dur])).toEqual([[[708, 399], 0]]);
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[708, 400, 0]]);
+    expect(tl.points).toEqual([39, 0]);
+  });
+  it("stops at the first rise: the path ends on the column before a step up", () => {
+    const tl = fire(setHeights(flatBattle(), (x) => (x >= 640 ? 390 : 400)), "tumbler", 30, 45); // a 10 px step up at x 640
+    const [r] = eventsOf(tl, "roll");
+    expect([r.path[0], r.path.length / 2, ...r.path.slice(-2), r.dur]).toEqual([623, 17, 639, 399, 6]); // level: rolls right, its travel direction
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[639, 400, 6]]);
+  });
 });
 
 describe("dig", () => {
@@ -329,6 +438,20 @@ describe("dig", () => {
     expect([d.x1, d.y1]).toEqual([d.x0, d.y0]);
     expect(eventsOf(tl, "blast").length).toBe(1);
   });
+  it("stops at the floor: the tunnel ends on the last row above WORLD_H, and later blasts are cut", () => {
+    const tl = fire(setHeights(flatBattle(), () => 470), "auger", 30, 60); // Auger's flatBattle() shot, 70 px lower
+    const [d] = eventsOf(tl, "dig");
+    expect([d.x0, d.y0, d.x1, d.y1, d.dur]).toEqual([837, 470, 888, 499, 15]); // 60 of its 160 px
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[871, 489, 10], [888, 499, 15]]);
+  });
+  it("stops mid-tunnel on entering a tank's hitbox, and blasts there", () => {
+    // player 0 on a shelf at 380 (x < 680); the enemy at 700 on 400
+    const tl = fire(setHeights(flatBattle(), (x) => (x < 680 ? 380 : 400)), "burrow", 48, 46);
+    const [d] = eventsOf(tl, "dig");
+    expect([d.x0, d.y0, d.x1, d.y1, d.dur]).toEqual([662, 380, 688, 395, 8]); // 30 of its 90 px
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[688, 395, 8]]);
+    expect(tl.points).toEqual([55, 0]);
+  });
 });
 
 describe("burn", () => {
@@ -362,6 +485,27 @@ describe("burn", () => {
   it("a direct hit with Wildfire's split flows burns the struck tank too", () => {
     expect(fire(uphillEnemy(), "wildfire", 20, 77).points).toEqual([45, 0]);
   });
+  it("Inferno's pool runs 15 px both ways before its 220 px flow; the leftward pool reaches the enemy: 70 at lag 4", () => {
+    const tl = fire(flatBattle(), "inferno", 61, 55);
+    const [b] = eventsOf(tl, "burn");
+    expect(b.x).toBe(723);
+    expect(b.flows.map((f) => [f[0], f[f.length - 2]])).toEqual([[723, 708], [723, 738], [723, 943]]); // pool left (to the tank), pool right, flow
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 4]]);
+    expect(tl.points).toEqual([70, 0]);
+  });
+  it("an ignition inside a hitbox burns that tank at lag 0, the earliest touch, with no direct hit", () => {
+    // the Tumbler cliff board: the shell strikes the cliff face and the fire starts at (708, 399), inside the enemy's hitbox
+    const tl = fire(setHeights(flatBattle(), (x) => (x >= 709 ? 300 : 400)), "inferno", 20, 64);
+    const [b] = eventsOf(tl, "burn");
+    expect([b.x, b.y]).toEqual([708, 399]);
+    expect(b.flows.map((f) => f.length / 2 - 1)).toEqual([1, 0, 1]); // the runs touch it again only at 1 px (lag 1)
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 0]]);
+  });
+  it("Inferno straight down onto its own tank burns it once, at lag 0", () => {
+    const tl = fire(flatBattle(), "inferno", 90, 0);
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[0, 70, 0]]);
+    expect(tl.points).toEqual([0, 70]);
+  });
 });
 
 describe("build", () => {
@@ -374,6 +518,15 @@ describe("build", () => {
     for (let x = 0; x < m.terrain.height.length; x++) if (m.terrain.height[x] !== 400) raised.push(x);
     expect(raised).toEqual(Array.from({ length: 36 }, (_, i) => b.x - 18 + i)); // 645..680: x - floor(width / 2) onward
     expect(raised.every((x) => m.terrain.height[x] === 320)).toBe(true);
+  });
+  it("Rampart on a slope raises each column by 80 from its own surface, not from the impact y", () => {
+    const m = setHeights(flatBattle(200, 1000), (x) => Math.min(480, 250 + Math.floor(x / 4))); // Leveler's 1-in-4 slope
+    const before = Array.from(m.terrain.height);
+    const [b] = eventsOf(fire(m, "rampart", 60, 60), "build");
+    expect([b.x, b.y, b.width]).toEqual([780, 445, 36]);
+    const left = b.x - 18;
+    expect(new Set(before.slice(left, left + 36)).size).toBe(10); // the columns under the wall start at 10 different heights
+    for (let x = 0; x < before.length; x++) expect(m.terrain.height[x]).toBe(x >= left && x < left + 36 ? before[x] - 80 : before[x]);
   });
   it("Bastion adds a dirt ball that settles into a symmetric mound at most 48 high", () => {
     const m = flatBattle(300, 1000);
@@ -499,6 +652,16 @@ describe("quake", () => {
     const m = flatBattle();
     fire(m, "quake", 60, 50);
     expect([0, 100, 200, 259, 260].map((dx) => m.terrain.height[663 + dx])).toEqual([406, 403, 401, 400, 400]);
+  });
+  it("on a slope furrows each column from its own surface: its old top plus the tapered depth", () => {
+    const m = setHeights(flatBattle(200, 1000), (x) => Math.min(480, 250 + Math.floor(x / 4))); // Leveler's 1-in-4 slope
+    const before = Array.from(m.terrain.height);
+    const [q] = eventsOf(fire(m, "quake", 60, 60), "quake");
+    expect([q.x, q.y]).toEqual([780, 445]);
+    for (let x = 0; x < before.length; x++) {
+      const d = Math.abs(x - q.x);
+      expect(m.terrain.height[x]).toBe(before[x] + (d < 260 ? Math.floor((6 * (260 - d)) / 260) : 0));
+    }
   });
   it("reaches across a chasm: the reach is horizontal", () => {
     const m = setHeights(flatBattle(), (x) => (x >= 675 && x <= 681 ? 499 : 400));

@@ -151,6 +151,14 @@ describe("the apex latch", () => {
     expect(fly(s, flat(400)).kind).toBe("terrain");
     expect(s.apexed).toBe(false);
   });
+  it("latches when vy lands exactly on 0 (vy >= 0): step 2, not step 3", () => {
+    const s = shellAt(fromInt(600), fromInt(300), 0, fromInt(-10), fromInt(10), fromInt(5));
+    s.stopAtApex = true;
+    const t = flat(WORLD_H);
+    expect(stepShell(s, t, [], 0)).toBeNull(); // vy -10 -> -5: still rising
+    expect(stepShell(s, t, [], 0)).toMatchObject({ kind: "apex", x: 600 }); // vy -5 -> 0
+    expect([s.vy, s.apexed, s.alive]).toEqual([0, true, false]);
+  });
 });
 
 describe("the spawn-inside mask", () => {
@@ -224,6 +232,22 @@ describe("bounces", () => {
     expect(s.vx).toBe(fromInt(600));
     expect(stepShell(s, flat(400), [], 0)).toBeNull();
   });
+  it("a bounce on the step that reaches the flight cap ends the shell: out at the last free sample, not a bounce", () => {
+    const s = bouncer(600, 398, 100, 200);
+    s.steps = MAX_FLIGHT_STEPS - 1;
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: 600, y: 399 });
+    expect([s.alive, s.steps]).toEqual([false, MAX_FLIGHT_STEPS]);
+  });
+  it("with no solid pixel around the contact to take a normal from, reflects back the way the shell came in", () => {
+    // an empty world but for one floating pixel at (600, 300): its radius-8 disc sums to (0, 0)
+    const t = flat(WORLD_H);
+    t.spanCount[600] = 1;
+    t.spans[600 * MAX_SPANS * 2] = 300;
+    t.spans[600 * MAX_SPANS * 2 + 1] = 301;
+    const s = bouncer(590, 290, 600, 600); // 10 px per step down-right: its samples are exact pixels, the last free one (599, 299)
+    expect(stepShell(s, t, [], 0)).toEqual({ kind: "bounce", x: 600, y: 300, wall: false });
+    expect([s.vx, s.vy]).toEqual([fromInt(-600), fromInt(-600)]); // the normal is (599 - 600, 299 - 300)
+  });
 });
 
 describe("homing", () => {
@@ -259,5 +283,16 @@ describe("homing", () => {
     }
     expect(checked).toBeGreaterThan(1900);
     expect(turned).toBeGreaterThan(1800); // it does steer: only targets within 1° of the heading take no turn
+  });
+  it("dead astern (cross 0, dot < 0) it turns anticlockwise: exactly 2° toward up", () => {
+    const s = shellAt(fromInt(600), fromInt(300), fromInt(300), 0, fromInt(300), 0); // level, rightward, no gravity
+    s.apexed = true;
+    s.homeDeg = 2;
+    s.homeX = 500; // straight behind it
+    s.homeY = 300;
+    expect(stepShell(s, flat(WORLD_H), [], 0)).toBeNull();
+    expect(s.vy).toBeLessThan(0);
+    expect([s.vx, s.vy]).toEqual(rotateVel(fromInt(300), 0, 2));
+    expect((Math.atan2(-s.vy, s.vx) * 180) / Math.PI).toBeCloseTo(2, 3);
   });
 });

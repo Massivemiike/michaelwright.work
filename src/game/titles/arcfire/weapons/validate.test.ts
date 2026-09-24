@@ -5,7 +5,7 @@ import { resolveWeapon } from "../resolve";
 import { hashMatch } from "../hash";
 import { MAX_SHELLS, MAX_TURN_STEPS, WORLD_H } from "../constants";
 import { flatBattle } from "@/game/test/arcfire/fixtures";
-import type { Blast, Effect, Stage, WeaponDef } from "./types";
+import type { Blast, DelayableEffect, Effect, Stage, WeaponDef } from "./types";
 
 const B: Blast = { radius: 28, damage: 40 };
 
@@ -39,8 +39,18 @@ describe("weaponErrors", () => {
       [impact([{ dig: { length: 90, width: 14, blastEvery: 30 } }]), "stage.effects[0].dig: blastEvery and each come together"],
       [impact([{ delay: { steps: 0, then: [{ blast: B }] } }]), "stage.effects[0].delay.steps: 0 is not an integer in [1, 600]"],
       [impact([{ blast: B, quake: { reach: 100, damage: 10, furrow: 2 } } as unknown as Effect]), "stage.effects[0]: an effect has exactly one known key"],
+      [impact([{ delay: { steps: 10, then: [{ split: { count: 2, spreadDeg: 10, speedPct: 50, from: "up", child: { on: "impact", effects: [{ blast: B }] } } } as unknown as DelayableEffect] } }]),
+        "stage.effects[0].delay.then[0]: a delay cannot schedule a split"],
+      [weapon({ stage: { on: "apex", effects: [{ blast: B }], bounce: { times: 2, restitutionPct: 50 } } }), "stage.bounce: only on an impact stage"],
+      [impact([{ dig: { length: 90, width: 1 } }]), "stage.effects[0].dig.width: 1 is not an integer in [2, 32]"],
     ];
     for (const [def, err] of cases) expect(weaponErrors(def)).toContain(err);
+  });
+  it("reports a legal-looking but over-bound def by its static cost: 9 children that each split 9 (1 + 9 × 10 shells)", () => {
+    const nine = (child: Stage): Effect => ({ split: { count: 9, spreadDeg: 40, speedPct: 50, from: "up", child } });
+    const def = impact([nine({ on: "impact", effects: [nine({ on: "impact", effects: [{ blast: B }] })] })]);
+    expect(maxShells(def)).toBe(91);
+    expect(weaponErrors(def)).toEqual([`maxShells 91 > MAX_SHELLS ${MAX_SHELLS}`]);
   });
   it("reports a cyclic stage (nesting deeper than 4), whose static bounds exceed the backstops", () => {
     const loop: Stage = { on: "impact", effects: [{ blast: B }] };
