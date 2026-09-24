@@ -5,7 +5,11 @@
 // keyed by weapon id, so a roster append only ADDS keys. Update modes (the
 // variable set to exactly one of):
 //   UPDATE_ARCFIRE_CORPUS=add   write new keys only; every existing key must still match
-//   UPDATE_ARCFIRE_CORPUS=1     rewrite everything — only for a declared, reviewed re-pin
+//   UPDATE_ARCFIRE_CORPUS=1     rewrite everything — only for a declared, reviewed re-pin. It also
+//                               needs ARCFIRE_CORPUS_EXPECT_MOVED=<n>, the number of moved cases and
+//                               defs the re-pin declares; unless exactly n moved it fails and writes
+//                               nothing. The moved list goes to stderr, which any reporter shows:
+//   UPDATE_ARCFIRE_CORPUS=1 ARCFIRE_CORPUS_EXPECT_MOVED=4 npx vitest run src/game/titles/arcfire/corpus.test.ts
 // On a mismatch the failure lists each moved case with its old and new fingerprint.
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -78,7 +82,13 @@ describe("arcfire corpus", () => {
         .map((id) => `${id}: ${JSON.stringify(old.cases[id])} -> ${JSON.stringify(cases[id] ?? null)}`)
         .concat(Object.keys(old.defs).filter((id) => old.defs[id] !== defs[id]).map((id) => `def ${id}: ${old.defs[id]} -> ${defs[id]}`))
       : [];
-    if (mode === "1") console.log(`re-pinned ${moved.length} moved cases:\n${moved.join("\n")}`); // paste into the commit body
+    if (mode === "1") {
+      // outside Vitest's console capture, so the list shows under any reporter: paste it into the commit body
+      process.stderr.write(`corpus re-pin: ${moved.length} moved cases:\n${moved.join("\n")}\n`);
+      const declared = process.env.ARCFIRE_CORPUS_EXPECT_MOVED;
+      const why = `UPDATE_ARCFIRE_CORPUS=1 needs ARCFIRE_CORPUS_EXPECT_MOVED=<n>, the moved count the re-pin declares (${moved.length} moved, listed on stderr); nothing was written`;
+      expect(declared, why).toBe(String(moved.length));
+    }
     if (mode === "1" || (mode === "add" && moved.length === 0)) writeFileSync(FIXTURE, JSON.stringify(fresh, null, 1) + "\n");
     expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_CORPUS=1").toBe(true);
     if (mode !== "1") expect(moved, "moved cases").toEqual([]);

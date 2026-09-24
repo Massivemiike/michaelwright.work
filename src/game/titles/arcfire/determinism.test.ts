@@ -4,8 +4,15 @@
 // A fixed in-file strategy GENERATES a complete 2-player command log; replaying
 // it must land on the hash pinned in determinism.golden.json. Same code → same
 // log → same hash; any unintended sim change moves the hash and fails loud.
-// Re-pin ONLY for an intentional sim change, with the variable set to exactly 1:
-//   UPDATE_ARCFIRE_GOLDEN=1 npx vitest run src/game/titles/arcfire/determinism.test.ts
+// Two goldens: "plan1" (determinism.golden.json, Plan 1's 8-weapon shape) and
+// "full" (determinism.full.golden.json, the 32-weapon roster). Re-pin ONLY for
+// an intentional sim change, naming the golden the change declares:
+//   UPDATE_ARCFIRE_GOLDEN=plan1 npx vitest run src/game/titles/arcfire/determinism.test.ts
+//   UPDATE_ARCFIRE_GOLDEN=full  npx vitest run src/game/titles/arcfire/determinism.test.ts
+//   UPDATE_ARCFIRE_GOLDEN=1     ... re-pins both (kept for compatibility)
+// A golden that is not named keeps failing on a moved hash. Every re-pin writes
+// `golden <name>: <old hash> -> <new hash> (scores <old> -> <new>)` to stderr,
+// which shows under any reporter: paste it into the commit body.
 // The inertness checks run first either way, so a degenerate match (a draw, a
 // zero score, no move, no volley) can never be pinned.
 // (This *.test.ts may use node:fs and process — the purity guard skips tests.)
@@ -17,6 +24,23 @@ import { replayMatch, type ArcfireCommand, type ArcfireReplay } from "./replay";
 import { cloneMatch, type MatchSettings } from "./state";
 import { SUDDEN_DEATH_WEAPON } from "./constants";
 import { ROSTER } from "./weapons/roster";
+
+interface GoldenFixture { replay: ArcfireReplay; hash: string; scores: number[]; winner: number }
+
+/** Is golden `name` selected for a re-pin? UPDATE_ARCFIRE_GOLDEN=1 selects both; =plan1 or =full only that one. */
+function repinning(name: "plan1" | "full"): boolean {
+  const mode = process.env.UPDATE_ARCFIRE_GOLDEN;
+  return mode === "1" || mode === name;
+}
+
+/** Rewrite golden `name` at `path` and report what moved on stderr (outside Vitest's console capture, so any reporter shows it). */
+function repin(name: string, path: string, fixture: GoldenFixture): void {
+  const old: GoldenFixture | null = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+  writeFileSync(path, JSON.stringify(fixture, null, 2) + "\n");
+  const was = old ? old.hash : "none";
+  const wasScores = old ? JSON.stringify(old.scores) : "none";
+  process.stderr.write(`golden ${name}: ${was} -> ${fixture.hash} (scores ${wasScores} -> ${JSON.stringify(fixture.scores)})\n`);
+}
 
 const FIXTURE = join("src/game/titles/arcfire/determinism.golden.json");
 const SEED = 20260922;
@@ -55,11 +79,10 @@ describe("arcfire golden determinism", () => {
     expect(result.state.scores[1]).toBeGreaterThan(0);
     expect(replay.commands.some((c) => c.k === "turn" && c.move !== 0)).toBe(true);
     expect(replay.commands.some((c) => c.k === "turn" && ROSTER[c.w].tag === "VOLLEY")).toBe(true);
-    if (process.env.UPDATE_ARCFIRE_GOLDEN === "1") {
-      const fixture = { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner };
-      writeFileSync(FIXTURE, JSON.stringify(fixture, null, 2) + "\n");
+    if (repinning("plan1")) {
+      repin("plan1", FIXTURE, { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner });
     }
-    expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=1").toBe(true);
+    expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=plan1").toBe(true);
     const golden = JSON.parse(readFileSync(FIXTURE, "utf8"));
     expect(replay).toEqual(golden.replay);
     expect(result.hash).toBe(golden.hash);
@@ -123,11 +146,10 @@ describe("arcfire full-roster golden", () => {
     expect(result.state.scores[1]).toBeGreaterThan(0);
     expect(replay.commands.some((c) => c.k === "turn" && c.move !== 0)).toBe(true);
     expect(new Set(replay.commands.flatMap((c) => (c.k === "turn" ? [ROSTER[c.w].tag] : [])))).toEqual(new Set(ROSTER.map((w) => w.tag)));
-    if (process.env.UPDATE_ARCFIRE_GOLDEN === "1") {
-      const fixture = { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner };
-      writeFileSync(FULL_FIXTURE, JSON.stringify(fixture, null, 2) + "\n");
+    if (repinning("full")) {
+      repin("full", FULL_FIXTURE, { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner });
     }
-    expect(existsSync(FULL_FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=1").toBe(true);
+    expect(existsSync(FULL_FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=full").toBe(true);
     const golden = JSON.parse(readFileSync(FULL_FIXTURE, "utf8"));
     expect(replay).toEqual(golden.replay);
     expect(result.hash).toBe(golden.hash);

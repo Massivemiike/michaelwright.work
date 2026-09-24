@@ -8,13 +8,14 @@
 import { runReplay, type Replay } from "@/game/titles/circle-td/replay";
 import { circleTdTitle } from "@/game/titles/circle-td/title";
 import { replayMatch, type ArcfireReplay } from "@/game/titles/arcfire/replay";
-import { runCorpus, corpusDigest } from "@/game/test/arcfire/corpus";
+import { runCorpus, corpusDigest, type Fingerprint } from "@/game/test/arcfire/corpus";
 
 declare global {
   interface Window {
     runGolden: (replay: Replay) => string;
     runArcfireGolden: (replay: ArcfireReplay) => string;
     runArcfireCorpus: () => string;
+    runArcfireCorpusCases: () => Record<string, Fingerprint>;
   }
 }
 
@@ -26,3 +27,6 @@ window.runArcfireGolden = (replay: ArcfireReplay): string => {
 };
 
 window.runArcfireCorpus = (): string => corpusDigest(runCorpus());
+
+// Every corpus case's fingerprint, by id: the spec diffs it against corpus.golden.json on a digest mismatch.
+window.runArcfireCorpusCases = (): Record<string, Fingerprint> => runCorpus();

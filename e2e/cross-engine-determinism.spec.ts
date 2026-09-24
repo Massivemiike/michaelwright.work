@@ -7,7 +7,9 @@
 // single largest board-correctness risk: an honest Safari/Firefox run
 // rejected by the V8 verifier over a ULP divergence.
 //
-// One table (PINS) drives every engine, so adding a pin is one row.
+// One table (PINS) drives every engine, so adding a pin is one row. When an
+// engine's corpus digest differs, the failure names the case ids whose
+// fingerprints differ from corpus.golden.json, like the Node corpus test.
 //
 // Run via the dedicated playwright.cross-engine.config.ts (no webServer —
 // this spec never touches the Next.js app, it launches each browser engine
@@ -22,10 +24,24 @@ const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) 
 const circleGolden = readJson<{ replay: unknown; hash: string }>("src/game/test/determinism.golden.json");
 const arcfireGolden = readJson<{ replay: unknown; hash: string }>("src/game/titles/arcfire/determinism.golden.json");
 const arcfireFullGolden = readJson<{ replay: unknown; hash: string }>("src/game/titles/arcfire/determinism.full.golden.json");
-const arcfireCorpus = readJson<{ digest: string }>("src/game/titles/arcfire/corpus.golden.json");
+type Fingerprint = { board: string; points: number[] };
+const arcfireCorpus = readJson<{ digest: string; cases: Record<string, Fingerprint> }>("src/game/titles/arcfire/corpus.golden.json");
 
-/** Every pin an engine must reproduce: its name, the committed Node value, and how the page computes it. */
-const PINS: Array<{ label: string; expected: string; run: (page: Page) => Promise<string> }> = [
+/** The corpus case ids whose browser fingerprint differs from corpus.golden.json's `cases` (missing on either side counts). */
+async function movedCorpusCases(page: Page): Promise<string> {
+  const got = await page.evaluate(() => window.runArcfireCorpusCases());
+  const pinned = arcfireCorpus.cases;
+  const ids = [...new Set([...Object.keys(pinned), ...Object.keys(got)])].sort()
+    .filter((id) => JSON.stringify(got[id] ?? null) !== JSON.stringify(pinned[id] ?? null));
+  return `cases that differ from corpus.golden.json: ${ids.length > 0 ? ids.join(", ") : "none (only the digest differs)"}`;
+}
+
+/**
+ * Every pin an engine must reproduce: its name, the committed Node value, how
+ * the page computes it, and (optionally) what to add to the failure message
+ * when an engine's value differs.
+ */
+const PINS: Array<{ label: string; expected: string; run: (page: Page) => Promise<string>; explain?: (page: Page) => Promise<string> }> = [
   {
     label: "Circle TD golden",
     expected: circleGolden.hash,
@@ -45,6 +61,7 @@ const PINS: Array<{ label: string; expected: string; run: (page: Page) => Promis
     label: "Arcfire corpus digest",
     expected: arcfireCorpus.digest,
     run: (page) => page.evaluate(() => window.runArcfireCorpus()),
+    explain: movedCorpusCases,
   },
 ];
 
@@ -66,7 +83,11 @@ for (const [name, engine] of engines) {
     try {
       const page = await browser.newPage();
       await page.addScriptTag({ content: js });
-      for (const pin of PINS) expect.soft(await pin.run(page), `${name} must reproduce the ${pin.label}`).toBe(pin.expected);
+      for (const pin of PINS) {
+        const got = await pin.run(page);
+        const detail = got !== pin.expected && pin.explain ? ` (${await pin.explain(page)})` : "";
+        expect.soft(got, `${name} must reproduce the ${pin.label}${detail}`).toBe(pin.expected);
+      }
     } finally {
       await browser.close();
     }
