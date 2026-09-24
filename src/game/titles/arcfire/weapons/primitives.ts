@@ -10,12 +10,14 @@ import type { Fx } from "@/game/sim/types";
 import { fromInt, toInt, mul } from "@/game/sim/math/fixed";
 import { cosDeg, sinDeg } from "../aimTable";
 import { idiv, isqrt, floorPx } from "../imath";
-import { isSolid, carveCircle, carveCapsule, groundBelow, type Terrain } from "../terrain";
+import {
+  isSolid, carveCircle, carveCapsule, removeInterval, addInterval, groundBelow, surfaceTop, type Terrain,
+} from "../terrain";
 import { rotateVel, shellAt, type HitCircle, type Shell } from "../ballistics";
 import { blastDamage } from "../damage";
 import { WORLD_W, WORLD_H, TANK_HIT_R, ROLL_PROBE, MAX_SHELLS, DIG_MAX_PITCH } from "../constants";
 import { SHOW_PX_PER_STEP, showSteps, type Timeline, type TimelineEvent } from "../timeline";
-import type { Blast, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
+import type { Blast, Build, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
 
 /** Everything one shot's effects can touch. Built by resolveWeapon; lives for one turn. */
 export interface Shot {
@@ -64,6 +66,7 @@ export function applyEffects(shot: Shot, trig: Trigger, effects: readonly Effect
     else if ("roll" in e) roll(shot, trig, e.roll);
     else if ("dig" in e) dig(shot, trig, e.dig);
     else if ("burn" in e) burn(shot, trig, e.burn);
+    else if ("build" in e) build(shot, trig, e.build);
     else if ("delay" in e) {
       const at = trig.step + (e.delay.steps > 1 ? e.delay.steps : 1);
       shot.pending.push({ at, trig, effects: e.delay.then });
@@ -272,4 +275,30 @@ function burn(shot: Shot, trig: Trigger, b: Burn): void {
   for (let p = 0; p < 2; p++) {
     if (touched[p] >= 0) hurt(shot, p, b.damage, trig.step, showSteps(touched[p], SHOW_PX_PER_STEP.burn));
   }
+}
+
+function build(shot: Shot, trig: Trigger, b: Build): void {
+  const t = shot.t;
+  const x = trig.x;
+  const y = trig.y;
+  if (b.shape === "ball") {
+    const r = b.radius;
+    for (let cx = Math.max(0, x - r); cx <= Math.min(WORLD_W - 1, x + r); cx++) {
+      const h = isqrt(r * r - (cx - x) * (cx - x));
+      addInterval(t, cx, y - h, y + h + 1);
+    }
+  } else if (b.shape === "wall") {
+    const left = x - idiv(b.width, 2);
+    for (let cx = Math.max(0, left); cx < Math.min(WORLD_W, left + b.width); cx++) {
+      const top = surfaceTop(t, cx);
+      addInterval(t, cx, top - b.height, top);
+    }
+  } else {
+    for (let cx = Math.max(0, x - b.radius); cx <= Math.min(WORLD_W - 1, x + b.radius); cx++) {
+      removeInterval(t, cx, 0, y);
+      addInterval(t, cx, y, groundBelow(t, cx, y));
+    }
+  }
+  emit(shot, { step: trig.step, kind: "build", shell: trig.shell, shape: b.shape, x, y,
+    size: b.shape === "wall" ? b.height : b.radius, width: b.shape === "wall" ? b.width : 2 * b.radius + 1 });
 }

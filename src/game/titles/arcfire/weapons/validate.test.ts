@@ -91,3 +91,9 @@ describe("totality: roll, dig and burn", () => {
     expectTotal(impact([{ burn: { flow: 0, pool: 0, damage: 0 } }]));
   });
 });
+
+describe("totality: build", () => {
+  it("a 0 × 0 wall", () => {
+    expectTotal(impact([{ build: { shape: "wall", width: 0, height: 0 } }]));
+  });
+});

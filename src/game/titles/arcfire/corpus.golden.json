@@ -1,5 +1,5 @@
 {
- "digest": "0d68b775",
+ "digest": "085791c6",
  "defs": {
   "pulse": "e151d5df",
   "pulse2": "1a588902",
@@ -23,7 +23,10 @@
   "burrow": "f96fb9f8",
   "auger": "72d8b736",
   "inferno": "230720b4",
-  "wildfire": "be236dc7"
+  "wildfire": "be236dc7",
+  "rampart": "98540804",
+  "bastion": "a9c8b577",
+  "leveler": "af18fce6"
  },
  "cases": {
   "pulse|hills|p0|w0|m0|35/70": {
@@ -2439,6 +2442,321 @@
    "points": [
     0,
     45
+   ]
+  },
+  "rampart|hills|p0|w0|m0|35/70": {
+   "board": "12322401",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|50/80": {
+   "board": "f75fa471",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|65/95": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w40|m0|50/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w-40|m0|50/80": {
+   "board": "2573d59a",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p1|w0|m0|130/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m1|55/75": {
+   "board": "f6ccffda",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|0/100": {
+   "board": "24e655cd",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|180/100": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|90/0": {
+   "board": "ea3f0751",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|90/100": {
+   "board": "ea3f0751",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|2/30": {
+   "board": "91faa9f1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|hills|p0|w0|m0|178/30": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|flat|p0|w0|m0|45/60": {
+   "board": "100389dc",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "rampart|flat|p0|w0|m0|0/60": {
+   "board": "b6f0755c",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|35/70": {
+   "board": "d0e3ee0e",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|50/80": {
+   "board": "e78a53e3",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|65/95": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w40|m0|50/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w-40|m0|50/80": {
+   "board": "ea2d4553",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p1|w0|m0|130/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m1|55/75": {
+   "board": "38c22dda",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|0/100": {
+   "board": "67b0f346",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|180/100": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|90/0": {
+   "board": "60dfd5e1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|90/100": {
+   "board": "60dfd5e1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|2/30": {
+   "board": "3ed1eab6",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|hills|p0|w0|m0|178/30": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|flat|p0|w0|m0|45/60": {
+   "board": "bbfa3b2c",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "bastion|flat|p0|w0|m0|0/60": {
+   "board": "7787b26c",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|35/70": {
+   "board": "2f752b17",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|50/80": {
+   "board": "97231bb3",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|65/95": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w40|m0|50/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w-40|m0|50/80": {
+   "board": "d9496ba8",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p1|w0|m0|130/80": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m1|55/75": {
+   "board": "6f3d2086",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|0/100": {
+   "board": "d7863e34",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|180/100": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|90/0": {
+   "board": "503a79a3",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|90/100": {
+   "board": "503a79a3",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|2/30": {
+   "board": "2ea549f6",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|hills|p0|w0|m0|178/30": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|flat|p0|w0|m0|45/60": {
+   "board": "b6f939dc",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "leveler|flat|p0|w0|m0|0/60": {
+   "board": "b6f939dc",
+   "points": [
+    0,
+    0
    ]
   },
   "special|left-edge|seed777|railshot|129/10": {

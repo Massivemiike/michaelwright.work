@@ -131,6 +131,21 @@ export const ROSTER: readonly WeaponDef[] = [
     launch: { kind: "shell" },
     stage: { on: "impact", effects: [{ burn: { flow: 140, pool: 0, damage: 45, split: true } }] },
   },
+  {
+    id: "rampart", name: "Rampart", tag: "DIRT", tier: 1, power: 25,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ build: { shape: "wall", width: 36, height: 80 } }] },
+  },
+  {
+    id: "bastion", name: "Bastion", tag: "DIRT", tier: 1, power: 25,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ build: { shape: "ball", radius: 48 } }] },
+  },
+  {
+    id: "leveler", name: "Leveler", tag: "DIRT", tier: 1, power: 25,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ build: { shape: "level", radius: 80 } }] },
+  },
 ];
 
 /** Roster index by weapon id. */

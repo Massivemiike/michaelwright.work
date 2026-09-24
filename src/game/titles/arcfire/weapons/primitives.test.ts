@@ -11,6 +11,7 @@ import { cloneMatch, type MatchState } from "../state";
 import { createMatch } from "../match";
 import { hashMatch } from "../hash";
 import { isSolid } from "../terrain";
+import { hitCircles } from "../tanks";
 import { ROSTER, ROSTER_INDEX } from "./roster";
 import { MAX_TURN_STEPS, WORLD_H, TANK_HIT_DY } from "../constants";
 import { CORPUS_SEED, CORPUS_SETTINGS } from "@/game/test/arcfire/corpus";
@@ -324,5 +325,64 @@ describe("burn", () => {
     expect(eventsOf(tl, "burn")[0].x).toBe(470);
     expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 55]]);
     expect(Array.from(m.terrain.height)).toEqual(before);
+  });
+});
+
+describe("build", () => {
+  it("Rampart raises exactly 36 contiguous columns by 80, following the ground", () => {
+    const m = flatBattle(300, 1000);
+    const tl = fire(m, "rampart", 60, 50);
+    const [b] = eventsOf(tl, "build");
+    expect([b.shape, b.x, b.size, b.width]).toEqual(["wall", 663, 80, 36]);
+    const raised: number[] = [];
+    for (let x = 0; x < m.terrain.height.length; x++) if (m.terrain.height[x] !== 400) raised.push(x);
+    expect(raised).toEqual(Array.from({ length: 36 }, (_, i) => b.x - 18 + i)); // 645..680: x - floor(width / 2) onward
+    expect(raised.every((x) => m.terrain.height[x] === 320)).toBe(true);
+  });
+  it("Bastion adds a dirt ball that settles into a symmetric mound at most 48 high", () => {
+    const m = flatBattle(300, 1000);
+    const tl = fire(m, "bastion", 60, 50);
+    const [b] = eventsOf(tl, "build");
+    expect([b.shape, b.x, b.size, b.width]).toEqual(["ball", 663, 48, 97]);
+    const h = m.terrain.height;
+    expect([h[663], h[663 + 17], h[663 + 40]]).toEqual([352, 356, 374]);
+    for (let d = 1; d <= 60; d++) expect(h[663 - d]).toBe(h[663 + d]);
+    for (let x = 0; x < h.length; x++) expect(400 - h[x]).toBeLessThanOrEqual(48);
+  });
+  it("Leveler flattens every column within 80 px to the impact height, and nothing beyond", () => {
+    const m = setHeights(flatBattle(200, 1000), (x) => Math.min(480, 250 + Math.floor(x / 4))); // a 1-in-4 slope
+    const before = Array.from(m.terrain.height);
+    const tl = fire(m, "leveler", 60, 60);
+    const [b] = eventsOf(tl, "build");
+    expect([b.shape, b.size, b.width]).toEqual(["level", 80, 161]);
+    for (let x = 0; x < before.length; x++) {
+      expect(m.terrain.height[x]).toBe(Math.abs(x - b.x) <= 80 ? b.y : before[x]);
+    }
+  });
+  it("never buries a tank: a ball dropped on it compacts beneath it and lifts it", () => {
+    let found = 0;
+    for (let power = 40; power <= 80 && found === 0; power++) {
+      const m = flatBattle();
+      const [b] = eventsOf(fire(m, "bastion", 45, power), "build");
+      if (Math.abs(b.x - 700) > 8) continue;
+      found = power;
+      expect(m.terrain.height[700]).toBe(328);
+      const enemy = hitCircles(m)[1];
+      expect(enemy.y).toBe(m.terrain.height[700] - TANK_HIT_DY); // riding on top of its column
+      expect(isSolid(m.terrain, enemy.x, enemy.y)).toBe(false);
+      expect(m.terrain.spanCount[700]).toBe(1);
+    }
+    expect(found).toBe(50);
+  });
+  it("Rampart built against a tank lifts its column by exactly 80", () => {
+    let found = 0;
+    for (let power = 40; power <= 80 && found === 0; power++) {
+      const m = flatBattle();
+      const [b] = eventsOf(fire(m, "rampart", 45, power), "build");
+      if (Math.abs(b.x - 700) > 10) continue;
+      found = power;
+      expect(m.terrain.height[700]).toBe(320);
+    }
+    expect(found).toBe(49);
   });
 });
