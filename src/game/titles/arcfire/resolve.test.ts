@@ -6,7 +6,7 @@ import { spansFromHeight } from "./terrain";
 import { ROSTER_INDEX } from "./weapons/roster";
 import { MOVE_STEP, MOVES_PER_MATCH, WORLD_W } from "./constants";
 
-const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
+const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [], rosterSize: 8 };
 const PULSE = ROSTER_INDEX.pulse;
 
 /** A battle-phase match on flat ground (y = 400) with tanks at x = 300 and 700, player 0 to shoot. */

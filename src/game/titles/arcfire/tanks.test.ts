@@ -5,7 +5,7 @@ import { spansFromHeight } from "./terrain";
 import type { MatchSettings } from "./state";
 import { MOVE_STEP, MIN_TANK_SEP, TANK_EDGE_MARGIN, TANK_HIT_DY, WORLD_W } from "./constants";
 
-const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
+const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [], rosterSize: 8 };
 
 /** A match on flat ground (y = 400) with the tanks at x0 and x1. */
 function onFlat(x0: number, x1: number) {

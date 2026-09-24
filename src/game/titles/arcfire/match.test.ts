@@ -6,8 +6,9 @@ import { hashMatch } from "./hash";
 import { spansFromHeight } from "./terrain";
 import { SPAWN_X, MOVES_PER_MATCH, SUDDEN_DEATH_WEAPON, WIND_MAX } from "./constants";
 import type { Tag } from "./weapons/types";
+import { ROSTER } from "./weapons/roster";
 
-const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
+const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [], rosterSize: 8 };
 
 function draftAll(m: MatchState): void {
   while (m.phase === "draft") expect(applyPick(m, m.poolOwner.findIndex((o) => o === -1)).ok).toBe(true);
@@ -41,15 +42,26 @@ describe("createMatch", () => {
   it("rejects a pool too small to finish the draft", () => {
     expect(() => createMatch(1, { ...SMALL, poolSize: 5 })).toThrow(RangeError);
   });
+  it("rejects a rosterSize below poolSize, above the roster, or not an integer", () => {
+    expect(() => createMatch(1, { ...SMALL, rosterSize: 7 })).toThrow(RangeError);
+    expect(() => createMatch(1, { ...SMALL, rosterSize: ROSTER.length + 1 })).toThrow(RangeError);
+    expect(() => createMatch(1, { ...SMALL, poolSize: 6, rosterSize: 7.5 })).toThrow(RangeError);
+  });
+  it("draws the pool from the roster prefix ROSTER[0, rosterSize)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(createMatch(seed, { ...SMALL, poolSize: 6, rosterSize: 6 }).pool).toEqual([0, 1, 2, 3, 4, 5]);
+    }
+  });
   it("keeps a private, frozen copy of its settings", () => {
-    const settings: { weaponsEach: number; poolSize: number; wind: boolean; guaranteeTags: Tag[] } = {
-      weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"],
+    const settings: { weaponsEach: number; poolSize: number; wind: boolean; guaranteeTags: Tag[]; rosterSize: number } = {
+      weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"], rosterSize: 8,
     };
     const m = createMatch(4, settings);
     settings.weaponsEach = 4;
     settings.wind = true;
     settings.guaranteeTags.push("SPLIT");
-    expect(m.settings).toEqual({ weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"] });
+    settings.rosterSize = 9;
+    expect(m.settings).toEqual({ weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"], rosterSize: 8 });
     expect(Object.isFrozen(m.settings)).toBe(true);
     expect(Object.isFrozen(m.settings.guaranteeTags)).toBe(true);
   });

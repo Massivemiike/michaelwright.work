@@ -5,7 +5,7 @@ import { hashMatch } from "./hash";
 import type { MatchSettings } from "./state";
 import { SUDDEN_DEATH_WEAPON } from "./constants";
 
-const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: true, guaranteeTags: [] };
+const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: true, guaranteeTags: [], rosterSize: 8 };
 
 /** Play a whole match with a fixed strategy, recording the command log. */
 function play(seed: number) {

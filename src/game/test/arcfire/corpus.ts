@@ -17,7 +17,7 @@ import { SUDDEN_DEATH_WEAPON } from "@/game/titles/arcfire/constants";
 import type { Timeline } from "@/game/titles/arcfire/timeline";
 
 export const CORPUS_SEED = 20260922;
-export const CORPUS_SETTINGS: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
+export const CORPUS_SETTINGS: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [], rosterSize: 8 };
 
 export interface ShotCase {
   id: string; // `${weapon}|${board}|p${shooter}|w${wind}|m${move}|${angle}/${power}`

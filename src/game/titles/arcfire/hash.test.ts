@@ -3,7 +3,7 @@ import { createMatch, applyPick } from "./match";
 import { hashMatch } from "./hash";
 import { cloneMatch, type MatchSettings, type MatchState } from "./state";
 
-const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
+const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [], rosterSize: 8 };
 
 describe("hashMatch", () => {
   it("is an 8-char hex digest that's stable for equal states", () => {

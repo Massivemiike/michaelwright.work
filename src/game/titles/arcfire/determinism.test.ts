@@ -20,7 +20,7 @@ import { ROSTER } from "./weapons/roster";
 
 const FIXTURE = join("src/game/titles/arcfire/determinism.golden.json");
 const SEED = 20260922;
-const SETTINGS: MatchSettings = { weaponsEach: 4, poolSize: 8, wind: true, guaranteeTags: ["VOLLEY"] };
+const SETTINGS: MatchSettings = { weaponsEach: 4, poolSize: 8, wind: true, guaranteeTags: ["VOLLEY"], rosterSize: 8 };
 
 function buildGoldenReplay(): ArcfireReplay {
   const m = createMatch(SEED, SETTINGS);

@@ -14,6 +14,7 @@ export interface MatchSettings {
   poolSize: number; // 24 for 10 each, 12 for 5 each; must be >= 2 × weaponsEach
   wind: boolean; // seeded per-turn wind (free-play toggle)
   guaranteeTags: readonly Tag[]; // the pool always holds >= 1 weapon of each (spec: BLAST, SPLIT, DIRT)
+  rosterSize: number; // the pool is drawn from ROSTER[0, rosterSize): pins a match to a roster prefix, so appends never move it
 }
 
 export interface MatchState {
