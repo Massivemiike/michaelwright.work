@@ -50,6 +50,12 @@ describe("resolveTurn", () => {
     const tl = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 45, power: 50 });
     expect(tl.shells.map((s) => s.angle)).toEqual([39, 42, 45, 48, 51]);
   });
+  it("never clamps a volley near the horizon: the fan stays symmetric about the aim", () => {
+    const low = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 2, power: 30 });
+    expect(low.shells.map((s) => s.angle)).toEqual([-4, -1, 2, 5, 8]);
+    const high = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 178, power: 30 });
+    expect(high.shells.map((s) => s.angle)).toEqual([172, 175, 178, 181, 184]);
+  });
   it("lands a Fan volley on the opponent: one terminal event per shell", () => {
     const tl = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 36, power: 48 });
     const terminal = tl.events.filter((e) => e.kind === "blast" || e.kind === "out");

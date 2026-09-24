@@ -18,3 +18,9 @@ export const clampInt = (v: number, lo: number, hi: number): number => (v < lo ?
 
 /** Integer division rounding toward zero. */
 export const idiv = (a: number, b: number): number => Math.trunc(a / b);
+
+/** The pixel containing a Q16.16 coordinate: floor, so x in (-1, 0) is column -1, off the world. Exact: f / 65536 is exact in binary64. */
+export const floorPx = (f: number): number => Math.floor(f / 65536);
+
+/** ceil(a / b) for integers a >= 0 and b >= 1. */
+export const ceilDiv = (a: number, b: number): number => idiv(a + b - 1, b);

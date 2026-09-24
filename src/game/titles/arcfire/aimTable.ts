@@ -42,3 +42,20 @@ export const aimCos = (deg: number): Fx => COS[index(deg)];
 
 /** Q16.16 sin of an integer aim angle (clamped to 0..180). */
 export const aimSin = (deg: number): Fx => SIN[index(deg)];
+
+const norm360 = (deg: number): number => {
+  const d = (deg | 0) % 360;
+  return d < 0 ? d + 360 : d;
+};
+
+/** Q16.16 cos of ANY integer angle (aim sense: 0 = right, 90 = up, 270 = down), by exact symmetry of the baked table. */
+export const cosDeg = (deg: number): Fx => {
+  const d = norm360(deg);
+  return d <= 180 ? COS[d] : COS[360 - d];
+};
+
+/** Q16.16 sin of ANY integer angle; negative below the horizon. `0 - x`, so it never yields negative zero. */
+export const sinDeg = (deg: number): Fx => {
+  const d = norm360(deg);
+  return d <= 180 ? SIN[d] : 0 - SIN[360 - d];
+};

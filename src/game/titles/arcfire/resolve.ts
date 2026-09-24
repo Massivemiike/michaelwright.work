@@ -5,14 +5,14 @@
 // need the original (AI search, previews) resolve a cloneMatch() copy. The
 // caller (match.ts applyTurn) validates the command first. Plan 1 resolves
 // shell launches with impact blasts; Plan 2 adds the other primitives.
-import { fromInt, toInt } from "@/game/sim/math/fixed";
+import { fromInt } from "@/game/sim/math/fixed";
 import { ROSTER } from "./weapons/roster";
 import type { Blast } from "./weapons/types";
 import { launchShell, muzzle, stepShell, type HitCircle, type Shell } from "./ballistics";
 import { carveCircle, settle, spansFromHeight } from "./terrain";
 import { blastDamage } from "./damage";
 import { hitCircles, moveTarget } from "./tanks";
-import { idiv, clampInt } from "./imath";
+import { idiv, floorPx } from "./imath";
 import { STEPS_PER_SEC, MAX_FLIGHT_STEPS } from "./constants";
 import type { MatchState } from "./state";
 import type { Timeline, TimelineEvent } from "./timeline";
@@ -56,7 +56,7 @@ export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
   const shells: Shell[] = [];
   for (let i = 0; i < count; i++) {
     const offset = count > 1 ? idiv((2 * i - (count - 1)) * spread, 2 * (count - 1)) : 0;
-    const angle = clampInt(input.angle + offset, 0, 180);
+    const angle = input.angle + offset; // never clamped: an edge shell may leave below the horizon
     const mz = muzzle(tanks[shooter].x, tanks[shooter].y, angle);
     shells.push(launchShell(mz.x, mz.y, angle, input.power, def.launch.speedPct ?? 100, def.launch.gravityPct ?? 100));
     tl.shells.push({ angle, points: [mz.x, mz.y] });
@@ -72,7 +72,7 @@ export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
       if (!s.alive) continue;
       const hit = stepShell(s, m.terrain, tanks, windStep);
       if (hit === null) {
-        tl.shells[i].points.push(toInt(s.x), toInt(s.y));
+        tl.shells[i].points.push(floorPx(s.x), floorPx(s.y));
         anyAlive = true;
         continue;
       }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aimCos, aimSin } from "./aimTable";
+import { aimCos, aimSin, cosDeg, sinDeg } from "./aimTable";
 
 describe("aimTable", () => {
   it("hits the exact special angles", () => {
@@ -26,5 +26,27 @@ describe("aimTable", () => {
   it("clamps out-of-range angles", () => {
     expect(aimCos(-5)).toBe(aimCos(0));
     expect(aimSin(200)).toBe(aimSin(180));
+  });
+});
+
+describe("cosDeg / sinDeg (any integer angle)", () => {
+  it("equal aimCos / aimSin bit for bit on 0..180", () => {
+    for (let d = 0; d <= 180; d++) {
+      expect(cosDeg(d)).toBe(aimCos(d));
+      expect(sinDeg(d)).toBe(aimSin(d));
+    }
+  });
+  it("are exactly even / odd and 360-periodic, and never return -0", () => {
+    for (let d = -400; d <= 400; d++) {
+      expect(cosDeg(-d)).toBe(cosDeg(d));
+      expect(sinDeg(-d)).toBe(-sinDeg(d) || 0);
+      expect(cosDeg(d + 360)).toBe(cosDeg(d));
+      expect(sinDeg(d + 360)).toBe(sinDeg(d));
+      expect(Object.is(cosDeg(d), -0) || Object.is(sinDeg(d), -0)).toBe(false);
+    }
+  });
+  it("points straight down at 270", () => {
+    expect([cosDeg(270), sinDeg(270)]).toEqual([0, -65536]);
+    expect([cosDeg(-90), sinDeg(-90)]).toEqual([0, -65536]);
   });
 });

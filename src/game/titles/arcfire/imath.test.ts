@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isqrt, clampInt, idiv } from "./imath";
+import { isqrt, clampInt, idiv, floorPx, ceilDiv } from "./imath";
 
 describe("imath", () => {
   it("isqrt is the exact integer floor", () => {
@@ -17,5 +17,16 @@ describe("imath", () => {
   it("idiv truncates toward zero", () => {
     expect(idiv(7, 2)).toBe(3);
     expect(idiv(-7, 2)).toBe(-3);
+  });
+});
+
+describe("floorPx / ceilDiv", () => {
+  it("floorPx is the pixel containing a Q16.16 coordinate (floor, not truncation toward zero)", () => {
+    expect([0, 65535, 65536, -1, -65536, -65537].map(floorPx)).toEqual([0, 0, 1, -1, -1, -2]);
+  });
+  it("ceilDiv rounds a >= 0 up to a multiple of b >= 1", () => {
+    expect(ceilDiv(0, 3)).toBe(0);
+    expect(ceilDiv(6, 3)).toBe(2);
+    expect(ceilDiv(7, 3)).toBe(3);
   });
 });

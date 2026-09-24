@@ -97,3 +97,19 @@ describe("stepShell", () => {
     expect(windy.x).toBeGreaterThan(calm.x + 10);
   });
 });
+
+describe("Plan 2A carry-forwards", () => {
+  it("muzzle and launch take any integer angle, including below the horizon", () => {
+    expect(muzzle(500, 300, -90)).toEqual({ x: 500, y: 300 + BARREL_LEN });
+    expect(muzzle(500, 300, 270)).toEqual({ x: 500, y: 300 + BARREL_LEN });
+    const down = launchShell(100, 100, -30, 50);
+    expect(down.vy).toBeGreaterThan(0); // leaves downward
+    expect(down.vx).toBe(launchShell(100, 100, 30, 50).vx);
+  });
+  it("floors pixels: a shell crossing x in (-1, 0) is off the world at column -1", () => {
+    // x = 100/65536 px, moving left at 6 px/s: its first sample is at x ≈ -0.098 px
+    const s: Shell = { x: 100, y: fromInt(100), vx: fromInt(-6), vy: 0, gravityStep: 0, steps: 0, alive: true };
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: -1, y: 100 });
+    expect(s.alive).toBe(false);
+  });
+});
