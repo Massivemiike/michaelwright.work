@@ -154,6 +154,16 @@ export const ROSTER: readonly WeaponDef[] = [
     id: "prism", name: "Prism", tag: "BEAM", tier: 3, power: 80,
     launch: { kind: "beam", count: 3, spreadDeg: 8, length: 1200, width: 6, damage: 35 },
   },
+  {
+    id: "seeker", name: "Seeker", tag: "HOMING", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", homing: { degPerStep: 2 }, effects: [{ blast: blast(32, 50) }] },
+  },
+  {
+    id: "swarm", name: "Swarm", tag: "HOMING", tier: 3, power: 80,
+    launch: { kind: "shell", count: 5, spreadDeg: 14 },
+    stage: { on: "impact", homing: { degPerStep: 1 }, effects: [{ blast: blast(16, 20) }] },
+  },
 ];
 
 /** Roster index by weapon id. */

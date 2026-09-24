@@ -49,6 +49,18 @@ describe("every roster weapon", () => {
   });
 });
 
+describe("homing", () => {
+  it("Seeker steers onto the enemy where Pulse, at the same aim, misses", () => {
+    expect(fire(flatBattle(), "pulse", 45, 45).points).toEqual([0, 0]);
+    expect(fire(flatBattle(), "seeker", 45, 45).points).toEqual([50, 0]);
+  });
+  it("Seeker fired level never apexes, so it flies exactly Pulse's path", () => {
+    const seeker = fire(flatBattle(), "seeker", 0, 60);
+    const pulse = fire(flatBattle(), "pulse", 0, 60);
+    expect(seeker.shells[0].points).toEqual(pulse.shells[0].points);
+  });
+});
+
 describe("shell paths", () => {
   it("muzzle shells have parent -1 and start 0, and each path ends on its terminal step", () => {
     const tl = fire(flatBattle(), "fan", 45, 60);

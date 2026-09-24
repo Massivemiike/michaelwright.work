@@ -9,7 +9,7 @@ const WIRE = [
   "pulse", "pulse2", "nova", "needle", "crater", "triad", "fan", "railshot",
   "twinnova", "cascade", "hydra", "hailstorm", "shrapnel", "barrage", "skipper", "pinball",
   "ricochet", "tumbler", "juggernaut", "burrow", "auger", "inferno", "wildfire", "rampart",
-  "bastion", "leveler", "lancer", "prism",
+  "bastion", "leveler", "lancer", "prism", "seeker", "swarm",
 ];
 
 describe("ROSTER", () => {

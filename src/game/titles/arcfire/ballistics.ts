@@ -87,6 +87,32 @@ export function rotateVel(vx: Fx, vy: Fx, deg: number): [Fx, Fx] {
 }
 
 /**
+ * Turn the shell toward (homeX, homeY) by k = min(homeDeg, the whole degrees
+ * between its heading and the target) — never past the target, so there is no
+ * overshoot and no wobble. No arctangent: with dot > 0 the angle is < k exactly
+ * when |cross| * cos k < dot * sin k, compared with the baked table. At
+ * 90 degrees or more (dot <= 0) the full homeDeg turn is taken.
+ */
+function steer(s: Shell): void {
+  const dx = s.homeX - floorPx(s.x);
+  const dy = s.homeY - floorPx(s.y);
+  const vx = idiv(s.vx, 256); // 1/256-px/s units: every product below stays < 2^52 for validator-legal data (see the magnitude notes)
+  const vy = idiv(s.vy, 256);
+  const cross = vx * dy - vy * dx; // < 0: the target is anticlockwise of the heading (aim sense)
+  const dot = vx * dx + vy * dy;
+  if (cross === 0 && dot >= 0) return; // dead on, at the target, or too slow to have a heading
+  let k = s.homeDeg;
+  if (dot > 0) {
+    const ac = cross < 0 ? 0 - cross : cross;
+    while (k > 0 && ac * cosDeg(k) < dot * sinDeg(k)) k--;
+  }
+  if (k === 0) return;
+  const [rx, ry] = rotateVel(s.vx, s.vy, cross <= 0 ? k : 0 - k); // dead astern (cross 0, dot < 0) turns anticlockwise
+  s.vx = rx;
+  s.vy = ry;
+}
+
+/**
  * The outward surface direction at solid pixel (cx, cy): minus the sum of the
  * offsets of the solid pixels in a radius-BOUNCE_PROBE_R disc around it (their
  * centroid points into the ground). If that is zero or doesn't oppose the
@@ -143,7 +169,7 @@ function endBounce(s: Shell, fx: Fx, fy: Fx, ev: Impact): Impact {
  * null while the shell is still flying. windStep is the horizontal velocity
  * change per step (Fx). The order inside a step is part of the determinism
  * contract: wind, gravity, the apex latch (an apex stage ends the step here),
- * then the sweep, whose every sample checks the side edges, then the
+ * homing, then the sweep, whose every sample checks the side edges, then the
  * tanks in index order, then the terrain.
  */
 export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], windStep: Fx): Impact | null {
@@ -157,6 +183,7 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
       return { kind: "apex", x: floorPx(s.x), y: floorPx(s.y), fx: s.x, fy: s.y };
     }
   }
+  if (s.homeDeg > 0 && s.apexed) steer(s);
   const nx = s.x + idiv(s.vx, STEPS_PER_SEC);
   const ny = s.y + idiv(s.vy, STEPS_PER_SEC);
   const n = Math.max(Math.abs(floorPx(nx) - floorPx(s.x)), Math.abs(floorPx(ny) - floorPx(s.y)), 1);

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fromInt } from "@/game/sim/math/fixed";
 import { makeTerrain, spansFromHeight, type Terrain } from "./terrain";
-import { launchShell, stepShell, muzzle, shellAt, rotateVel, type HitCircle, type Impact, type Shell } from "./ballistics";
+import { launchShell, launchAt, stepShell, muzzle, shellAt, rotateVel, type HitCircle, type Impact, type Shell } from "./ballistics";
+import { makeRng, nextRange } from "@/game/sim/math/rng";
 import { floorPx } from "./imath";
 import { WORLD_H, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, MAX_SPANS, GRAVITY_STEP } from "./constants";
 
@@ -222,5 +223,41 @@ describe("bounces", () => {
     expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "bounce", x: 0, y: 100, wall: true });
     expect(s.vx).toBe(fromInt(600));
     expect(stepShell(s, flat(400), [], 0)).toBeNull();
+  });
+});
+
+describe("homing", () => {
+  it("turns at most N whole degrees per step toward the target, and never past it (2,000 seeded cases)", () => {
+    const rng = makeRng(2026);
+    const world = flat(WORLD_H);
+    const heading = (vx: number, vy: number): number => Math.atan2(-vy, vx); // aim sense: y is down
+    const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+    const DEG = Math.PI / 180;
+    let checked = 0;
+    let turned = 0;
+    for (let k = 0; k < 2000; k++) {
+      const s = launchAt(200 + nextRange(rng, 800), 100 + nextRange(rng, 300), nextRange(rng, 360), fromInt(60 + nextRange(rng, 1200)), 0);
+      s.apexed = true;
+      s.homeDeg = 1 + nextRange(rng, 3);
+      s.homeX = 100 + nextRange(rng, 1000);
+      s.homeY = 50 + nextRange(rng, 400);
+      const dx = s.homeX - floorPx(s.x);
+      const dy = s.homeY - floorPx(s.y);
+      if (dx === 0 && dy === 0) continue;
+      const target = Math.atan2(-dy, dx); // seen from where the shell steers (before it moves)
+      const h0 = heading(s.vx, s.vy);
+      const before = wrap(target - h0);
+      if (Math.abs(before) > Math.PI - 1e-9) continue; // dead astern: either way is a legal turn
+      stepShell(s, world, [], 0);
+      const h1 = heading(s.vx, s.vy);
+      const turn = Math.abs(wrap(h1 - h0));
+      expect(turn).toBeLessThanOrEqual(s.homeDeg * DEG + 0.001 * DEG);
+      if (turn > 0.5 * DEG) turned++;
+      const after = wrap(target - h1);
+      expect(Math.sign(after) === Math.sign(before) || Math.abs(after) < 0.001 * DEG).toBe(true);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(1900);
+    expect(turned).toBeGreaterThan(1800); // it does steer: only targets within 1° of the heading take no turn
   });
 });
