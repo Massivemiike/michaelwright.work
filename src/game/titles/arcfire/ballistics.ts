@@ -196,7 +196,8 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
     const cx = floorPx(sx);
     const cy = floorPx(sy);
     if (cx < 0 || cx >= WORLD_W) {
-      if (s.wallBounces > 0) {
+      // A wall reflects only a shell coming from inside the world: one spawned past a side wall is out (§3.2 rule 6).
+      if (s.wallBounces > 0 && floorPx(fx) >= 0 && floorPx(fx) < WORLD_W) {
         s.wallBounces--;
         reflect(s, cx < 0 ? 1 : -1, 0);
         return endBounce(s, fx, fy, { kind: "bounce", x: cx < 0 ? 0 : WORLD_W - 1, y: cy, wall: true });

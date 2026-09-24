@@ -255,6 +255,7 @@ function burn(shot: Shot, trig: Trigger, b: Burn): void {
   const x = floorPx(trig.fx);
   const g = groundBelow(shot.t, x, floorPx(trig.fy));
   const touched = [-1, -1]; // px along a run where each tank was first touched (-1 = never)
+  if (trig.tank >= 0) touched[trig.tank] = 0; // a direct hit touches the struck tank, whichever way the runs go
   const start = tankAt(shot, x, g - 1);
   if (start >= 0) touched[start] = 0;
   const half = idiv(b.pool, 2);

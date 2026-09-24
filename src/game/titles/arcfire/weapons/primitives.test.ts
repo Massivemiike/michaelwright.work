@@ -250,6 +250,18 @@ describe("bounce", () => {
     const pulse = fire(flatBattle(100, 700), "pulse", 150, 70);
     expect(pulse.events.map((e) => e.kind)).toEqual(["out"]);
   });
+  it("a wall bouncer spawned past a side wall is out at its first sample, with no wall bounce (§3.2 rule 6)", () => {
+    // straight up from x 100: a 2-child line 300 px apart spawns its children at x -50 and 250
+    const child: Stage = { on: "impact", effects: [{ blast: { radius: 20, damage: 18 } }], bounce: { times: 3, restitutionPct: 100, walls: true } };
+    const def = synth({ on: "apex", effects: [{ split: { count: 2, spreadDeg: 0, speedPct: 100, from: "ahead", gapPx: 300, child } }] });
+    const tl = fireDef(flatBattle(100, 700), def, 90, 50);
+    const sp = eventsOf(tl, "split")[0];
+    const [off, on] = sp.children;
+    expect([tl.shells[off].points[0], tl.shells[on].points[0]]).toEqual([-50, 250]);
+    expect(tl.shells[off].points.length).toBe(4); // the spawn point, then the out
+    expect(eventsOf(tl, "out")).toEqual([{ step: sp.step + 1, kind: "out", shell: off, x: -50, y: tl.shells[off].points[3], lag: 0 }]);
+    expect(eventsOf(tl, "bounce").filter((b) => b.wall)).toEqual([]);
+  });
 });
 
 describe("roll", () => {
@@ -327,7 +339,7 @@ describe("burn", () => {
     const [b] = eventsOf(tl, "burn");
     expect(b.x).toBe(687);
     expect(b.flows.map((f) => [f[0], f[f.length - 2]])).toEqual([[687, 547], [687, 692]]); // the right-hand flow stops at the tank
-    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 45, 2]]);
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 45, 0]]); // the shell struck it: lag 0
     expect(Array.from(m.terrain.height)).toEqual(before); // fire changes no terrain
   });
   it("Inferno ignites uphill of the enemy and its flow runs down into it: 70, once", () => {
@@ -338,6 +350,17 @@ describe("burn", () => {
     expect(eventsOf(tl, "burn")[0].x).toBe(470);
     expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 55]]);
     expect(Array.from(m.terrain.height)).toEqual(before);
+  });
+  /** Tanks 300 / 700; the enemy on top of a 1:1 slope falling toward the shooter (400 from x 700 on, down to 460). */
+  const uphillEnemy = (): MatchState =>
+    setHeights(flatBattle(300, 700), (x) => (x >= 700 ? 400 : Math.min(460, 400 + (700 - x))));
+  it("a direct hit burns the struck tank once, at lag 0, even when every run from the ignition turns away from it", () => {
+    const tl = fire(uphillEnemy(), "inferno", 20, 77);
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 0]]);
+    expect(tl.points).toEqual([70, 0]);
+  });
+  it("a direct hit with Wildfire's split flows burns the struck tank too", () => {
+    expect(fire(uphillEnemy(), "wildfire", 20, 77).points).toEqual([45, 0]);
   });
 });
 
