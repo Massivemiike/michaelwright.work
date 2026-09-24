@@ -51,3 +51,19 @@ describe("replayMatch", () => {
     ).toEqual({ ok: false, reason: "invalid_command", atIndex: 0 });
   });
 });
+
+describe("replayMatch on a malformed log", () => {
+  const bad = (commands: unknown) => replayMatch({ seed: 1, settings: SMALL, commands: commands as ArcfireCommand[] });
+
+  it("rejects an unknown command kind", () => {
+    expect(bad([{ k: "pick", w: 0 }, { k: "PICK", w: 1 }])).toEqual({ ok: false, reason: "invalid_command", atIndex: 1 });
+  });
+  it("rejects a null or non-object entry instead of throwing", () => {
+    expect(bad([{ k: "pick", w: 0 }, { k: "pick", w: 1 }, null])).toEqual({ ok: false, reason: "invalid_command", atIndex: 2 });
+    expect(bad([7])).toEqual({ ok: false, reason: "invalid_command", atIndex: 0 });
+  });
+  it("rejects commands that aren't an array", () => {
+    expect(bad({ k: "pick", w: 0 })).toEqual({ ok: false, reason: "invalid_command", atIndex: 0 });
+    expect(bad(null)).toEqual({ ok: false, reason: "invalid_command", atIndex: 0 });
+  });
+});

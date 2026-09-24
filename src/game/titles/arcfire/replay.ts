@@ -3,7 +3,11 @@
 // The Arcfire command log (spec §1.3, §7): one entry per draft pick or turn,
 // in order. A 2-player log holds BOTH players' commands; a vs-AI log (Plan 2)
 // holds only the human's, with the AI's regenerated during replay. Any illegal
-// command rejects the whole log.
+// command rejects the whole log, and a malformed log (not an array, a
+// non-object entry, an unknown `k`) is rejected the same way — replayMatch
+// never throws on one. An UNFINISHED log is accepted (resume re-simulates a
+// partial match, spec §6.5), so a verifier must additionally require
+// state.phase === "over" (Plan 4's binding).
 import { createMatch, applyPick, applyTurn } from "./match";
 import { hashMatch } from "./hash";
 import type { MatchSettings, MatchState } from "./state";
@@ -24,12 +28,16 @@ export type ReplayMatchResult =
 
 /** Replay a 2-player command log from a fresh match. */
 export function replayMatch(r: ArcfireReplay): ReplayMatchResult {
+  if (!Array.isArray(r.commands)) return { ok: false, reason: "invalid_command", atIndex: 0 };
   const m = createMatch(r.seed, r.settings);
   for (let i = 0; i < r.commands.length; i++) {
-    const c = r.commands[i];
-    const res = c.k === "pick"
-      ? applyPick(m, c.w)
-      : applyTurn(m, { move: c.move, w: c.w, angle: c.angle, power: c.power });
+    const entry: unknown = r.commands[i];
+    if (typeof entry !== "object" || entry === null) return { ok: false, reason: "invalid_command", atIndex: i };
+    const c = entry as ArcfireCommand;
+    let res: { ok: boolean };
+    if (c.k === "pick") res = applyPick(m, c.w);
+    else if (c.k === "turn") res = applyTurn(m, { move: c.move, w: c.w, angle: c.angle, power: c.power });
+    else return { ok: false, reason: "invalid_command", atIndex: i };
     if (!res.ok) return { ok: false, reason: "invalid_command", atIndex: i };
   }
   return { ok: true, state: m, hash: hashMatch(m) };

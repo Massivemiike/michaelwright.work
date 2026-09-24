@@ -3,6 +3,7 @@ import { createMatch, applyPick, applyTurn, type TurnCommand } from "./match";
 import { cloneMatch, type MatchSettings, type MatchState } from "./state";
 import { spansFromHeight } from "./terrain";
 import { SPAWN_X, MOVES_PER_MATCH, SUDDEN_DEATH_WEAPON, WIND_MAX } from "./constants";
+import type { Tag } from "./weapons/types";
 
 const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
 
@@ -37,6 +38,18 @@ describe("createMatch", () => {
   });
   it("rejects a pool too small to finish the draft", () => {
     expect(() => createMatch(1, { ...SMALL, poolSize: 5 })).toThrow(RangeError);
+  });
+  it("keeps a private, frozen copy of its settings", () => {
+    const settings: { weaponsEach: number; poolSize: number; wind: boolean; guaranteeTags: Tag[] } = {
+      weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"],
+    };
+    const m = createMatch(4, settings);
+    settings.weaponsEach = 4;
+    settings.wind = true;
+    settings.guaranteeTags.push("SPLIT");
+    expect(m.settings).toEqual({ weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: ["BLAST"] });
+    expect(Object.isFrozen(m.settings)).toBe(true);
+    expect(Object.isFrozen(m.settings.guaranteeTags)).toBe(true);
   });
 });
 

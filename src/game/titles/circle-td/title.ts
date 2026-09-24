@@ -1,11 +1,11 @@
 // src/game/titles/circle-td/title.ts
 //
 // The circle-td binding of the generic TitleDef (src/game/sim/title.ts). The
-// verifier only calls replay(): it rejects any command whose tick is not an
-// integer in [0, maxTicks), then drives this title's own replay loop and
-// reports wave as the generic stat. makeSim/applyCommand stay exposed because
-// runReplay's direct callers (tests, the cross-engine harness) drive the loop
-// through them.
+// verifier only calls replay(): it rejects any command that is not a non-null
+// object or whose tick is not an integer in [0, maxTicks), then drives this
+// title's own replay loop and reports wave as the generic stat.
+// makeSim/applyCommand stay exposed because runReplay's direct callers (tests,
+// the cross-engine harness) drive the loop through them.
 import { SIM_VERSION } from "@/game/titles/circle-td/version";
 import type { TitleDef } from "@/game/sim/title";
 import { applyCommand, runReplay, type CircleTdSimDef, type Command } from "@/game/titles/circle-td/replay";
@@ -20,6 +20,8 @@ export const circleTdTitle: TitleDef<Command> & CircleTdSimDef = {
   applyCommand,
   replay(input, limits) {
     for (const cmd of input.commands) {
+      // A null / non-object entry has no tick to read: a shape error, not a throw.
+      if (typeof cmd !== "object" || cmd === null) return { rejected: "invalid_command_shape" };
       if (!Number.isInteger(cmd.tick) || cmd.tick < 0 || cmd.tick >= limits.maxTicks) {
         return { rejected: "invalid_command_shape" };
       }

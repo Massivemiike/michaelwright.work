@@ -35,6 +35,7 @@ export interface MatchState {
   winner: number; // -1 undecided, 0 or 1, or 2 for a draw
 }
 
+/** A deep copy for AI search and previews. `settings` is frozen by createMatch, so it is shared, not copied. */
 export function cloneMatch(m: MatchState): MatchState {
   return {
     ...m,

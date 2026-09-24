@@ -60,6 +60,10 @@ describe("verifyScore", () => {
     expect(verifyScore(input({ commands: [{ tick: 1.5, type: "start" }] }), baseOpts)).toEqual({ ok: false, reason: "invalid_command_shape" });
     expect(verifyScore(input({ commands: [{ tick: 50, type: "start" }] }), { ...baseOpts, maxTicks: 50 })).toEqual({ ok: false, reason: "invalid_command_shape" });
   });
+  it("rejects a null or non-object command as a malformed shape instead of throwing", () => {
+    expect(verifyScore(input({ commands: [null] }), baseOpts)).toEqual({ ok: false, reason: "invalid_command_shape" });
+    expect(verifyScore(input({ commands: [{ tick: 0, type: "start" }, 7] }), baseOpts)).toEqual({ ok: false, reason: "invalid_command_shape" });
+  });
   it("checks simVersion against the title's own version and skips replay on a mismatch", () => {
     const { title, calls } = fakeTitle(7, { score: 1, stat: 2, hash: "0000abcd" });
     expect(verifyScore(input({ simVersion: SIM_VERSION }), { title, acceptableSeeds: null })).toEqual({ ok: false, reason: "sim_version_mismatch" });

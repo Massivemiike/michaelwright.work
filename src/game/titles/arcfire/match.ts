@@ -29,13 +29,16 @@ export function createMatch(seed: number, settings: MatchSettings): MatchState {
   if (settings.poolSize < settings.weaponsEach * 2) {
     throw new RangeError(`createMatch: poolSize ${settings.poolSize} < 2 × weaponsEach ${settings.weaponsEach}`);
   }
+  // A private, frozen copy: the caller mutating its settings object later can't
+  // reach into the match. cloneMatch shares it safely.
+  const own: MatchSettings = Object.freeze({ ...settings, guaranteeTags: Object.freeze([...settings.guaranteeTags]) });
   const rng = makeRng(seed);
   const terrain = makeTerrain();
   generateTerrain(terrain, rng);
-  const pool = drawPool(rng, ROSTER, settings.poolSize, settings.guaranteeTags);
+  const pool = drawPool(rng, ROSTER, own.poolSize, own.guaranteeTags);
   const firstPicker = nextRange(rng, 2);
   return {
-    settings,
+    settings: own,
     rng,
     phase: "draft",
     terrain,
