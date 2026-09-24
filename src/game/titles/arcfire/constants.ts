@@ -35,6 +35,8 @@ export const SPAWN_FLAT = 24; // terrain is flattened ±this around each spawn c
 // --- terrain (spec §3.1)
 export const TERRAIN_MIN_Y = 120;
 export const TERRAIN_MAX_Y = 420;
+export const TERRAIN_CTRL_MIN_Y = 160; // generation control points are drawn in [MIN, MAX]
+export const TERRAIN_CTRL_MAX_Y = 380;
 export const MAX_SPANS = 8; // solid runs a column may hold during a shot
 export const TERRAIN_CTRL_STEP = 150; // generation control-point pitch, px
 export const TERRAIN_BLUR_R = 24; // generation box-blur radius, px

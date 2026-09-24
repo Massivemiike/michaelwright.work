@@ -4,8 +4,10 @@
 // A fixed in-file strategy GENERATES a complete 2-player command log; replaying
 // it must land on the hash pinned in determinism.golden.json. Same code → same
 // log → same hash; any unintended sim change moves the hash and fails loud.
-// Re-pin ONLY for an intentional sim change:
+// Re-pin ONLY for an intentional sim change, with the variable set to exactly 1:
 //   UPDATE_ARCFIRE_GOLDEN=1 npx vitest run src/game/titles/arcfire/determinism.test.ts
+// The inertness checks run first either way, so a degenerate match (a draw, a
+// zero score, no move, no volley) can never be pinned.
 // (This *.test.ts may use node:fs and process — the purity guard skips tests.)
 import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -14,6 +16,7 @@ import { createMatch, applyPick, applyTurn } from "./match";
 import { replayMatch, type ArcfireCommand, type ArcfireReplay } from "./replay";
 import type { MatchSettings } from "./state";
 import { SUDDEN_DEATH_WEAPON } from "./constants";
+import { ROSTER } from "./weapons/roster";
 
 const FIXTURE = join("src/game/titles/arcfire/determinism.golden.json");
 const SEED = 20260922;
@@ -45,8 +48,14 @@ describe("arcfire golden determinism", () => {
     const result = replayMatch(replay);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    // Not inert: a decisive match where both sides scored, a tank moved and a volley flew.
     expect(result.state.phase).toBe("over");
-    if (process.env.UPDATE_ARCFIRE_GOLDEN) {
+    expect([0, 1]).toContain(result.state.winner);
+    expect(result.state.scores[0]).toBeGreaterThan(0);
+    expect(result.state.scores[1]).toBeGreaterThan(0);
+    expect(replay.commands.some((c) => c.k === "turn" && c.move !== 0)).toBe(true);
+    expect(replay.commands.some((c) => c.k === "turn" && ROSTER[c.w].tag === "VOLLEY")).toBe(true);
+    if (process.env.UPDATE_ARCFIRE_GOLDEN === "1") {
       const fixture = { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner };
       writeFileSync(FIXTURE, JSON.stringify(fixture, null, 2) + "\n");
     }

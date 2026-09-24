@@ -1,10 +1,11 @@
 // src/game/titles/circle-td/index.ts
 //
 // Title-specific sim assembly: config, state construction, the ordered
-// per-tick loop, and the render-snapshot packer. The generic RenderSnapshot
-// shape and allocator live in @/game/sim/engine (title-agnostic); this file
-// is where posAt/TRACK/TILES/toFloat get used to fill one in, since that's
-// all Circle-TD-specific geometry.
+// per-tick loop, and the render-snapshot packer. The RenderSnapshot shape and
+// allocator are Circle TD's own and live in ./snapshot
+// (@/game/titles/circle-td/snapshot); this file is where posAt/TRACK/TILES/
+// toFloat get used to fill one in, since that's all Circle-TD-specific
+// geometry.
 import { makeCreeps, makeTowers, type SimState } from "@/game/titles/circle-td/state";
 import { makeRng } from "@/game/sim/math/rng";
 import { toFloat } from "@/game/sim/math/fixed";

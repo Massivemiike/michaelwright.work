@@ -4,7 +4,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { sinFx, cosFx } from "@/game/sim/math/trig";
 
-const ROOTS = ["src/game/sim", "src/game/titles/circle-td", "src/game/titles/arcfire"];
+const ARCFIRE_ROOT = "src/game/titles/arcfire";
+const ROOTS = ["src/game/sim", "src/game/titles/circle-td", ARCFIRE_ROOT];
 const BANNED = [
   /\bwindow\b/, /\bdocument\b/, /\bnavigator\b/, /\bperformance\b/,
   /\bnew Date\b/, /\bDate\.now\b/,
@@ -21,6 +22,9 @@ const BANNED = [
 ];
 // trig.ts legitimately builds its table from Math.sin at load; allow-list it.
 const ALLOW = new Set(["src/game/sim/math/trig.ts"]);
+// Arcfire never uses the shared trig table (built from floating-point sine at
+// load, a cross-engine risk); its aim comes only from the baked aimTable.ts.
+const SHARED_TRIG_IMPORT = /math\/trig["']/;
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -32,18 +36,18 @@ function walk(dir: string): string[] {
   return out;
 }
 
+/** The non-test .ts files under a root. A missing root throws and an empty one fails: either would make the guard vacuous. */
+function sources(root: string): string[] {
+  const files = walk(root);
+  expect(files.length, `${root} yielded no files`).toBeGreaterThan(0);
+  return files;
+}
+
 describe("simulation purity", () => {
   it("contains no banned globals or non-deterministic math", () => {
     const violations: string[] = [];
     for (const root of ROOTS) {
-      let files: string[];
-      try {
-        files = walk(root);
-      } catch (e: any) {
-        if (e && e.code === "ENOENT") continue; // dir may not exist yet
-        throw e;
-      }
-      for (const file of files) {
+      for (const file of sources(root)) {
         if (ALLOW.has(file.replace(/\\/g, "/"))) continue;
         const src = readFileSync(file, "utf8");
         for (const re of BANNED) {
@@ -69,6 +73,17 @@ describe("simulation purity", () => {
     const ok = "/**\n * a JSDoc comment, not an exponent\n */\nconst x = 1;";
     const exponentBan = BANNED.find((re) => re.source.includes("\\*\\*"))!;
     expect(exponentBan.test(ok)).toBe(false);
+  });
+
+  it("Arcfire never imports the shared trig table", () => {
+    const offenders = sources(ARCFIRE_ROOT).filter((file) => SHARED_TRIG_IMPORT.test(readFileSync(file, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+
+  it("the shared-trig check catches a trig import (guard is not vacuous)", () => {
+    expect(SHARED_TRIG_IMPORT.test('import { sinFx } from "@/game/sim/math/trig";')).toBe(true);
+    expect(SHARED_TRIG_IMPORT.test("import { cosFx } from '../../sim/math/trig';")).toBe(true);
+    expect(SHARED_TRIG_IMPORT.test('import { aimCos, aimSin } from "./aimTable";')).toBe(false);
   });
 
   it("trig runtime functions use no Math.* (only the table build may)", () => {

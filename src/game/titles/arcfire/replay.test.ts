@@ -50,6 +50,22 @@ describe("replayMatch", () => {
       replayMatch({ seed: 1, settings: SMALL, commands: [{ k: "turn", move: 0, w: 0, angle: 45, power: 50 }] })
     ).toEqual({ ok: false, reason: "invalid_command", atIndex: 0 });
   });
+  it("rejects a turn after the match is over", () => {
+    const { log } = play(77);
+    const extra: ArcfireCommand = { k: "turn", move: 0, w: SUDDEN_DEATH_WEAPON, angle: 45, power: 50 };
+    expect(replayMatch({ seed: 77, settings: SMALL, commands: [...log, extra] })).toEqual({
+      ok: false, reason: "invalid_command", atIndex: log.length,
+    });
+  });
+  it("accepts an unfinished log (resume re-simulates one, spec §6.5)", () => {
+    const { log } = play(77);
+    const picks = log.filter((c) => c.k === "pick");
+    for (const partial of [picks, log.slice(0, picks.length + 2)]) {
+      const r = replayMatch({ seed: 77, settings: SMALL, commands: partial });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.state.phase).not.toBe("over");
+    }
+  });
 });
 
 describe("replayMatch on a malformed log", () => {

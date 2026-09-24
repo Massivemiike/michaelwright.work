@@ -9,7 +9,7 @@
 // i.e. back to a heightfield. Integer px throughout.
 import { nextRange, type Rng } from "@/game/sim/math/rng";
 import {
-  WORLD_W, WORLD_H, MAX_SPANS, TERRAIN_MIN_Y, TERRAIN_MAX_Y,
+  WORLD_W, WORLD_H, MAX_SPANS, TERRAIN_MIN_Y, TERRAIN_MAX_Y, TERRAIN_CTRL_MIN_Y, TERRAIN_CTRL_MAX_Y,
   TERRAIN_CTRL_STEP, TERRAIN_BLUR_R, TERRAIN_BLUR_PASSES, SPAWN_X, SPAWN_FLAT,
 } from "./constants";
 import { isqrt, clampInt, idiv } from "./imath";
@@ -62,8 +62,8 @@ export function spansFromHeight(t: Terrain): void {
 
 /** Seeded rolling hills: random control points, linear interpolation, box blur, clamp, then flatten both spawn pads. */
 export function generateTerrain(t: Terrain, rng: Rng): void {
-  const lo = TERRAIN_MIN_Y + 40;
-  const hi = TERRAIN_MAX_Y - 40;
+  const lo = TERRAIN_CTRL_MIN_Y;
+  const hi = TERRAIN_CTRL_MAX_Y;
   const nCtrl = idiv(WORLD_W, TERRAIN_CTRL_STEP) + 1;
   const ctrl = new Int32Array(nCtrl);
   for (let i = 0; i < nCtrl; i++) ctrl[i] = lo + nextRange(rng, hi - lo + 1);

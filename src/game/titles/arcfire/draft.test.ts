@@ -35,6 +35,10 @@ describe("drawPool", () => {
   it("is deterministic per seed", () => {
     expect(drawPool(makeRng(9), roster, 5, ["DIRT"])).toEqual(drawPool(makeRng(9), roster, 5, ["DIRT"]));
   });
+  it("draws the pinned pool for a fixed seed", () => {
+    // Regression pin: computed once from the current code. The draw order (guarantees first, then the shuffle) is part of the replay format.
+    expect(drawPool(makeRng(4), roster, 5, ["SPLIT"])).toEqual([0, 2, 3, 4, 7]);
+  });
   it("skips a guaranteed tag the roster doesn't have", () => {
     expect(drawPool(makeRng(2), roster, 3, ["BEAM"]).length).toBe(3);
   });

@@ -4,7 +4,7 @@ import { resolveTurn } from "./resolve";
 import { cloneMatch, type MatchSettings, type MatchState } from "./state";
 import { spansFromHeight } from "./terrain";
 import { ROSTER_INDEX } from "./weapons/roster";
-import { MOVE_STEP, MOVES_PER_MATCH } from "./constants";
+import { MOVE_STEP, MOVES_PER_MATCH, WORLD_W } from "./constants";
 
 const SMALL: MatchSettings = { weaponsEach: 3, poolSize: 8, wind: false, guaranteeTags: [] };
 const PULSE = ROSTER_INDEX.pulse;
@@ -50,6 +50,22 @@ describe("resolveTurn", () => {
     const tl = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 45, power: 50 });
     expect(tl.shells.map((s) => s.angle)).toEqual([39, 42, 45, 48, 51]);
   });
+  it("lands a Fan volley on the opponent: one terminal event per shell", () => {
+    const tl = resolveTurn(flatBattle(), { move: 0, weapon: ROSTER_INDEX.fan, angle: 36, power: 48 });
+    const terminal = tl.events.filter((e) => e.kind === "blast" || e.kind === "out");
+    expect(terminal.length).toBe(5); // a shell that hit a tank must stop, not blast again next step
+    expect(terminal.map((e) => e.shell).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+    expect(tl.points).toEqual([51, 0]);
+  });
+  it("scores nothing and leaves the ground alone when the shot leaves the world", () => {
+    const m = flatBattle();
+    const before = Array.from(m.terrain.height);
+    const tl = resolveTurn(m, { move: 0, weapon: PULSE, angle: 170, power: 100 }); // off the left edge
+    expect(tl.events.filter((e) => e.kind === "out").length).toBe(1);
+    expect(tl.events.some((e) => e.kind === "blast")).toBe(false);
+    expect(tl.points).toEqual([0, 0]);
+    expect(Array.from(m.terrain.height)).toEqual(before);
+  });
   it("moves before firing", () => {
     const m = flatBattle();
     const tl = resolveTurn(m, { move: 1, weapon: PULSE, angle: 45, power: 10 });
@@ -65,5 +81,33 @@ describe("resolveTurn", () => {
     const tb = resolveTurn(b, { move: 0, weapon: ROSTER_INDEX.nova, angle: 50, power: 70 });
     expect(tb).toEqual(ta);
     expect(Array.from(b.terrain.height)).toEqual(Array.from(a.terrain.height));
+  });
+});
+
+describe("the timeline", () => {
+  it("records the settled heightfield", () => {
+    const m = flatBattle();
+    const tl = resolveTurn(m, { move: 0, weapon: ROSTER_INDEX.fan, angle: 36, power: 48 });
+    expect(Array.from(tl.settle.heights)).toEqual(Array.from(m.terrain.height));
+  });
+  it("ends each shell's path at its terminal event", () => {
+    for (const [weapon, angle, power] of [[ROSTER_INDEX.fan, 36, 48], [PULSE, 170, 100], [PULSE, 60, 30]]) {
+      const tl = resolveTurn(flatBattle(), { move: 0, weapon, angle, power });
+      for (const e of tl.events) {
+        if (e.kind === "damage") continue;
+        expect(tl.shells[e.shell].points.slice(-2)).toEqual([e.x, e.y]);
+      }
+    }
+  });
+  it("records the dirt that falls when a blast undercuts a cliff", () => {
+    const m = flatBattle();
+    for (let x = 450; x < WORLD_W; x++) m.terrain.height[x] = 200; // a sheer 200 px cliff face at x = 450
+    spansFromHeight(m.terrain);
+    const tl = resolveTurn(m, { move: 0, weapon: PULSE, angle: 0, power: 100 }); // flat and fast into the face
+    expect(tl.events.find((e) => e.kind === "blast")).toMatchObject({ x: 450, y: 393 }); // well below the top
+    expect(tl.settle.falls.length).toBeGreaterThan(0);
+    expect(tl.settle.falls).toContainEqual({ x: 450, top: 200, bottom: 365, fall: 57 });
+    expect(m.terrain.height[450]).toBe(257);
+    expect(Array.from(tl.settle.heights)).toEqual(Array.from(m.terrain.height));
   });
 });
