@@ -270,6 +270,6 @@ describe("a windless match", () => {
     expect(m.phase).toBe("over");
     expect(Array.from(m.scores)).toEqual([36, 24]);
     expect(m.winner).toBe(0);
-    expect(hashMatch(m)).toBe("1c8832e9");
+    expect(hashMatch(m)).toBe("8d7dc831");
   });
 });

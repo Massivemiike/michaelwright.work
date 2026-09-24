@@ -12,7 +12,7 @@ export function hashMatch(m: MatchState): string {
   const s = m.settings;
   let h = FNV_OFFSET;
   for (const v of [
-    s.weaponsEach, s.poolSize, s.wind ? 1 : 0, s.guaranteeTags.length,
+    s.weaponsEach, s.poolSize, s.wind ? 1 : 0, s.guaranteeTags.length, s.rosterSize,
     PHASE_CODE[m.phase], m.rng.state, m.firstPicker, m.picksMade, m.shooter, m.shotsFired,
     m.wind, m.winner, m.scores[0], m.scores[1],
     m.tankX[0], m.tankX[1], m.movesLeft[0], m.movesLeft[1], m.pool.length,

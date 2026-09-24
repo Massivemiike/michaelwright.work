@@ -25,5 +25,6 @@ describe("hashMatch", () => {
     expect(after((m) => { m.scores[0] = 1; })).not.toBe(h);
     expect(after((m) => { applyPick(m, 0); })).not.toBe(h);
     expect(after((m) => { m.rng.state ^= 1; })).not.toBe(h);
+    expect(after((m) => { m.settings = { ...m.settings, rosterSize: 7 }; })).not.toBe(h); // settings alone, nothing played
   });
 });
