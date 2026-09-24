@@ -86,7 +86,7 @@ Today `src/game/sim/` is labeled generic but is Circle-TD-shaped: `replay.ts` im
 
 `applyTurn(m, cmd)` is the checked entry point. It validates the command (phase, integer angle 0–180 and power 0–100, a legal move, and a weapon in the shooter's hand, or Pulse in sudden death), calls `resolveTurn`, removes a battle weapon from the hand, and advances `shotsFired`, the shooter, the phase, and the wind. On an illegal command it returns `invalid_command` and changes nothing. `applyPick(m, poolIndex)` does the same for draft picks.
 
-`replayMatch({ seed, settings, commands })` re-runs a command log from `createMatch` through `applyPick`/`applyTurn` and returns the final state and its `hashMatch`. An illegal command rejects the whole log as `invalid_command` at its index, and so does a malformed log (not an array, a non-object entry, an unknown `k`); `replayMatch` never throws on one. It accepts an unfinished log (resume, §6.5), so a verifier must also require `phase === "over"`. Plan 1's `replayMatch` replays 2-player logs; regenerating the AI's commands arrives with the AI in Plan 2.
+`replayMatch({ seed, settings, commands })` re-runs a command log from `createMatch` through `applyPick`/`applyTurn` and returns the final state and its `hashMatch`. An illegal command rejects the whole log as `invalid_command` at its index, and so does a malformed log (not an array, a non-object entry, an unknown `k`); `replayMatch` never throws on one. The settings, unlike the commands, are trusted input (the verifier supplies them): `createMatch` throws a `RangeError` on settings it rejects (§2) instead of returning a result. It accepts an unfinished log (resume, §6.5), so a verifier must also require `phase === "over"`. Plan 1's `replayMatch` replays 2-player logs; regenerating the AI's commands arrives with the AI in Plan 2.
 
 `cloneMatch` is the deep copy that AI search and previews resolve against, so the original state is never touched. `createMatch` stores a frozen copy of its settings, which clones share.
 
@@ -111,6 +111,7 @@ The sim and AI run in a **Web Worker** (the main thread owns rendering, the HUD,
 - **Draft:** a seeded pool of **24** distinct weapons drawn from the 32-weapon roster, with at least one of each of BLAST, SPLIT, and DIRT. Players alternate picks until each holds **10**. (Free play can choose **5** each, with a pool of 12.)
   - These are `STANDARD_SETTINGS` (10 each, pool 24) and `SHORT_SETTINGS` (5 each, pool 12), frozen in `state.ts`. Both guarantee BLAST, SPLIT and DIRT, and both have wind off (free play's toggle turns it on).
   - The pool is drawn from the roster prefix `ROSTER[0, rosterSize)`. `MatchSettings.rosterSize` is validated by `createMatch` (an integer in [`poolSize`, `ROSTER.length`]) and folded into `hashMatch`. Both standard settings carry the literal 32, so a roster append never moves a pinned match; growing the roster is a deliberate settings and `simVersion` change.
+  - `createMatch` also requires `weaponsEach` to be an integer ≥ 1 and `poolSize` an integer ≥ 2 × `weaponsEach`, and throws a `RangeError` on settings it rejects. Settings are trusted input: Plan 4's binding supplies `STANDARD_SETTINGS`, and full range validation stays in Plan 4 (§7, §9.1).
 - **Turn:** an optional **move** (4 per player per match; ±36 px horizontally, with y following the surface; tank centres stay at least 24 px inside the world edges (`TANK_EDGE_MARGIN`) and can't come closer than 64 px to the other tank), then choose one of your remaining weapons, set **angle** (integer degrees 0–180; 0 = right, 90 = straight up; a beam weapon reads the same angle on the **beam dial**, where 90 is level at the opponent, §4.1) and **power** (integer 0–100), and fire. The **ghost trail** of your previous shot stays visible; there is no trajectory preview.
 - **Scoring:** damage dealt to the opponent = points. **Self-damage is awarded to the opponent.** Once all weapons are fired, the higher total wins. **Tie:** sudden death, one Pulse shot each; if still tied, it's a draw.
 - **Wind:** off by default. The free-play toggle adds seeded per-turn wind (−40…+40 px/s² horizontal), shown as an arrow and value in the HUD.
@@ -125,7 +126,7 @@ All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), rando
 ### 3.1 Terrain
 
 - **Persistent state = heightfield:** `height: Int32Array(1200)`, the surface y per 1-px column (y-down; 500 is the floor).
-- **During a shot**, each column may hold several solid **spans** (tunnels, floating dirt): `spans[x] = [top0, bot0, top1, bot1, …]`, capped at 8 per column. Carve (circle, capsule) and add (ball, wall, level) edit spans directly, and projectiles collide with spans exactly. A carve that would make a 9th span drops the top one (Plan 1's rule); an add never loses dirt: a 9th piece is merged into the span below it (or above it, with none below).
+- **During a shot**, each column may hold several solid **spans** (tunnels, floating dirt): `spans[x] = [top0, bot0, top1, bot1, …]`, capped at 8 per column. Carve (circle, capsule) and add (ball, wall, level) edit spans directly, and projectiles collide with spans exactly. A carve that would make a 9th span drops the top one (Plan 1's rule); an add never loses dirt: when it would make a 9th span, it closes the gap to the span below (or above, with none below) with dirt, so it can add up to that gap on top of its own piece.
 - **Settle** runs once, after the whole shot resolves: in every column, floating spans fall and merge onto the span below or the floor, collapsing back to one span, i.e. the heightfield. The timeline records the post-settle heightfield plus each falling span so the renderer can animate the pour; Plan 3 adds the pre-settle heightfield (§3.4).
 - **Generation:** seeded rolling hills, integer-only:
   - 9 control points (one every 150 px) drawn from the match RNG in [160, 380];
@@ -141,7 +142,7 @@ All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), rando
 - **Launch:** `v0 = power × V_UNIT` along the aim angle, where `V_UNIT = 6.84 px/s` per power point (power 100 at 45° ranges ~1.3 × world width). `G = 300 px/s²` downward; wind adds horizontal acceleration.
 - **Integration:** a fixed physics step of **1/60 s**, semi-implicit Euler in Q16.16. Each step's movement is swept at ≤ 1 px increments (integer DDA) against terrain spans and tank hitboxes, so nothing tunnels. Pixels are **floored** (`floorPx`): column c is [c, c + 1), so the left world edge is exactly x = 0 and a step crossing it never drops a sample.
 - **Volleys:** shell i of a volley flies at `aim + fanOffset(i)`, from −spread/2 to +spread/2, each from its own muzzle, and is **never clamped**: the fan stays symmetric about the aim, and an edge shell may leave below the horizon (Fan aimed at 2° fires at −4°, −1°, 2°, 5° and 8°). Directions outside 0..180 (volley edges, the beam dial, homing turns, the dig clamp) come from the same baked table by exact symmetry (`cosDeg`/`sinDeg`), with no new literals.
-- **Bounds:** leaving the left or right world edge = lost (except Ricochet, which reflects). There is no ceiling.
+- **Bounds:** leaving the left or right world edge = lost (except Ricochet, which reflects a shell whose last free sample is inside the world, §4.1). There is no ceiling.
 - **Flight caps:** each shell flies at most **1200 of its own steps** (20 s), counted from its launch or spawn with bounce steps included, so a split child gets a full flight; a shell that reaches the cap is lost (`out`). A turn also has two backstops, **4,800 steps** and **64 shells**: at the step backstop everything still flying is lost and armed delays are dropped, and spawns beyond 64 are dropped. Only invalid data can reach them: `weapons/validate.ts` bounds every weapon statically, and the roster's maximum is 3,600 steps and 13 shells (Cascade), which a test enforces.
 - **Tank hitbox:** a circle of radius 14 px centered 12 px above the tank's surface point.
 
@@ -208,7 +209,7 @@ interface Stage { on: "impact" | "apex"; effects: Effect[]; early?: Effect[]; ho
 interface WeaponDef { id: string; name: string; tag: Tag; tier: 1 | 2 | 3; power: number; launch: Launch; stage?: Stage }
 ```
 
-`tag` ∈ BLAST, VOLLEY, SPLIT, BOUNCE, ROLL, DIG, FIRE, DIRT, BEAM, HOMING, QUAKE, SPECIAL. `power` is a draft score in 1–100, written by the balance harness and used by the draft AI. Adding a weapon means adding a `WeaponDef` plus an SVG glyph for the HUD.
+`tag` ∈ BLAST, VOLLEY, SPLIT, BOUNCE, ROLL, DIG, FIRE, DIRT, BEAM, HOMING, QUAKE, SPECIAL. `power` is a draft score in 1–100, written by the balance harness and used by the draft AI. Adding a weapon means adding a `WeaponDef` plus its HUD metadata (a one-line description and an SVG glyph). That metadata lives in a separate map keyed by weapon id, outside `WeaponDef`: the corpus pins each weapon's definition digest, which hashes every `WeaponDef` key except `power` (§8), so a presentation field inside `WeaponDef` would move pins. For the same reason, renaming a weapon's `name` needs a declared corpus re-pin.
 
 Plan 2A implements this model in `weapons/types.ts`, `weapons/primitives.ts` and `ballistics.ts`. Against the first sketch:
 - `bounce` is a `Stage` flight modifier, not an `Effect`: Ricochet reflects in flight, before any impact. `homing` and `bounce` are valid only on impact stages.
@@ -226,7 +227,7 @@ Plan 2A implements this model in `weapons/types.ts`, `weapons/primitives.ts` and
 
   This order is part of the determinism contract.
 - **Triggers.** An `impact` stage fires at the first terrain or tank contact that a bounce doesn't consume. An `apex` stage fires on the first step a *rising* shell stops rising (`vy < 0` before the step's gravity, `vy ≥ 0` after it), so a shell launched level or downward never apexes. An apex-stage shell that hits something before its apex applies `early` instead, or is a `dud` without it. Effects see the trigger pixel (the first solid or hitbox pixel on impact), the last free position (children spawn, and roll and burn drop, from there), the velocity, and the tank struck.
-- **Spawns.** A spawn point is never tested. A child whose first sample is solid impacts there on its first step, and one spawned off the world is lost. A shell spawned inside a tank's hitbox ignores that tank until a sample leaves it.
+- **Spawns.** A spawn point is never tested. A child whose first sample is solid impacts there on its first step, and one spawned off the world is out at its first sample unless that sample is back inside the world. That holds for a wall bouncer too: a side wall reflects only a shell whose last free sample is inside the world. A shell spawned inside a tank's hitbox ignores that tank until a sample leaves it.
 - **Blast** is Plan 1's: carve a disc, then damage tank 0 and then tank 1 (§3.3).
 - **Split.** Child `i` is offset by the volley rule (`fanOffset`) and spawns at the parent's last free position:
   - `up` (Cascade, Shrapnel): a fan about straight up at the parent's nominal speed × `speedPct`;
@@ -239,7 +240,7 @@ Plan 2A implements this model in `weapons/types.ts`, `weapons/primitives.ts` and
   - The normal is minus the centroid of the solid pixels in a **radius-8 disc** (`BOUNCE_PROBE_R`, owner decision 2026-09-23), in exact integers: ≤ 197 probes, no square root. It is exact on flat ground and at 45°, and within 2.3° of the ideal heading on slopes of 1:10 and steeper.
   - `blastEach` detonates at each contact after the reflection.
   - A tank contact always triggers the stage.
-  - With `walls: true` (Ricochet) only the side walls reflect.
+  - With `walls: true` (Ricochet) only the side walls reflect, and only a shell whose last free sample is inside the world. A wall bouncer spawned past a side wall (a `gapPx` child) goes `out` at its first sample instead (Spawns).
 - **Homing** (owner decision 2026-09-23: the §4.2 numbers, Seeker ≤ 2°/step and Swarm ≤ 1°/step) turns a shell ≤ `degPerStep` whole degrees per step toward the enemy's hitbox centre (fixed at shot start), from its apex on. A shell that never rises never steers, and gravity keeps acting, so a homing shell arcs in.
   - A turn never passes the target, so there is no overshoot or wobble.
   - There is no arctangent: it turns `k = min(degPerStep, ⌊angle to the target⌋)` whole degrees, finding `⌊angle⌋` by comparing tangents with the baked table (`|cross|·cos k < dot·sin k`).
@@ -251,7 +252,7 @@ Plan 2A implements this model in `weapons/types.ts`, `weapons/primitives.ts` and
   - the test is one exact comparison against the baked table, `c·cos 30° > |a|·sin 30°` for a falling heading `(a, c)`, with no arctangent.
 
   The tunnel ends early at a side edge, at the floor, or inside a tank's hitbox. It carves a capsule of radius `width/2`, blasts `each` every `blastEvery` px before its end, and blasts `then` at its end. A direct tank hit digs nothing and fires only `then`. The clamp keeps a falling shell from tunnelling straight down, but a tunnel blast still reaches a tank only from an impact above that tank's ground (a slope or a ledge) or by tunnelling into its hitbox. On a blind aim grid (20 seeded boards × both shooters), Burrow hits 2.7% of shots for 1.23 points per shot (1.9% and 0.96 unclamped) and Auger 3.3% for 0.46 (2.1% and 0.30), against Pulse's 3.2% and 0.93. The balance harness judges the rest.
-- **Burn** walks the same way as a roll, from the ground below the last free pixel: the pool `pool/2` each way, then the flow `flow` px downhill, or both ways with `split`. Each tank whose hitbox a run reaches takes `damage` **once per burn effect**. Fire changes no terrain and never lingers.
+- **Burn** walks the same way as a roll, from the ground below the last free pixel: the pool `pool/2` each way, then the flow `flow` px downhill, or both ways with `split`. Each tank whose hitbox a run reaches takes `damage` **once per burn effect**. A burn that strikes a tank directly touches that tank, which takes the burn damage once, at lag 0, whichever way the runs go. This follows the owner defaults O8 (touch = the hitbox circle, which the shell itself struck) and O11 (direct hits) of the Plan 2A design addendum (`2026-09-23-arcfire-plan2a-weapons-design.md`, §10.1). Fire changes no terrain and never lingers.
 - **Build** acts at the trigger pixel:
   - `ball` adds a disc of dirt;
   - `wall` raises each of its `width` columns by `height` on that column's own surface;
@@ -278,7 +279,14 @@ Plan 2A implements this model in `weapons/types.ts`, `weapons/primitives.ts` and
   - **Effect.** It carves a capsule of radius `width/2` along its length. Each tank whose hitbox it passes within `width/2` of takes `damage` once.
   - **No self-hit.** Width ≤ 12 and the muzzle stands ≥ 20.8 px from the hitbox centre in every direction, so a beam can never touch its own tank, whatever its direction.
 - **Weapons consume no RNG**, so a candidate shot's outcome depends only on the state and the command.
-- **The validator.** `weapons/validate.ts` checks every definition statically: integer ranges that keep every product below 2^53 and every data-fed divisor ≥ 1, stage nesting ≤ 4 (which also stops a cyclic definition), where `early`, `homing` and `bounce` may appear, and the static bounds `maxShells(def)` and `maxTurnSteps(def)` (§3.2). The roster test requires every entry to pass. Each data-fed divisor also has a runtime guard, so degenerate definitions (zeros, count 0, a cyclic stage) resolve without throwing.
+- **The validator.** `weapons/validate.ts` checks every definition statically: integer ranges that keep every product below 2^53 and every data-fed divisor ≥ 1, stage nesting ≤ 4, where `early`, `homing` and `bounce` may appear, and the static bounds `maxShells(def)` and `maxTurnSteps(def)` (§3.2). It also enforces the structure:
+  - a split's `from: "ahead"` or `"cone"` only in an apex stage's `effects` (at an impact the heading points into the ground, and an `early` list counts as an impact);
+  - effect lists are non-empty, with exactly one known key per effect, and a delay schedules no split or delay;
+  - a dig's `blastEvery` and `each` come together;
+  - a stage cycle is found directly: each reference back to a stage already on the current path is reported once, as a `cyclic stage` error, and not descended into;
+  - `weaponErrors` never throws: an absent or null nested object is reported as `<path>: missing`.
+
+  The roster test requires every entry to pass. Each data-fed divisor also has a runtime guard, so degenerate definitions (zeros, count 0, a cyclic stage) resolve without throwing.
 
 ### 4.2 Roster (32; initial parameters, which the balance harness tunes)
 
@@ -286,6 +294,7 @@ The `#` column is display order. A weapon's **roster index**, which turn command
 - Plan 1's roster indices are `0 pulse, 1 pulse2, 2 nova, 3 needle, 4 crater, 5 triad, 6 fan, 7 railshot`.
 - Plan 2A appends the other 24 in this table's display order: `8 twinnova, 9 cascade, 10 hydra, 11 hailstorm, 12 shrapnel, 13 barrage, 14 skipper, 15 pinball, 16 ricochet, 17 tumbler, 18 juggernaut, 19 burrow, 20 auger, 21 inferno, 22 wildfire, 23 rampart, 24 bastion, 25 leveler, 26 lancer, 27 prism, 28 seeker, 29 swarm, 30 quake, 31 aftershock`. So #6 Twin Nova is index 8, and #9–#31 are indices 9–31.
 - Where the first draft of this table left a number open, the row shows Plan 2A's initial choice. Every `power` is a placeholder until the balance harness writes it; the appended weapons start at 30 (tier 1), 55 (tier 2), 80 (tier 3) and 25 (DIRT).
+- The Name column is each `WeaponDef.name`, which the definition digest covers, so a rename needs a declared corpus re-pin. The HUD's description and glyph live outside `WeaponDef`, in a map keyed by weapon id (§4.1), so adding them moves no pin.
 
 | # | Name | Tag | Tier | Behavior (radius px / damage) |
 |---|---|---|---|---|
@@ -351,6 +360,7 @@ Behind `BALANCE_SWEEP=1` (the same pattern as Circle TD's balance sweep), determ
 ### 6.1 Battle screen: "Deck+" (one layout; `deck-plus.html`)
 
 - **Battlefield** (~70% of the height): the rendered world, letterboxed. It carries floating **score pills** (you in red, opponent in blue), the **turn pill** (`TURN 7 / 20`), your previous shot's **ghost trail**, and the **drag-to-aim** vector (drag from your tank: direction = angle, length = power) with an `angle · power` bubble.
+  - **Beams.** For a beam weapon, the drag direction θ (aim degrees, taken within ±180° of the shooter's facing: −180..180 for player 0, 0..360 for player 1) maps through the inverse of `beamDir` (§4.1). The command angle is θ + 90 for player 0 and θ − 90 for player 1, clamped to 0..180, so only the opponent-facing half-plane can be dragged. The drag length is ignored, because beams ignore power, and the bubble shows the elevation (§4.1) instead of the power.
 - **Command deck** (~30%, DOM, design tokens):
   - Row 1: the **weapon carousel** (your 10 drafted weapons; used ones dimmed and struck through; tap to select) and a **weapon info** block (name + one-line description).
   - Row 2: labeled **ANGLE ±** and **POWER ±**, **MOVE ◀ pips ▶**, a "or drag from your tank to aim" hint, and a big **FIRE**.
@@ -404,7 +414,7 @@ Behind `BALANCE_SWEEP=1` (the same pattern as Circle TD's balance sweep), determ
 - **Route changes** (`src/app/api/games/scores/route.ts`): `scoreSubmissionSchema` becomes a zod **discriminated union on `gameSlug`** (Circle TD's schema unchanged; an Arcfire command schema added). The verifier already checks each title's own `title.simVersion` (Plan 1 removed the global `expectedSimVersion`). The daily seed comes from a new `dailySeedFor(slug, now)` in `src/lib/dailySeed.ts`: Circle TD keeps its existing `dailySeed(now)` (existing rows are keyed by it), and Arcfire uses `hashToSeed("arcfire:" + utcDateString(now))`. Ranks and boards are already filtered by `game_slug`. Plan 4 must also:
   - use `title.simVersion` (not Circle TD's imported `SIM_VERSION`) for the inserted row's `sim_version` and the rank/board filters;
   - compute `replay_hash` with a per-title command-log digest (e.g. an optional `TitleDef.hashCommands`), because today it uses Circle TD's `hashCommands`;
-  - have the Arcfire `TitleDef` binding derive `MatchSettings` from the mode, never from the submission;
+  - have the Arcfire `TitleDef` binding derive `MatchSettings` from the mode, never from the submission (the daily challenge uses `STANDARD_SETTINGS`). Settings are trusted input to `replayMatch`: `createMatch` checks only `weaponsEach`, `poolSize` and `rosterSize` (integers, and the pool and roster bounds) and throws a `RangeError` otherwise (§2), so full range validation belongs to the binding;
   - validate command shape in the zod schema;
   - require `phase === "over"` before scoring.
 - **Config:** `LEADERBOARD_PUBLIC` becomes a per-slug map (both `false` until each game's launch gate passes), and `LEADERBOARD_SIM_VERSION` becomes a per-slug mirror with a sync test per title.
@@ -422,8 +432,13 @@ Behind `BALANCE_SWEEP=1` (the same pattern as Circle TD's balance sweep), determ
   - a single table of pins that drives every engine in `e2e/cross-engine-determinism.spec.ts`: Circle TD's golden, both Arcfire goldens and the corpus digest.
 
   Golden moves are **staged**, one cause per commit, each with an inertness check. The `rosterSize` plumbing moves nothing and its fold moves only the hash. Exact damage moves points only, and only down. Floored pixels and unclamped volleys move no golden, only a declared set of corpus cases. The loop refactor moves nothing, and each weapon task only adds corpus keys (a corpus update that would move an existing key refuses to write).
+
+  Re-pins are declared and loud. Each update command writes what moved to stderr, which every Vitest reporter shows:
+  - `UPDATE_ARCFIRE_GOLDEN=plan1` (`determinism.golden.json`) or `=full` (`determinism.full.golden.json`) re-pins only that golden, and `=1` re-pins both. A golden that is not named keeps failing on a moved hash. Each re-pin logs `golden <name>: <old hash> -> <new hash> (scores <old> -> <new>)`.
+  - `UPDATE_ARCFIRE_CORPUS=1` prints the moved cases and definition digests, and requires `ARCFIRE_CORPUS_EXPECT_MOVED=<n>`, the count of both that the re-pin declares: unless exactly n moved, it fails and writes nothing.
+  - `UPDATE_ARCFIRE_CORPUS=add` is unchanged: it writes new keys only, and refuses to write if any existing case or definition digest moved.
 - **Sim unit tests (TDD):** terrain carve/add/settle (spans ↔ heightfield); ballistics (range, swept collision, bounds, flight cap); each primitive, through its roster weapons, plus synthetic definitions fired with `resolveWeapon` for the cases no roster weapon reaches; the draft (pool guarantees, alternation, first-pick rule); moves; scoring incl. self-damage and sudden death. Plan 2A also tests:
-  - the weapon validator (every roster entry passes, seeded mistakes are named, a cyclic definition is reported) and a totality test (degenerate definitions resolve without throwing, to integer state);
+  - the weapon validator (every roster entry passes, seeded mistakes are named, a cyclic definition is reported, malformed input is reported and never thrown) and a totality test (degenerate definitions resolve without throwing, to integer state);
   - the quiet path's parity with `resolveTurn`, and that no weapon touches the match RNG;
   - homing (never more than `degPerStep`, never past the target);
   - beams (the dial and its mirror identity, mirror-exact boards, no self-hit at any of the 181 angles for either shooter);
@@ -471,15 +486,21 @@ This is too large for a single plan. It's expected to split into sequential plan
     - Plan 2A's perf figures understate the AI's workload: `perf.test.ts`'s grid (shooter 0, angles 20–160) partly fires away from the opponent, and those shots leave the world early. They were also measured on the dev machine; CI runs Node 22, so 2B takes its baseline from a Node 22 run on a grid aimed at the opponent.
   - Before the AI's inner loop multiplies them, gate the quiet path's remaining allocations: the walk paths, `split`'s `children`, the per-trigger objects, `settle`'s heights copy and `carveCapsule`'s radius table. The parity test proves such a change inert.
   - The balance harness rewrites the `power` placeholders. It is the first judge of homing at the spec numbers (where a lock radius or turn budget would be considered), of Burrow and Auger under the dig clamp, and of top-attack and direct-hit stacking, which can exceed the tier-3 band (§4.3).
+  - Minors deferred by Plan 2A's final review:
+    - `Timeline.shells[i].angle` can be −0: a split child's `fanOffset` when `spreadDeg` is 0 (Barrage). It never reaches a hash, but compare angles sign-insensitively.
+    - `endBounce` repeats `stepShell`'s step count and flight-cap check. A refactor that shares them must keep the bounce-at-the-cap test green (`ballistics.test.ts`: a bounce on the step that reaches the cap is `out`).
+    - `abandon()`'s `out` events for shells still alive at step 4,800 are untested; no legal weapon can reach the step backstop.
 - **Plan 3:**
   - Extend the Timeline (pre-settle heightfield, launch/move events; §3.4).
   - Play it back at `step + lag`, animating roll, dig, burn and quake over `dur`.
   - Draw a beam weapon's aim needle along `beamDir`, with the elevation readout (§4.1).
+  - Drag-to-aim for a beam weapon goes through the inverse of `beamDir` (§6.1): the command angle is θ + 90 for player 0 and θ − 90 for player 1, clamped to 0..180, and the drag length is ignored.
+  - Keep the HUD metadata (description, glyph) in a separate map keyed by weapon id, outside `WeaponDef` (§4.1): a presentation field inside `WeaponDef` would move the pinned definition digests.
   - Draw negative y: repeated builds can raise a column toward y = 0, so a hitbox can extend above the world top.
 - **Plan 4:**
   - the §7 route items above;
   - harden `src/game/sim/boundary.test.ts`, which only matches the literal `@/game/titles/` alias, to also resolve relative imports;
-  - range-validate `MatchSettings` at the binding.
+  - range-validate `MatchSettings` at the binding (`createMatch` checks only `weaponsEach`, `poolSize` and `rosterSize`, §2).
 - **Housekeeping:**
   - pre-existing jsdom "HTMLCanvasElement getContext()" test noise;
   - the duplicated per-engine loops in `e2e/cross-engine-determinism.spec.ts`: resolved by Plan 2A, where one table of pins drives every engine;

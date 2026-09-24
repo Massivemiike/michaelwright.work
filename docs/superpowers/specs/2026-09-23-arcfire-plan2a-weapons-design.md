@@ -1,6 +1,6 @@
 # Arcfire Plan 2A — Weapons: final design
 
-**Status:** final synthesized design for Plan 2A, **revised with the owner's decisions of 2026-09-23** (Revision 2, logged at the end), ready to be turned into a plan. **Base:** `worktree-games+arcfire` = master `2f9e6ba` (Plan 1 merged).
+**Status:** final synthesized design for Plan 2A, **revised with the owner's decisions of 2026-09-23** (Revision 2, logged at the end), ready to be turned into a plan. **Revision 3** (also logged at the end) records the fixes from Plan 2A's final review. **Base:** `worktree-games+arcfire` = master `2f9e6ba` (Plan 1 merged).
 **Authority:** the spec, `docs/superpowers/specs/2026-09-22-arcfire-design.md` (§2 rules, §3 sim model, §4 weapons, §5 AI budgets, §8 testing, §9.1 carry-forwards). Where this design changes a spec *shape* it says so (§2.4, §10), and the last task syncs the spec.
 
 **Scope (2A):**
@@ -15,6 +15,8 @@
 **Base design:** the "minimal" design, which won all three reviews. Every defect the judges found in it is fixed here, and the best ideas of the "engine" and "feel" designs are grafted in. §12 (Provenance) records what came from where.
 
 **How to read the code:** every code block marked *(verbatim)* is copied mechanically from a throwaway prototype of this exact design. The prototype passed the checks in §1 and was then deleted. Transcribe those blocks exactly: the hashes in §1 and §7 are the transcription checks, and a single changed constant or operator moves them.
+
+**After the final review.** The blocks stay as the plan transcribed them. Plan 2A's final review then changed the code of five of them, and no pin moved: `burn` (§4.5), `stepShell`'s side-edge branch (§4.4), `validate.ts` (§4.7), `corpus.test.ts` (§8.4) and the `determinism.test.ts` re-pin (§8.5), plus the `createMatch` checks (§2.2). The Revision 3 log gives each change exactly; where it and a block differ, the log describes the code.
 
 **Owner decisions (2026-09-23), all applied below** (§10.1 has each one with its measured effect):
 - **Beams are long and can aim down** (O1): Lancer and Prism reach 1,200 px, and read the command angle on the *beam dial*, `beamDir` (D19).
@@ -293,7 +295,7 @@ export function cloneMatch(m: MatchState): MatchState {
 }
 ```
 
-`match.ts` validates the field and drafts from the prefix. These are the only two changes to `createMatch`:
+`match.ts` validates the field and drafts from the prefix. These are the only two changes the tasks make to `createMatch`:
 
 ```ts
   if (!Number.isInteger(settings.rosterSize) || settings.rosterSize < settings.poolSize || settings.rosterSize > ROSTER.length) {
@@ -302,6 +304,8 @@ export function cloneMatch(m: MatchState): MatchState {
   // ...
   const pool = drawPool(rng, ROSTER.slice(0, own.rosterSize), own.poolSize, own.guaranteeTags);
 ```
+
+The final review (Revision 3) adds two checks before the existing `poolSize < 2 × weaponsEach` check: `weaponsEach` must be an integer ≥ 1 and `poolSize` an integer, or `createMatch` throws a `RangeError`. Settings are trusted input to `replayMatch` (its header says so): Plan 4's binding supplies `STANDARD_SETTINGS`, and full range validation stays in Plan 4.
 
 `hash.ts` folds the new field right after `guaranteeTags.length`. The position is part of the transcription check (§7.2):
 
@@ -381,7 +385,7 @@ Nothing else is an entity. Roll paths, fire flows, tunnels, quakes, builds and b
    - Like a muzzle point, the spawn point is not a sample. The child's first step tests its samples from the first one on, which is ≤ 1 px from the spawn point, with the usual side-edge, tank and terrain checks.
    - So a child spawned inside terrain (a Barrage line child whose `gapPx` offset lands in a hill) **impacts at its first sample** when that sample is solid: at `s + 1`, with its `fx, fy` still the spawn point.
    - If the first sample is free, the child flies on. That happens when it spawned on a surface pixel moving out, or when an earlier sibling's crater opened the spot that step.
-   - A child spawned off the world is `out` at its first sample, unless that sample is back inside.
+   - A child spawned off the world is `out` at its first sample, unless that sample is back inside. That holds for a wall bouncer too (Revision 3): a side wall reflects only a shell whose last free sample is inside the world, so a `gapPx` child spawned past a side wall is `out` there with its wall bounces unused.
    - Tank hitboxes are the one exception: D6's `ignore` mask.
 7. **A delay armed at step `s` fires at `s + max(1, steps)`**, per rule 2.
 8. **Tanks are frozen during the shot.** Hitboxes are computed once, after the move and before the launch. Damage accumulates in `received[]` immediately (with its event); scoring happens after the settle.
@@ -396,7 +400,7 @@ Nothing else is an entity. Roll paths, fire flows, tunnels, quakes, builds and b
 | apex | the latch step (D4); the shell dies without moving | `stage.effects` (apex stage) |
 | early | an apex-stage shell hits terrain or a tank before its apex | `stage.early`, or a `dud` event if it has none |
 | delay | step `at` (rule 7) | `delay.then` at the arming trigger's geometry |
-| out | leaves a side edge with no wall bounce left, or reaches the per-shell cap | none (the shell is lost) |
+| out | leaves a side edge with no wall bounce left (or with its last free sample already off the world), or reaches the per-shell cap | none (the shell is lost) |
 
 What effects see:
 
@@ -959,6 +963,8 @@ export function settle(t: Terrain, collect = true): SettleResult {
 ```
 
 **`addInterval` overflow.** A new piece that would be a 9th span is extended to absorb the span directly below it (or, if there is none below, the one above). Dirt lands on dirt: the new dirt is always present and nothing is lost. This was tested against a pixel model.
+- The merge closes the gap to the span below (or above) with dirt, so an overflowing add can add up to that gap as well as its own piece: dirt that no effect placed.
+- Revisit it if a later weapon both carves and builds in one shot (for example, merge across the smaller of the two neighbouring gaps).
 
 **Why `carveCapsule` needs one interval per column.** Consecutive samples are ≤ 1 px apart on both axes. A sample's section in column c and the next sample's section therefore overlap or touch: the half-height `isqrt(2r − 1)` at the disc edge is ≥ 1. The samples covering a column are contiguous in the sequence, because x is monotone along a line, so each column's union is one interval.
 
@@ -1287,6 +1293,7 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
   - **After a bounce** the step ends at the last free sample, so a bouncer never restarts inside dirt. The flight cap still counts that step.
   - **Tanks never bounce a shell:** a tank contact always triggers the stage.
 - **Walls (Ricochet).** A side-edge exit with `wallBounces > 0` reflects about (±1, 0), so vx flips and both components keep `restitutionPct`. The shell stays at its last in-world sample, and the bounce event's x is clamped to the wall column. The world has no ceiling, so a wall bounce can happen at any height.
+  - **Only from inside the world** (Revision 3). The branch reflects only when the last free sample is inside the world (`floorPx(fx) >= 0 && floorPx(fx) < WORLD_W`). Otherwise the shell is `out` at the off-world sample, as §3.2 rule 6 says. Only a `gapPx` child spawned past a side wall can meet this; before the fix it sat at its spawn point, emitting a wall `bounce` at x = 0 each step until its wall bounces ran out.
 
 ### 4.5 The effects: `weapons/primitives.ts` *(verbatim, full file)*
 
@@ -1694,7 +1701,7 @@ export function fireBeams(shot: Shot, launch: BeamLaunch, angle: number): void {
 
 **Bounce (terrain).** See §4.4. Each terrain contact while `bounces > 0` consumes one bounce, reflects, and ends the step at the last free sample. `blastEach` (Skipper) detonates at the contact pixel in the same step, *after* the reflection (the normal is read before the crater exists). When the bounces are used up, the next contact triggers the stage.
 
-**Bounce (walls).** With `walls: true` only side-wall exits bounce. Terrain triggers the stage as usual. With no wall bounces left, leaving the side is `out`.
+**Bounce (walls).** With `walls: true` only side-wall exits bounce. Terrain triggers the stage as usual. With no wall bounces left, leaving the side is `out`. So is a side-edge exit whose last free sample is already off the world (Revision 3): a wall bouncer spawned past a side wall is `out` at its first sample (§3.2 rule 6, §4.4).
 
 **Homing.** See §4.4. Swarm's five shells home independently.
 
@@ -1723,7 +1730,8 @@ export function fireBeams(shot: Shot, launch: BeamLaunch, angle: number): void {
 **Burn** (`burn` → `walk`).
 - **Ignition** is the ground below the last free pixel. Each run walks from there under the same no-climb rule: the **pool** walks `pool/2` each way, then the **flow** walks `flow` px downhill (travel direction on level ground), or both ways when `split` (Wildfire).
 - A run stops at a rise, an edge, or a tank. A tank that stops a run, or whose hitbox contains the ignition point, is *touched*.
-- Each touched tank takes `damage` **once per burn effect**, with `lag` = the run distance to it. There is no terrain change.
+- **A direct hit touches the struck tank** (Revision 3, ruling R6), at 0 px, whichever way the runs go: `if (trig.tank >= 0) touched[trig.tank] = 0;`. It follows O8 (touch = the hitbox circle, which the shell itself struck) and O11 (direct hits). Without it, a direct hit on a tank standing even 1 px uphill of the ignition point could deal 0, because every run toward the tank stops at the first rise (O7).
+- Each touched tank takes `damage` **once per burn effect**, with `lag` = `showSteps` of the shortest run distance to it (0 px for a direct hit or an ignition inside its hitbox, so lag 0). There is no terrain change.
 
 **Build.** All shapes act at the trigger pixel (x, y):
 - **ball:** a disc of radius r, one `addInterval` per column. The airborne half settles onto the ground, so on flat ground Bastion makes a mound 48 px high at the centre (352 at the centre, 356 at ±17, 374 at ±40).
@@ -1948,6 +1956,11 @@ Data far outside the validator's ranges is **not** covered:
 - NaN data is unspecified.
 
 The validator is the gate: the roster test requires `[]` for every entry, and 2B's probe definitions should pass it too.
+
+**Since the final review (Revision 3),** `weaponErrors` never throws, and it finds cycles directly. The ranges and the static bounds are unchanged.
+- An absent or null nested object is reported as `<path>: missing`: an `isObj` / `present` guard runs before every def, launch, stage, effect, effect body, blast, `homing` and `bounce` is read.
+- `checkStage` carries `onPath`, the set of stages from the root to the current one. A reference back to one of them pushes `<path>: cyclic stage, so its stages nest deeper than 4` once and is not descended into, so a stage that refers to itself k times costs k checks, not k^4.
+- The depth rule still reports acyclic nesting deeper than 4.
 
 ### 4.8 Cost
 
@@ -2330,6 +2343,8 @@ export interface Timeline {
    - `UPDATE_ARCFIRE_CORPUS=1 npx vitest run src/game/titles/arcfire/corpus.test.ts`
 
    Edit the windless and Fan literals by hand. Re-run with no variables: green.
+
+   Since the final review (Revision 3), both commands are stricter and louder, writing what moved to stderr under any reporter. `UPDATE_ARCFIRE_GOLDEN=plan1` or `=full` re-pins one golden, and `=1` still re-pins both. `UPDATE_ARCFIRE_CORPUS=1` also needs `ARCFIRE_CORPUS_EXPECT_MOVED=<n>`, the number of moved cases plus moved definition digests; without it, or with any other count, it fails and writes nothing.
 4. **`npm run test:e2e:cross-engine`:** Chromium and WebKit reproduce the new golden and corpus digest (Firefox runs in CI).
 5. **One commit per cause.** The body lists the old → new hash, the scores and the moved corpus ids. The corpus test prints them in mode 1.
 
@@ -2560,7 +2575,7 @@ The reference uses `BigInt(…)` calls because the repo's `tsconfig` targets ES2
 - Burrow at 90/0 (a direct hit): a zero-length dig and one blast.
 
 *Burn*
-- Wildfire at 60/52: 2 flows. The enemy takes 45 exactly once, with a small `lag`. *(proto: ignition at 687, flows 687→547 and 687→692 stopped by the tank, lag 2)*
+- Wildfire at 60/52: 2 flows. The enemy takes 45 exactly once. *(proto: ignition at 687, flows 687→547 and 687→692 stopped by the tank, lag 2)* The shell strikes the enemy's hitbox, so since Revision 3 this is a direct hit and the lag is 0.
 - Inferno on a slope falling toward the enemy (tanks 200/700; `height[x]` = 300 for x < 400, `300 + ⌊(x − 400) · 120 / 300⌋` for 400 ≤ x ≤ 700, and 420 beyond): at 45°/37 it ignites uphill of the enemy, at x 470, and the flow reaches it: 70 exactly once, with `lag` 55, and the terrain is unchanged.
 - Heights after a burn equal the heights before it.
 
@@ -3012,7 +3027,7 @@ describe("arcfire corpus", () => {
 
 - **`determinism.test.ts`:**
   - the Plan 1 golden keeps its strategy, with `rosterSize: 8` added to `SETTINGS`;
-  - a second `describe` adds the **full-roster golden**, with fixture `determinism.full.golden.json` and the same `UPDATE_ARCFIRE_GOLDEN=1` variable.
+  - a second `describe` adds the **full-roster golden**, with fixture `determinism.full.golden.json` and the same `UPDATE_ARCFIRE_GOLDEN=1` variable. Since Revision 3, `=plan1` and `=full` select one golden (§7.3).
 
   Appended to the file *(verbatim; import `cloneMatch` from `./state`)*:
 
@@ -3258,6 +3273,7 @@ Measurements use the **blind grid** of §1: 20 seeded hills boards × both shoot
 **⚑ O8: Fire — default accepted.**
 - Touch = the tank's hitbox circle, so on level ground a flow must reach within about 8 px of the centre.
 - Damage is once per tank per burn effect (Wildfire max 45); flows stop at a tank; there is no lingering fire.
+- **A direct hit touches the struck tank** (amended by the final review, Revision 3, ruling R6): its hitbox is the circle the shell struck, so it takes the burn damage once, at lag 0, whichever way the fire runs (O11).
 - Not taken: a wider reach; once per flow (Wildfire up to 90); lingering fire (a hashed `MatchState` addition).
 
 **⚑ O9: Quake — DECIDED: horizontal distance, never the shooter (D21).**
@@ -3269,7 +3285,7 @@ Measurements use the **blind grid** of §1: 20 seeded hills boards × both shoot
 
 **⚑ O10: Builds lift tanks — default accepted.** Rampart on a tank puts it on an 80 px pedestal, and Bastion on the enemy raised it 72 px. Builds do not skip tank columns (that would be closer to burying).
 
-**⚑ O11: Direct tank hits skip the roll and the tunnel — default accepted.** Tumbler blasts at once; Burrow and Auger give only their end blast.
+**⚑ O11: Direct tank hits skip the roll and the tunnel — default accepted.** Tumbler blasts at once; Burrow and Auger give only their end blast. A burn direct hit touches the struck tank, which takes the burn damage once at lag 0 (O8; amended by the final review, Revision 3, ruling R6).
 
 **⚑ O12: Bounce restitution — default accepted.** It scales both components (speed kept = pct), and walls are elastic (Ricochet 100%). Restitution on the normal component only (a longer "skip") is not taken.
 
@@ -3302,7 +3318,7 @@ Measurements use the **blind grid** of §1: 20 seeded hills boards × both shoot
 ### 10.2 Engineering risks
 
 - **K1: Transcription drift.** Mitigated by the verbatim blocks plus the stage transcription checks: `4c1d8598`, `389a1340`, `8d7dc831`, the corpus digests at each stage (`09403dbb`, `655486aa`, `fa6b1ed7`, `a7100140`), and `3f614265`. The final three pins (`389a1340`, `a7100140`, `3f614265`) were reproduced in Chromium and WebKit.
-- **K2: `MAX_SPANS` carve overflow** still drops the top span: Plan 1's rule, kept so the pins cannot move. It needs 8+ holes in one column in one shot. `addInterval` never loses dirt.
+- **K2: `MAX_SPANS` carve overflow** still drops the top span: Plan 1's rule, kept so the pins cannot move. It needs 8+ holes in one column in one shot. `addInterval` never loses dirt, but when it would make a 9th span it closes the gap to the span below (or above, with none below) with dirt, so it can add up to that gap (§4.2).
 - **K3: Timing inside vitest is inflated about 4–5×** (§4.8). The perf test bundles; 2B's verification-budget test must too.
 - **K4: `-0` in Fx** (Plan 1's `mul` of small negatives) is harmless, because hashing uses `|0`. New code writes negations as `0 - x`.
 - **K5: Heights near 0.** Repeated builds can raise a column toward y = 0, and the hitbox then extends above the world top. The sim is fine (there is no ceiling); Plan 3 must draw negative y.
@@ -3338,6 +3354,7 @@ Measurements use the **blind grid** of §1: 20 seeded hills boards × both shoot
 - **Timing:** bundle the sim before timing (§4.8), and use `copyMatchInto` (K10).
 - **Quiet-path allocations to gate** before the AI's inner loop multiplies them (K12): the walk paths, `children`, the per-trigger objects, `settle`'s heights copy and `carveCapsule`'s `half` table. The parity test proves such a change inert.
 - **The corpus runner** is reusable as a regression net for AI-side changes.
+- **Deferred minors** from the final review (Revision 3; spec §9.1 lists them under Plan 2B): a split child's `Timeline.shells` angle can be −0 (compare sign-insensitively); `endBounce` repeats `stepShell`'s cap check (keep the bounce-at-the-cap test green through any refactor); and `abandon()`'s `out` events for shells alive at step 4,800 are untested (no legal weapon reaches them).
 
 ---
 
@@ -3549,3 +3566,43 @@ The owner's decisions of 2026-09-23 are applied in place. Each code block was th
 - The Revision 1 perf notes in §8.6.
 
 **Not re-run**, because no code on their path changed: the Barrage spawn sweep (§4.6: 128,586 children), the `steer` magnitude measurements (§4.4), and the staged roster-prefix runs (§8.2). The decisions change no roster order, id, staged test or gate. The beam-scored gate that switches on at T11 is met by `lancer|hills|…|90/0`, which exists from T11.
+
+### Revision 3 (the Plan 2A final review)
+
+The final review of the executed plan (`2f9e6ba..a0bb1ba`) confirmed one important defect and listed minors. The controller's rulings R6–R10 (in the Plan 2A execution ledger) settled them, and the fixes landed on `a0bb1ba` in four commits: `1b470e3`, `dfc6076`, `b4cc113` and `3cf1407`. The verbatim blocks above are unchanged; this entry describes the code where they differ.
+
+**No pin moved.** Golden `389a1340` [31, 83], windless `8d7dc831`, corpus `a7100140` (483 cases, the same 32 definition digests), full-roster golden `3f614265` [359, 448], and Circle TD `5167b43d` are all byte-identical.
+
+**Code changes**
+- **`weapons/primitives.ts`, `burn` (§4.5; ruling R6).** Right after `const touched = [-1, -1];`:
+  ```ts
+  if (trig.tank >= 0) touched[trig.tank] = 0; // a direct hit touches the struck tank, whichever way the runs go
+  ```
+  A burn that strikes a tank directly touches it, so it takes the burn damage once at lag 0 (O8, O11; §4.6). Before the fix, a direct hit on a tank standing uphill of the ignition point could deal 0. On the review's blind grid, none of the Inferno and Wildfire direct hits whiffed on spawn boards, but 18.5% did on the same boards after six earlier big blasts.
+- **`ballistics.ts`, `stepShell` (§4.4).** The side-edge branch reflects only a shell whose last free sample is inside the world:
+  ```ts
+  if (s.wallBounces > 0 && floorPx(fx) >= 0 && floorPx(fx) < WORLD_W) {
+  ```
+  Otherwise the shell is `out` (§3.2 rule 6), so a wall bouncer spawned past a side wall is `out` at its first sample. No roster weapon combines `gapPx` with wall bounces.
+- **`weapons/validate.ts` (§4.7).** `weaponErrors` never throws: an absent or null nested object is reported as `<path>: missing`. `checkStage` carries the stages on the current path and reports each back-reference once, as `<path>: cyclic stage, so its stages nest deeper than 4`, without descending into it. The closing note of §4.7 has the details.
+- **`match.ts`, `createMatch` (§2.2).** `weaponsEach` must be an integer ≥ 1 and `poolSize` an integer (a `RangeError` otherwise). `replay.ts`'s header now says the settings are trusted input.
+- **`corpus.test.ts` (§8.4).** Mode `1` writes `corpus re-pin: N moved cases:` and the list to stderr. It writes the fixture only when `ARCFIRE_CORPUS_EXPECT_MOVED` equals N, the moved cases plus the moved definition digests. Mode `add` is unchanged.
+- **`determinism.test.ts` (§8.5).** `UPDATE_ARCFIRE_GOLDEN=plan1` or `=full` re-pins that golden alone, and `=1` both. Each re-pin writes `golden <name>: <old hash> -> <new hash> (scores <old> -> <new>)` to stderr.
+- **Cross-engine.** `harness.entry.ts` gains `window.runArcfireCorpusCases()`. When an engine's corpus digest differs, `e2e/cross-engine-determinism.spec.ts` names the case ids that differ from `corpus.golden.json`. The digest and the pins are unchanged.
+
+**Tests.** 24 tests were added: the Arcfire gate went from 188 to 212, and `npm test` from 441 to 465 passed.
+- The fixes: the burn direct hit (an enemy atop a 1:1 slope falling toward the shooter: Inferno 20/77 gives [70, 0], Wildfire [45, 0]) and the wall bouncer spawned off the world.
+- The validator: cycles, a shared acyclic child, malformed input, and the seeded mistakes that had no case (including an over-bound `maxShells 91`). Also `createMatch`'s integer checks.
+- The primitives: roll (the level-ground tie-break, landing against a tank, the first rise), dig (the floor stop, the mid-tunnel tank stop), burn (the pool arms, an ignition inside a hitbox, its own tank), homing dead astern, and Rampart and Quake on a slope.
+- The engine: the step order (delays fire before shells move), `addInterval`'s overflow direction, and the `stepShell` edges (the apex at `vy` = 0, a bounce on the capped step, the fallback normal).
+- The §6.2 terrain-replay contract: 640 turns, 0 mismatches.
+
+One existing expectation changed: Wildfire at 60/52 is a direct hit, so its damage lag is 0, not 2 (§8.1).
+
+**Recorded, with no code change**
+- `addInterval`'s overflow merge can add up to the gap it closes (§4.2, K2). Revisit it if a weapon both carves and builds in one shot.
+- **Presentation metadata** (ruling R8). The HUD description and glyph live in a separate map keyed by weapon id, outside `WeaponDef`. `defDigest` hashes every `WeaponDef` key except `power`, so a presentation field inside `WeaponDef` would move the pinned definition digests, and renaming a weapon's `name` needs a declared corpus re-pin (spec §4.1).
+- Drag-to-aim for a beam weapon maps through the inverse of `beamDir` (spec §6.1).
+- **Deferred to 2B** (ruling R9; §11): −0 child angles, `endBounce`'s duplicated cap check, and `abandon()`'s untested `out` events. Firefox cross-engine stays CI-only (ruling R10).
+
+**The spec** was synced in the same pass: §1.3, §2, §3.1, §3.2, §4.1 (spawns, wall bounces, burn, the validator, HUD metadata), §4.2, §6.1, §7, §8 (the re-pin commands) and §9.1.
