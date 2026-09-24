@@ -55,7 +55,7 @@ describe("resolveTurn", () => {
     const terminal = tl.events.filter((e) => e.kind === "blast" || e.kind === "out");
     expect(terminal.length).toBe(5); // a shell that hit a tank must stop, not blast again next step
     expect(terminal.map((e) => e.shell).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
-    expect(tl.points).toEqual([51, 0]);
+    expect(tl.points).toEqual([50, 0]); // 51 under Plan 1's floored distance (exact damage, Plan 2A Task 3)
   });
   it("scores nothing and leaves the ground alone when the shot leaves the world", () => {
     const m = flatBattle();

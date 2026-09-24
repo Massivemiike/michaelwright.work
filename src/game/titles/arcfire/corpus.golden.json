@@ -1,5 +1,5 @@
 {
- "digest": "09403dbb",
+ "digest": "655486aa",
  "defs": {
   "pulse": "e151d5df",
   "pulse2": "1a588902",
@@ -567,7 +567,7 @@
   "triad|hills|p0|w-40|m0|50/80": {
    "board": "966b6d9b",
    "points": [
-    37,
+    36,
     0
    ]
   },
@@ -581,7 +581,7 @@
   "triad|hills|p0|w0|m1|55/75": {
    "board": "045786a6",
    "points": [
-    52,
+    50,
     0
    ]
   },
@@ -658,7 +658,7 @@
   "fan|hills|p0|w0|m0|65/95": {
    "board": "09844853",
    "points": [
-    5,
+    4,
     0
    ]
   },
@@ -672,7 +672,7 @@
   "fan|hills|p0|w-40|m0|50/80": {
    "board": "6a2fa253",
    "points": [
-    24,
+    23,
     0
    ]
   },
