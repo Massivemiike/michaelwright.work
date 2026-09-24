@@ -45,8 +45,9 @@ src/game/titles/arcfire/          sim + rules + AI + roster (pure, purity-guarde
   terrain.ts     heightfield + in-shot span columns, carve/add/settle
   ballistics.ts  launch + fixed-step integration + swept collision
   weapons/       primitives.ts (effect implementations), roster.ts (32 WeaponDefs, data only)
-  resolve.ts     resolveTurn(state, command) -> { state, timeline }
-  match.ts       match state machine: draft -> turns -> sudden death -> result
+  resolve.ts     resolveTurn(state, input) -> timeline (mutates state)
+  match.ts       createMatch, applyPick, applyTurn: validation + turn advance
+                 (draft -> turns -> sudden death -> over)
   ai/            search.ts, evaluate.ts, draftPick.ts (pure, fixed-point)
   state.ts, replay.ts, hash.ts, title.ts (TitleDef binding)
 src/game/runtime/render/arcfire/  presentation (outside the purity guard)
@@ -60,7 +61,7 @@ src/data/games.data.ts            + arcfire catalog entry
 
 Today `src/game/sim/` is labeled generic but is Circle-TD-shaped: `replay.ts` imports Circle TD content, `Command` is `start|place|upgrade|sell`, `state.ts` is creeps/towers, `verify.ts` returns `wave`/`maxTowerLevel`, `engine.ts`'s `RenderSnapshot` is creeps/towers, and `runtime/render/transform.ts` imports Circle TD's `STAGE_W/H`. The refactor:
 
-1. **Move the Circle TD specifics into `src/game/titles/circle-td/`:** `SimState`/`Creeps`/`Towers`, its `Command` + `applyCommand` + replay loop, `hashState`, and `RenderSnapshot`. `src/game/sim/` keeps only `math/*`, the FNV-1a primitives, `title.ts`, `registry.ts`, and a generic `verify.ts`.
+1. **Move the Circle TD specifics into `src/game/titles/circle-td/`:** `SimState`/`Creeps`/`Towers`, its `Command` + `applyCommand` + replay loop, `hashState`, and `RenderSnapshot`. `src/game/sim/` keeps only `math/*`, `types.ts` (`Fx`), the FNV-1a primitives (`hash.ts`), `title.ts`, `registry.ts`, and a generic `verify.ts`. Circle TD's `SIM_VERSION` now lives in `src/game/titles/circle-td/version.ts`.
 2. **Generic title contract** (`sim/title.ts`):
    ```ts
    export interface ReplayInput<Cmd> { seed: number; mode: "daily" | "free"; commands: readonly Cmd[] }
@@ -73,14 +74,22 @@ Today `src/game/sim/` is labeled generic but is Circle-TD-shaped: `replay.ts` im
      replay(input: ReplayInput<Cmd>, limits: ReplayLimits): ReplayOutcome | { rejected: ReplayRejection };
    }
    ```
-   Circle TD's binding validates each command's tick against `limits.maxTicks` (`invalid_command_shape`, as today), then wraps its existing loop (`score` = score, `stat` = wave). Arcfire's returns `score` = margin, `stat` = the human's points.
+   Circle TD's binding rejects any command that is not a non-null object or whose tick is not an integer in `[0, limits.maxTicks)` (`invalid_command_shape`), then wraps its existing loop (`score` = score, `stat` = wave). Arcfire's returns `score` = margin, `stat` = the human's points.
 3. **Generic `verifyScore`** keeps the version/mode/limits/seed-acceptance checks and delegates the run to `title.replay`, using `title.simVersion` instead of the global `SIM_VERSION`.
 4. **`computeFit(pxW, pxH, stageW, stageH)`** takes stage dimensions; each title passes its own.
-5. **Regression gate:** Circle TD's determinism golden `5167b43d`, its replay/verify/route tests, and its in-browser behavior must be byte-for-byte unchanged. The refactor lands first, alone, and is verified before any Arcfire code.
+5. **Regression gate:** Circle TD's determinism golden `5167b43d` is byte-for-byte unchanged, and its behavior (replay/verify/route results, in-browser rendering and hit-testing) is unchanged. Its existing tests were edited only for import paths, the new `verifyScore` contract (`stat` instead of `wave`, no `expectedSimVersion`), and `computeFit`'s stage arguments; every other test change adds a test or an assertion. The refactor lands first, alone, and is verified before any Arcfire code.
 
 ### 1.3 The turn contract
 
-`resolveTurn(state, command) -> timeline` is **deterministic** and touches nothing but the `MatchState` it is given, which it advances in place. It resolves one whole turn (optional move, then the shot) to completion. Callers that must keep the original state (AI search, previews) resolve a `cloneMatch` copy. The same function serves:
+`resolveTurn(m, { move, weapon, angle, power }) -> Timeline` is **deterministic** and touches nothing but the `MatchState` it is given. It resolves one whole turn to completion, in place: the optional move, the shot, the settle, and the scoring. It does **no** validation and **no** turn bookkeeping (`weapon` is a roster index).
+
+`applyTurn(m, cmd)` is the checked entry point. It validates the command (phase, integer angle 0–180 and power 0–100, a legal move, and a weapon in the shooter's hand, or Pulse in sudden death), calls `resolveTurn`, removes a battle weapon from the hand, and advances `shotsFired`, the shooter, the phase, and the wind. On an illegal command it returns `invalid_command` and changes nothing. `applyPick(m, poolIndex)` does the same for draft picks.
+
+`replayMatch({ seed, settings, commands })` re-runs a command log from `createMatch` through `applyPick`/`applyTurn` and returns the final state and its `hashMatch`. An illegal command rejects the whole log as `invalid_command` at its index, and so does a malformed log (not an array, a non-object entry, an unknown `k`); `replayMatch` never throws on one. It accepts an unfinished log (resume, §6.5), so a verifier must also require `phase === "over"`. Plan 1's `replayMatch` replays 2-player logs; regenerating the AI's commands arrives with the AI in Plan 2.
+
+`cloneMatch` is the deep copy that AI search and previews resolve against, so the original state is never touched. `createMatch` stores a frozen copy of its settings, which clones share.
+
+`resolveTurn` serves:
 - **gameplay**: the renderer plays the `timeline` back at display rate, fully decoupled from the sim;
 - **AI search**: the AI calls it on candidate commands;
 - **verification**: the server replays the command log;
@@ -99,7 +108,7 @@ The sim and AI run in a **Web Worker** (the main thread owns rendering, the HUD,
 - **World:** 1200 × 500 stage px (2.4:1), letterboxed to fit. Margins beyond the world show dimmed, non-playable decorative terrain. Nothing playable is ever cropped.
 - **Match:** 1v1. A seeded coin flip decides who **picks first**; the other player **shoots first**.
 - **Draft:** a seeded pool of **24** distinct weapons drawn from the 32-weapon roster, with at least one of each of BLAST, SPLIT, and DIRT. Players alternate picks until each holds **10**. (Free play can choose **5** each, with a pool of 12.)
-- **Turn:** an optional **move** (4 per match; ±36 px horizontally, with y following the surface; can't pass the world edge or come within 64 px of the other tank), then choose one of your remaining weapons, set **angle** (integer degrees 0–180; 0 = right, 90 = straight up) and **power** (integer 0–100), and fire. The **ghost trail** of your previous shot stays visible; there is no trajectory preview.
+- **Turn:** an optional **move** (4 per player per match; ±36 px horizontally, with y following the surface; tank centres stay at least 24 px inside the world edges (`TANK_EDGE_MARGIN`) and can't come closer than 64 px to the other tank), then choose one of your remaining weapons, set **angle** (integer degrees 0–180; 0 = right, 90 = straight up) and **power** (integer 0–100), and fire. The **ghost trail** of your previous shot stays visible; there is no trajectory preview.
 - **Scoring:** damage dealt to the opponent = points. **Self-damage is awarded to the opponent.** Once all weapons are fired, the higher total wins. **Tie:** sudden death, one Pulse shot each; if still tied, it's a draw.
 - **Wind:** off by default. The free-play toggle adds seeded per-turn wind (−40…+40 px/s² horizontal), shown as an arrow and value in the HUD.
 - **Tanks:** rest on the surface at their x. They ride settling dirt down; there is no fall damage and no burying (dirt settles beneath tanks, never over them).
@@ -114,7 +123,7 @@ All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), rando
 
 - **Persistent state = heightfield:** `height: Int32Array(1200)`, the surface y per 1-px column (y-down; 500 is the floor).
 - **During a shot**, each column may hold several solid **spans** (tunnels, floating dirt): `spans[x] = [top0, bot0, top1, bot1, …]`, capped at 8 per column. Carve (circle, line) and add (ball, wall, mound) edit spans directly, and projectiles collide with spans exactly.
-- **Settle** runs once, after the whole shot resolves: in every column, floating spans fall and merge onto the span below or the floor, collapsing back to one span, i.e. the heightfield. The timeline records the pre- and post-settle heightfields plus each falling span so the renderer can animate the pour.
+- **Settle** runs once, after the whole shot resolves: in every column, floating spans fall and merge onto the span below or the floor, collapsing back to one span, i.e. the heightfield. The timeline records the post-settle heightfield plus each falling span so the renderer can animate the pour; Plan 3 adds the pre-settle heightfield (§3.4).
 - **Generation:** seeded rolling hills, integer-only:
   - 9 control points (one every 150 px) drawn from the match RNG in [160, 380];
   - linear interpolation between them;
@@ -133,13 +142,27 @@ All state is integer or Q16.16 fixed-point (`src/game/sim/math/fixed.ts`), rando
 
 ### 3.3 Damage
 
-For a blast with radius `R` and damage `D` at distance `d` from a tank's hitbox edge (0 if overlapping): `dmg = D × (1 − d/R)` (linear) or `D × (1 − (d/R)²)` (quadratic, where specified), floored to an integer, for `d < R`. A turn's points are the damage its shot dealt to the opponent. Self-damage from any sub-munition is credited to the opponent.
+For a blast with radius `R` and damage `D`, where `dx`, `dy` run from the tank's hitbox centre to the blast centre (`damage.ts`):
+- `d = max(0, isqrt(dx² + dy²) − 14)`: `isqrt` is the exact integer floor square root of the centre distance, and 14 is the hitbox radius (`TANK_HIT_R`), so `d` is the distance to the hitbox edge (0 if overlapping);
+- for `d < R`: linear `trunc(D·(R − d) / R)`, or quadratic (where specified) `trunc(D·(R² − d²) / R²)`;
+- 0 otherwise.
+
+Flooring the centre distance keeps the calculation integer-only and engine-exact. An exact-distance variant was considered; it differs by under 1 px of reach and would only change results inside a planned golden re-pin (Plan 2).
+
+A turn's points are the damage its shot dealt to the opponent. Self-damage from any sub-munition is credited to the opponent.
 
 ### 3.4 State, hashing, timeline
 
 - `MatchState` = phase, turn index, whose turn, heightfield, tank x (and derived y), moves left, remaining weapons per player, pool/draft state, scores, wind, RNG state, and the sudden-death flag.
 - **`hashMatch`:** FNV-1a over every integer field in a canonical order. It's computed per turn (future desync detection) and at match end (verification and golden tests).
-- **Timeline** (presentation only, never hashed): per-step projectile positions (a typed array), plus discrete events: `launch`, `bounce`, `split`, `blast{x,y,r}`, `beam`, `roll`, `dig`, `burn{span}`, `quake`, `build`, `damage{player,amount}`, `settle{before,after,falling}`, `move{from,to}`.
+- **Timeline** (presentation only, never hashed; `timeline.ts`, built by `resolve.ts`). The Plan 1 shape:
+  - `shooter`, `move {fromX, toX} | null`, `wind`, `weapon` (roster index);
+  - `shells[{angle, points}]`, one per shell: `angle` is that shell's launch angle, and `points` is a flat px array `[x0, y0, x1, y1, …]` from the muzzle, one point per step, ending at the impact (or where the shell went out);
+  - `events`, ordered by step: `blast{step, shell, x, y, radius}`, `damage{step, target, amount}`, `out{step, shell, x, y}`;
+  - `settle {heights, falls}`: the post-settle heightfield plus each falling span `{x, top, bottom, fall}`;
+  - `points [p0, p1]`: the points this turn awarded to player 0 and player 1.
+
+  Later plans extend it: Plan 2 adds events per primitive (bounce, split, roll, dig, burn, quake, build, beam); Plan 3 adds the pre-settle heightfield and the launch/move events the renderer needs. The Timeline stays presentation-only and unhashed, so these additions don't move a golden.
 
 ---
 
@@ -168,6 +191,8 @@ interface WeaponDef { id: string; name: string; tag: Tag; tier: 1 | 2 | 3; power
 `tag` ∈ BLAST, VOLLEY, SPLIT, BOUNCE, ROLL, DIG, FIRE, DIRT, BEAM, HOMING, QUAKE, SPECIAL. `power` is a draft score in 1–100, written by the balance harness and used by the draft AI. Adding a weapon means adding a `WeaponDef` plus an SVG glyph for the HUD.
 
 ### 4.2 Roster (32; initial parameters, which the balance harness tunes)
+
+The `#` column is display order. A weapon's **roster index**, which turn commands use on the wire, is append-only: Plan 1's roster indices are `0 pulse, 1 pulse2, 2 nova, 3 needle, 4 crater, 5 triad, 6 fan, 7 railshot`, and Plan 2 appends the rest.
 
 | # | Name | Tag | Tier | Behavior (radius px / damage) |
 |---|---|---|---|---|
@@ -283,7 +308,12 @@ Behind `BALANCE_SWEEP=1` (the same pattern as Circle TD's balance sweep), determ
     | { k: "turn"; move: -1 | 0 | 1; w: number; angle: number; power: number }; // w = roster index
   ```
   There are ≤ 21 commands. The server replays the match and **regenerates every AI pick and shot**; any invalid human command rejects the run (`invalid_command`). Only the server-computed margin and points are stored.
-- **Route changes** (`src/app/api/games/scores/route.ts`): `scoreSubmissionSchema` becomes a zod **discriminated union on `gameSlug`** (Circle TD's schema unchanged; an Arcfire command schema added). The verifier already checks each title's own `title.simVersion` (Plan 1 removed the global `expectedSimVersion`). The daily seed comes from a new `dailySeedFor(slug, now)` in `src/lib/dailySeed.ts`: Circle TD keeps its existing `dailySeed(now)` (existing rows are keyed by it), and Arcfire uses `hashToSeed("arcfire:" + utcDateString(now))`. Ranks and boards are already filtered by `game_slug`.
+- **Route changes** (`src/app/api/games/scores/route.ts`): `scoreSubmissionSchema` becomes a zod **discriminated union on `gameSlug`** (Circle TD's schema unchanged; an Arcfire command schema added). The verifier already checks each title's own `title.simVersion` (Plan 1 removed the global `expectedSimVersion`). The daily seed comes from a new `dailySeedFor(slug, now)` in `src/lib/dailySeed.ts`: Circle TD keeps its existing `dailySeed(now)` (existing rows are keyed by it), and Arcfire uses `hashToSeed("arcfire:" + utcDateString(now))`. Ranks and boards are already filtered by `game_slug`. Plan 4 must also:
+  - use `title.simVersion` (not Circle TD's imported `SIM_VERSION`) for the inserted row's `sim_version` and the rank/board filters;
+  - compute `replay_hash` with a per-title command-log digest (e.g. an optional `TitleDef.hashCommands`), because today it uses Circle TD's `hashCommands`;
+  - have the Arcfire `TitleDef` binding derive `MatchSettings` from the mode, never from the submission;
+  - validate command shape in the zod schema;
+  - require `phase === "over"` before scoring.
 - **Config:** `LEADERBOARD_PUBLIC` becomes a per-slug map (both `false` until each game's launch gate passes), and `LEADERBOARD_SIM_VERSION` becomes a per-slug mirror with a sync test per title.
 - **Migration `0002_arcfire_leaderboard.sql`** (run manually in the Supabase SQL editor, like 0001): add a per-slug daily rank index `(game_slug, sim_version, daily_date, score desc, created_at)` for mode='daily', plus a column comment documenting `wave` as the title-defined secondary stat. No other schema change.
 - **Games index:** add an `arcfire` entry to `src/data/games.data.ts`; the daily preview becomes per-slug and shows only when that slug's board is public.
@@ -311,6 +341,26 @@ This is too large for a single plan. It's expected to split into sequential plan
 2. **Plan 2 — weapons + AI:** primitives, the 32-weapon roster, AI tiers, the worker, and the balance harness.
 3. **Plan 3 — presentation:** both renderers, tanks, effects, the Deck+ HUD, the draft screen, flow screens, audio, resume, and mobile.
 4. **Plan 4 — leaderboard:** route generalization, migration 0002, the daily challenge, and board UI + index integration.
+
+### 9.1 Carried forward from Plan 1
+
+- **Plan 2:**
+  - Decide and pin volley behavior near 0°/180°. Each shell's angle is clamped separately today, so a Fan/Triad aimed within spread/2 of the horizon stacks shells on one trajectory.
+  - Fix `stepShell`'s toward-zero pixel rounding. The left world edge is effectively x = −1, and a step crossing x = 0 can drop one sample. This moves the golden, so do it in Plan 2's re-pin.
+  - Add `STANDARD_SETTINGS` (10 each / pool 24 / BLAST+SPLIT+DIRT) and `SHORT_SETTINGS` (5 / 12), with tests that the real 32-weapon roster always satisfies the tag guarantees.
+  - Add a cross-engine corpus fixture: wind off, sudden death, extreme aims, the flight cap.
+  - Add a golden pin that survives roster appends.
+  - Guard `idiv` divisors if weapon data ever feeds one.
+  - Optionally, exact-distance damage (§3.3).
+- **Plan 3:** extend the Timeline (pre-settle heightfield, launch/move events; §3.4).
+- **Plan 4:**
+  - the §7 route items above;
+  - harden `src/game/sim/boundary.test.ts`, which only matches the literal `@/game/titles/` alias, to also resolve relative imports;
+  - range-validate `MatchSettings` at the binding.
+- **Housekeeping:**
+  - pre-existing jsdom "HTMLCanvasElement getContext()" test noise;
+  - the duplicated per-engine loops in `e2e/cross-engine-determinism.spec.ts`;
+  - Firefox cross-engine is verified in CI only (it can't launch locally).
 
 ---
 
