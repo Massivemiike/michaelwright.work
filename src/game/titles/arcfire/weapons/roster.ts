@@ -101,6 +101,36 @@ export const ROSTER: readonly WeaponDef[] = [
     launch: { kind: "shell" },
     stage: { on: "impact", bounce: { times: 2, restitutionPct: 100, walls: true }, effects: [{ blast: blast(30, 40) }] },
   },
+  {
+    id: "tumbler", name: "Tumbler", tag: "ROLL", tier: 1, power: 30,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ roll: { maxDistance: 160, then: blast(30, 40) } }] },
+  },
+  {
+    id: "juggernaut", name: "Juggernaut", tag: "ROLL", tier: 3, power: 80,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ roll: { maxDistance: 300, then: blast(60, 85) } }] },
+  },
+  {
+    id: "burrow", name: "Burrow", tag: "DIG", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ dig: { length: 90, width: 14, then: blast(34, 55) } }] },
+  },
+  {
+    id: "auger", name: "Auger", tag: "DIG", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ dig: { length: 160, width: 14, blastEvery: 40, each: blast(18, 16), then: blast(18, 16) } }] },
+  },
+  {
+    id: "inferno", name: "Inferno", tag: "FIRE", tier: 3, power: 80,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ burn: { flow: 220, pool: 30, damage: 70 } }] },
+  },
+  {
+    id: "wildfire", name: "Wildfire", tag: "FIRE", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ burn: { flow: 140, pool: 0, damage: 45, split: true } }] },
+  },
 ];
 
 /** Roster index by weapon id. */

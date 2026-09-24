@@ -237,3 +237,92 @@ describe("bounce", () => {
     expect(pulse.events.map((e) => e.kind)).toEqual(["out"]);
   });
 });
+
+describe("roll", () => {
+  /** Tanks at 200 / 900; the ground falls from 300 to 420 over x 300..539 (1 px every 2 columns). */
+  const slope = (): MatchState =>
+    setHeights(flatBattle(200, 900), (x) => (x < 300 ? 300 : x < 540 ? 300 + Math.floor((x - 300) / 2) : 420));
+  it("Tumbler rolls downhill along the surface and blasts where it stops", () => {
+    const tl = fire(slope(), "tumbler", 70, 30);
+    const [r] = eventsOf(tl, "roll");
+    const xs = r.path.filter((_, i) => i % 2 === 0);
+    const ys = r.path.filter((_, i) => i % 2 === 1);
+    for (let i = 1; i < xs.length; i++) {
+      expect(xs[i]).toBe(xs[i - 1] + 1); // one column at a time, downhill
+      expect(ys[i]).toBeGreaterThanOrEqual(ys[i - 1]); // never climbs
+    }
+    expect(xs.length).toBeLessThanOrEqual(161); // maxDistance 160
+    expect([xs[0], xs[xs.length - 1], r.dur]).toEqual([307, 467, 54]);
+    const blasts = eventsOf(tl, "blast");
+    expect(blasts.map((b) => [b.x, b.y - 1, b.lag])).toEqual([[xs[xs.length - 1], ys[ys.length - 1], r.dur]]); // at the stop column's ground pixel
+  });
+  it("a direct hit doesn't roll", () => {
+    const tl = fire(flatBattle(), "tumbler", 90, 0);
+    expect(eventsOf(tl, "roll")).toEqual([]);
+    expect(tl.points).toEqual([0, 40]);
+  });
+  it("a roll off the world is lost: an out, and no blast", () => {
+    const tl = fireDef(flatBattle(), synth({ on: "impact", effects: [{ roll: { maxDistance: 1200, then: { radius: 30, damage: 40 } } }] }), 60, 60);
+    expect(eventsOf(tl, "out").map((o) => o.x)).toEqual([1200]);
+    expect(eventsOf(tl, "blast")).toEqual([]);
+  });
+});
+
+describe("dig", () => {
+  it("Burrow's steep fall tunnels at the 30° clamp, and blasts at the tunnel's end", () => {
+    const tl = fire(flatBattle(), "burrow", 60, 50);
+    const [d] = eventsOf(tl, "dig");
+    expect([d.x0, d.y0, d.x1, d.y1, d.width, d.dur]).toEqual([663, 400, 740, 445, 14, 23]);
+    const len = Math.hypot(d.x1 - d.x0, d.y1 - d.y0);
+    expect(len >= 88 && len <= 91).toBe(true);
+    expect(eventsOf(tl, "blast").map((b) => [b.x, b.y, b.lag])).toEqual([[740, 445, 23]]);
+  });
+  it("keeps a heading shallower than 30°: a level shot into a cliff tunnels level", () => {
+    const m = setHeights(flatBattle(), (x) => (x >= 450 ? 200 : 400));
+    const [d] = eventsOf(fire(m, "burrow", 0, 100), "dig");
+    expect([d.x0, d.y0, d.x1, d.y1]).toEqual([450, 393, 539, 400]);
+  });
+  it("with no horizontal travel it digs 30° below level toward the opponent", () => {
+    const def = synth({ on: "apex", effects: [{ dig: { length: 90, width: 14 } }] });
+    const [d0] = eventsOf(fireDef(flatBattle(), def, 90, 50), "dig");
+    expect([d0.x0, d0.y0, d0.x1, d0.y1]).toEqual([300, 173, 377, 218]);
+    const m1 = flatBattle();
+    m1.shooter = 1;
+    const [d1] = eventsOf(fireDef(m1, def, 90, 50), "dig");
+    expect([d1.x0, d1.y0, d1.x1, d1.y1]).toEqual([700, 173, 623, 218]);
+  });
+  it("Auger blasts every 40 px along its clamped tunnel, then at the end", () => {
+    const tl = fire(flatBattle(), "auger", 30, 60);
+    const blasts = eventsOf(tl, "blast");
+    expect(blasts.map((b) => [b.x, b.y, b.lag])).toEqual([[871, 419, 10], [906, 440, 20], [940, 459, 30], [975, 480, 40]]);
+    expect(blasts.every((b) => b.y < WORLD_H)).toBe(true);
+  });
+  it("a direct hit digs nothing: a zero-length tunnel and one blast", () => {
+    const tl = fire(flatBattle(), "burrow", 90, 0);
+    const [d] = eventsOf(tl, "dig");
+    expect([d.x1, d.y1]).toEqual([d.x0, d.y0]);
+    expect(eventsOf(tl, "blast").length).toBe(1);
+  });
+});
+
+describe("burn", () => {
+  it("Wildfire runs both ways from its ignition and burns the enemy exactly once", () => {
+    const m = flatBattle();
+    const before = Array.from(m.terrain.height);
+    const tl = fire(m, "wildfire", 60, 52);
+    const [b] = eventsOf(tl, "burn");
+    expect(b.x).toBe(687);
+    expect(b.flows.map((f) => [f[0], f[f.length - 2]])).toEqual([[687, 547], [687, 692]]); // the right-hand flow stops at the tank
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 45, 2]]);
+    expect(Array.from(m.terrain.height)).toEqual(before); // fire changes no terrain
+  });
+  it("Inferno ignites uphill of the enemy and its flow runs down into it: 70, once", () => {
+    // tanks 200 / 700; flat at 300 up to x 399, then falling 120 px over x 400..700, then flat at 420
+    const m = setHeights(flatBattle(200, 700), (x) => (x < 400 ? 300 : x <= 700 ? 300 + Math.floor(((x - 400) * 120) / 300) : 420));
+    const before = Array.from(m.terrain.height);
+    const tl = fire(m, "inferno", 45, 37);
+    expect(eventsOf(tl, "burn")[0].x).toBe(470);
+    expect(eventsOf(tl, "damage").map((d) => [d.target, d.amount, d.lag])).toEqual([[1, 70, 55]]);
+    expect(Array.from(m.terrain.height)).toEqual(before);
+  });
+});

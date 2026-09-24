@@ -8,7 +8,7 @@ import { SUDDEN_DEATH_WEAPON, MAX_TURN_STEPS, MAX_SHELLS } from "../constants";
 const WIRE = [
   "pulse", "pulse2", "nova", "needle", "crater", "triad", "fan", "railshot",
   "twinnova", "cascade", "hydra", "hailstorm", "shrapnel", "barrage", "skipper", "pinball",
-  "ricochet",
+  "ricochet", "tumbler", "juggernaut", "burrow", "auger", "inferno", "wildfire",
 ];
 
 describe("ROSTER", () => {

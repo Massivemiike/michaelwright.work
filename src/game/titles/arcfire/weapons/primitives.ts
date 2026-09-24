@@ -7,15 +7,15 @@
 // weapon draws from the match RNG. The order effects run in is part of the
 // determinism contract (see resolve.ts).
 import type { Fx } from "@/game/sim/types";
-import { fromInt, mul } from "@/game/sim/math/fixed";
+import { fromInt, toInt, mul } from "@/game/sim/math/fixed";
 import { cosDeg, sinDeg } from "../aimTable";
-import { idiv, floorPx } from "../imath";
-import { carveCircle, type Terrain } from "../terrain";
+import { idiv, isqrt, floorPx } from "../imath";
+import { isSolid, carveCircle, carveCapsule, groundBelow, type Terrain } from "../terrain";
 import { rotateVel, shellAt, type HitCircle, type Shell } from "../ballistics";
 import { blastDamage } from "../damage";
-import { TANK_HIT_R, MAX_SHELLS } from "../constants";
-import type { Timeline, TimelineEvent } from "../timeline";
-import type { Blast, Effect, Split, Stage } from "./types";
+import { WORLD_W, WORLD_H, TANK_HIT_R, ROLL_PROBE, MAX_SHELLS, DIG_MAX_PITCH } from "../constants";
+import { SHOW_PX_PER_STEP, showSteps, type Timeline, type TimelineEvent } from "../timeline";
+import type { Blast, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
 
 /** Everything one shot's effects can touch. Built by resolveWeapon; lives for one turn. */
 export interface Shot {
@@ -61,6 +61,9 @@ export function applyEffects(shot: Shot, trig: Trigger, effects: readonly Effect
   for (const e of effects) {
     if ("blast" in e) blastAt(shot, e.blast, trig.x, trig.y, trig.step, trig.shell, 0);
     else if ("split" in e) split(shot, trig, e.split);
+    else if ("roll" in e) roll(shot, trig, e.roll);
+    else if ("dig" in e) dig(shot, trig, e.dig);
+    else if ("burn" in e) burn(shot, trig, e.burn);
     else if ("delay" in e) {
       const at = trig.step + (e.delay.steps > 1 ? e.delay.steps : 1);
       shot.pending.push({ at, trig, effects: e.delay.then });
@@ -151,4 +154,122 @@ function split(shot: Shot, trig: Trigger, sp: Split): void {
     if (id >= 0) children.push(id);
   }
   emit(shot, { step: trig.step, kind: "split", shell: trig.shell, x: trig.x, y: trig.y, children });
+}
+
+interface WalkEnd { x: number; g: number; stop: "far" | "rise" | "tank" | "edge"; tank: number }
+
+/**
+ * Walk along the ground from column x (standing on ground px g) toward dir,
+ * up to maxPx columns. Level or downhill only: it stops before any rise (the
+ * next column is solid at g - 1), at a world edge, or on entering a tank
+ * hitbox (the walker's point is (x, g - 1)). Appends each point to `path`.
+ */
+function walk(shot: Shot, x: number, g: number, dir: number, maxPx: number, path: number[]): WalkEnd {
+  for (let k = 0; k < maxPx; k++) {
+    const nx = x + dir;
+    if (nx < 0 || nx >= WORLD_W) return { x, g, stop: "edge", tank: -1 };
+    if (isSolid(shot.t, nx, g - 1)) return { x, g, stop: "rise", tank: -1 };
+    x = nx;
+    g = groundBelow(shot.t, x, g);
+    path.push(x, g - 1);
+    const tank = tankAt(shot, x, g - 1);
+    if (tank >= 0) return { x, g, stop: "tank", tank };
+  }
+  return { x, g, stop: "far", tank: -1 };
+}
+
+/** Downhill direction at (x, g) from the ground ROLL_PROBE px either side; on level ground, the travel direction. */
+function downhill(t: Terrain, x: number, g: number, vx: Fx): number {
+  const l = x - ROLL_PROBE >= 0 ? groundBelow(t, x - ROLL_PROBE, g - ROLL_PROBE) : g;
+  const r = x + ROLL_PROBE < WORLD_W ? groundBelow(t, x + ROLL_PROBE, g - ROLL_PROBE) : g;
+  if (r > l) return 1;
+  if (l > r) return -1;
+  return vx < 0 ? -1 : 1;
+}
+
+function roll(shot: Shot, trig: Trigger, r: Roll): void {
+  if (trig.tank >= 0) return blastAt(shot, r.then, trig.x, trig.y, trig.step, trig.shell, 0); // a direct hit doesn't roll
+  const x = floorPx(trig.fx);
+  const g = groundBelow(shot.t, x, floorPx(trig.fy));
+  const path = [x, g - 1];
+  const against = tankAt(shot, x, g - 1); // landed against a tank: it stops at once
+  const end: WalkEnd = against >= 0
+    ? { x, g, stop: "tank", tank: against }
+    : walk(shot, x, g, downhill(shot.t, x, g, trig.vx), r.maxDistance, path);
+  const dur = showSteps(path.length / 2 - 1, SHOW_PX_PER_STEP.roll);
+  emit(shot, { step: trig.step, kind: "roll", shell: trig.shell, path, dur });
+  if (end.stop === "edge") { // rolled off the world: lost, like any shell leaving the side edges
+    emit(shot, { step: trig.step, kind: "out", shell: trig.shell, x: end.x + (end.x === 0 ? -1 : 1), y: end.g - 1, lag: dur });
+    return;
+  }
+  blastAt(shot, r.then, end.x, end.g, trig.step, trig.shell, dur);
+}
+
+function dig(shot: Shot, trig: Trigger, d: Dig): void {
+  // Along the travel direction, but never steeper than DIG_MAX_PITCH below level: a steeper
+  // heading (or none) takes exactly that pitch, keeping the horizontal sense of travel
+  // (toward the opponent when there is none). Upward and shallower headings are kept.
+  let a = toInt(trig.vx); // px/s, |a| < 2^15: every product here stays < 2^33
+  let c = toInt(trig.vy); // px/s, + = down
+  if (c > 0 ? c * cosDeg(DIG_MAX_PITCH) > (a < 0 ? 0 - a : a) * sinDeg(DIG_MAX_PITCH) : a === 0 && c === 0) {
+    const sense = trig.vx > 0 ? 1 : trig.vx < 0 ? -1 : shot.shooter === 0 ? 1 : -1;
+    a = sense * cosDeg(DIG_MAX_PITCH); // (a, c) becomes that pitch's Q16.16 unit vector: only its direction matters
+    c = sinDeg(DIG_MAX_PITCH);
+  }
+  const len = isqrt(a * a + c * c); // >= 1: (a, c) is never (0, 0) here
+  const x0 = trig.x;
+  const y0 = trig.y;
+  const dx = idiv(a * d.length, len);
+  const dy = idiv(c * d.length, len);
+  const n = Math.max(Math.abs(dx), Math.abs(dy), 1);
+  let stop = n; // the last sample the tunnel reaches
+  for (let i = 0; i <= n; i++) {
+    const sx = x0 + idiv(dx * i, n);
+    const sy = y0 + idiv(dy * i, n);
+    // i = 0 is the trigger px, inside the world; the floor (WORLD_H) is bedrock
+    if (i > 0 && (sx < 0 || sx >= WORLD_W || sy >= WORLD_H)) { stop = i - 1; break; }
+    if (tankAt(shot, sx, sy) >= 0) { stop = i; break; }
+  }
+  const ex = x0 + idiv(dx * stop, n);
+  const ey = y0 + idiv(dy * stop, n);
+  const reached = idiv(stop * d.length, n); // px along the tunnel
+  carveCapsule(shot.t, x0, y0, ex, ey, idiv(d.width, 2));
+  const dur = showSteps(reached, SHOW_PX_PER_STEP.dig);
+  emit(shot, { step: trig.step, kind: "dig", shell: trig.shell, x0, y0, x1: ex, y1: ey, width: d.width, dur });
+  if (d.each && d.blastEvery && d.blastEvery > 0) {
+    for (let k = 1; k * d.blastEvery < d.length; k++) {
+      const i = idiv(k * d.blastEvery * n, d.length); // the sample k × blastEvery px along
+      if (i >= stop) break;
+      blastAt(shot, d.each, x0 + idiv(dx * i, n), y0 + idiv(dy * i, n), trig.step, trig.shell,
+        showSteps(k * d.blastEvery, SHOW_PX_PER_STEP.dig));
+    }
+  }
+  if (d.then) blastAt(shot, d.then, ex, ey, trig.step, trig.shell, dur);
+}
+
+function burn(shot: Shot, trig: Trigger, b: Burn): void {
+  const x = floorPx(trig.fx);
+  const g = groundBelow(shot.t, x, floorPx(trig.fy));
+  const touched = [-1, -1]; // px along a run where each tank was first touched (-1 = never)
+  const start = tankAt(shot, x, g - 1);
+  if (start >= 0) touched[start] = 0;
+  const half = idiv(b.pool, 2);
+  const runs: number[] = []; // [dir, max px] pairs: the pool both ways, then the flow(s)
+  if (half > 0) runs.push(-1, half, 1, half);
+  if (b.split) runs.push(-1, b.flow, 1, b.flow);
+  else runs.push(downhill(shot.t, x, g, trig.vx), b.flow);
+  const flows: number[][] = [];
+  let longest = 0;
+  for (let j = 0; j < runs.length; j += 2) {
+    const path = [x, g - 1];
+    const end = walk(shot, x, g, runs[j], runs[j + 1], path);
+    const px = path.length / 2 - 1;
+    if (end.tank >= 0 && (touched[end.tank] < 0 || px < touched[end.tank])) touched[end.tank] = px;
+    if (px > longest) longest = px;
+    flows.push(path);
+  }
+  emit(shot, { step: trig.step, kind: "burn", shell: trig.shell, x, y: g - 1, flows, dur: showSteps(longest, SHOW_PX_PER_STEP.burn) });
+  for (let p = 0; p < 2; p++) {
+    if (touched[p] >= 0) hurt(shot, p, b.damage, trig.step, showSteps(touched[p], SHOW_PX_PER_STEP.burn));
+  }
 }

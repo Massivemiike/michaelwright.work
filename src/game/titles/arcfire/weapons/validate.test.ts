@@ -82,3 +82,12 @@ describe("totality: split", () => {
     expectTotal(weapon({ stage: loop }));
   });
 });
+
+describe("totality: roll, dig and burn", () => {
+  it("a zero roll, an all-zero dig and an all-zero burn", () => {
+    const Z: Blast = { radius: 0, damage: 0 };
+    expectTotal(impact([{ roll: { maxDistance: 0, then: Z } }]));
+    expectTotal(impact([{ dig: { length: 0, width: 0, blastEvery: 0, each: Z, then: Z } }]));
+    expectTotal(impact([{ burn: { flow: 0, pool: 0, damage: 0 } }]));
+  });
+});
