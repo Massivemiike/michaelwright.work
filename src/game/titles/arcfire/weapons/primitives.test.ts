@@ -210,3 +210,30 @@ describe("split", () => {
     expect(tl.points[1]).toBe(18); // ... and flew into it: 18 self-damage, scored for the opponent
   });
 });
+
+describe("bounce", () => {
+  it("Pinball bounces exactly 6 times, then blasts", () => {
+    const tl = fire(flatBattle(300, 1100), "pinball", 45, 40);
+    const bounces = eventsOf(tl, "bounce");
+    expect(bounces.map((b) => b.x)).toEqual([586, 775, 894, 971, 1019, 1048]);
+    for (let i = 1; i < bounces.length; i++) expect(bounces[i].step).toBeGreaterThan(bounces[i - 1].step);
+    expect(bounces.every((b) => !b.wall)).toBe(true);
+    expect(eventsOf(tl, "blast").map((b) => [b.step, b.x, b.y, b.radius])).toEqual([[354, 1067, 400, 36]]);
+  });
+  it("Skipper blasts at each of its 3 bounces in the same step, then blasts where it lands", () => {
+    const tl = fire(flatBattle(300, 1100), "skipper", 45, 40);
+    const bounces = eventsOf(tl, "bounce");
+    expect(bounces.map((b) => b.x)).toEqual([586, 675, 701]);
+    const blasts = eventsOf(tl, "blast");
+    expect(blasts.slice(0, 3).map((b) => [b.step, b.x, b.y, b.radius])).toEqual(bounces.map((b) => [b.step, b.x, b.y, 22]));
+    expect(blasts.slice(3).map((b) => [b.x, b.y, b.radius])).toEqual([[699, 422, 26]]);
+  });
+  it("Ricochet reflects off the left wall back into the world; Pulse at the same aim is lost", () => {
+    const tl = fire(flatBattle(100, 700), "ricochet", 150, 70);
+    const bounces = eventsOf(tl, "bounce");
+    expect(bounces.map((b) => [b.step, b.x, b.wall])).toEqual([[12, 0, true]]);
+    expect(eventsOf(tl, "blast").map((b) => [b.step, b.x, b.y])).toEqual([[101, 609, 400]]);
+    const pulse = fire(flatBattle(100, 700), "pulse", 150, 70);
+    expect(pulse.events.map((e) => e.kind)).toEqual(["out"]);
+  });
+});

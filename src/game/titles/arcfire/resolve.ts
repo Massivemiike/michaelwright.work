@@ -21,7 +21,7 @@ import { settle, spansFromHeight } from "./terrain";
 import { hitCircles, moveTarget } from "./tanks";
 import { idiv, floorPx } from "./imath";
 import { STEPS_PER_SEC, MAX_TURN_STEPS } from "./constants";
-import { addShell, applyEffects, emit, fanOffset, type Shot } from "./weapons/primitives";
+import { addShell, applyEffects, blastAt, emit, fanOffset, type Shot } from "./weapons/primitives";
 import type { MatchState } from "./state";
 import type { Timeline } from "./timeline";
 import type { WeaponDef } from "./weapons/types";
@@ -116,6 +116,13 @@ export function resolveWeapon(m: MatchState, def: WeaponDef, input: TurnInput, r
         continue;
       }
       if (!s.alive) shot.live--;
+      if (hit.kind === "bounce") {
+        if (path) path.push(floorPx(s.x), floorPx(s.y));
+        emit(shot, { step, kind: "bounce", shell: i, x: hit.x, y: hit.y, wall: hit.wall });
+        const each = shot.stages[i].bounce?.blastEach;
+        if (each) blastAt(shot, each, hit.x, hit.y, step, i, 0);
+        continue;
+      }
       if (hit.kind === "out") {
         if (path) path.push(hit.x, hit.y);
         emit(shot, { step, kind: "out", shell: i, x: hit.x, y: hit.y, lag: 0 });

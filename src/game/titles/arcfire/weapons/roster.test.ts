@@ -7,7 +7,8 @@ import { SUDDEN_DEATH_WEAPON, MAX_TURN_STEPS, MAX_SHELLS } from "../constants";
 // prefix pin with the exact 32-id pin (§8.2). A prefix pin stays green when a later task appends weapons.
 const WIRE = [
   "pulse", "pulse2", "nova", "needle", "crater", "triad", "fan", "railshot",
-  "twinnova", "cascade", "hydra", "hailstorm", "shrapnel", "barrage",
+  "twinnova", "cascade", "hydra", "hailstorm", "shrapnel", "barrage", "skipper", "pinball",
+  "ricochet",
 ];
 
 describe("ROSTER", () => {

@@ -13,7 +13,7 @@ import { fromInt, toInt, mul } from "@/game/sim/math/fixed";
 import { cosDeg, sinDeg } from "./aimTable";
 import { isSolid, type Terrain } from "./terrain";
 import {
-  WORLD_W, STEPS_PER_SEC, GRAVITY_STEP, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, TANK_HIT_R,
+  WORLD_W, STEPS_PER_SEC, GRAVITY_STEP, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, TANK_HIT_R, BOUNCE_PROBE_R,
 } from "./constants";
 import { idiv, floorPx } from "./imath";
 
@@ -48,6 +48,7 @@ export type Impact =
   | { kind: "terrain"; x: number; y: number; fx: Fx; fy: Fx } // (x, y) = first solid px; (fx, fy) = last free position
   | { kind: "tank"; x: number; y: number; tank: number; fx: Fx; fy: Fx }
   | { kind: "apex"; x: number; y: number; fx: Fx; fy: Fx } // only for stopAtApex shells; the shell has not moved this step
+  | { kind: "bounce"; x: number; y: number; wall: boolean } // reflected at (x, y); the shell is alive at its last free position
   | { kind: "out"; x: number; y: number }; // left the world sideways, or hit the per-shell flight cap
 
 /** The muzzle point for a hitbox centre and an integer angle (any integer degrees), px. */
@@ -86,6 +87,58 @@ export function rotateVel(vx: Fx, vy: Fx, deg: number): [Fx, Fx] {
 }
 
 /**
+ * The outward surface direction at solid pixel (cx, cy): minus the sum of the
+ * offsets of the solid pixels in a radius-BOUNCE_PROBE_R disc around it (their
+ * centroid points into the ground). If that is zero or doesn't oppose the
+ * motion, the way the shell came in, (fromX - cx, fromY - cy), is used
+ * instead; it always opposes the motion, because the swept samples move
+ * monotonically along the velocity. Never (0, 0). At BOUNCE_PROBE_R = 8 the
+ * components are <= 330 (a half-disc's moment), from <= 197 isSolid probes.
+ */
+function surfaceNormal(s: Shell, t: Terrain, cx: number, cy: number, fromX: number, fromY: number): [number, number] {
+  const r = BOUNCE_PROBE_R;
+  let sx = 0;
+  let sy = 0;
+  for (let dy = 0 - r; dy <= r; dy++) {
+    for (let dx = 0 - r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r && isSolid(t, cx + dx, cy + dy)) {
+        sx += dx;
+        sy += dy;
+      }
+    }
+  }
+  const nx = 0 - sx;
+  const ny = 0 - sy;
+  if ((nx !== 0 || ny !== 0) && s.vx * nx + s.vy * ny < 0) return [nx, ny];
+  if (fromX !== cx || fromY !== cy) return [fromX - cx, fromY - cy];
+  return [0, -1];
+}
+
+/** Mirror the velocity's component along normal (nx, ny) (any non-zero length) if it points into the surface, then keep restitutionPct of the speed. */
+function reflect(s: Shell, nx: number, ny: number): void {
+  const vn = s.vx * nx + s.vy * ny; // |v| < 2^31, |n| components <= 330: < 2^41
+  if (vn < 0) {
+    const nn = nx * nx + ny * ny; // >= 1
+    s.vx -= idiv(2 * vn * nx, nn); // < 2^50
+    s.vy -= idiv(2 * vn * ny, nn);
+  }
+  s.vx = idiv(s.vx * s.restitutionPct, 100);
+  s.vy = idiv(s.vy * s.restitutionPct, 100);
+}
+
+/** A bounce ends the step at the last free sample; the flight cap still applies. */
+function endBounce(s: Shell, fx: Fx, fy: Fx, ev: Impact): Impact {
+  s.x = fx;
+  s.y = fy;
+  s.steps++;
+  if (s.steps >= MAX_FLIGHT_STEPS) {
+    s.alive = false;
+    return { kind: "out", x: floorPx(fx), y: floorPx(fy) };
+  }
+  return ev;
+}
+
+/**
  * Advance one physics step. Returns the first event along the swept path, or
  * null while the shell is still flying. windStep is the horizontal velocity
  * change per step (Fx). The order inside a step is part of the determinism
@@ -116,6 +169,11 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
     const cx = floorPx(sx);
     const cy = floorPx(sy);
     if (cx < 0 || cx >= WORLD_W) {
+      if (s.wallBounces > 0) {
+        s.wallBounces--;
+        reflect(s, cx < 0 ? 1 : -1, 0);
+        return endBounce(s, fx, fy, { kind: "bounce", x: cx < 0 ? 0 : WORLD_W - 1, y: cy, wall: true });
+      }
       s.alive = false;
       return { kind: "out", x: cx, y: cy };
     }
@@ -133,6 +191,12 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
       }
     }
     if (isSolid(t, cx, cy)) {
+      if (s.bounces > 0) {
+        s.bounces--;
+        const [nX, nY] = surfaceNormal(s, t, cx, cy, floorPx(fx), floorPx(fy));
+        reflect(s, nX, nY);
+        return endBounce(s, fx, fy, { kind: "bounce", x: cx, y: cy, wall: false });
+      }
       s.alive = false;
       return { kind: "terrain", x: cx, y: cy, fx, fy };
     }

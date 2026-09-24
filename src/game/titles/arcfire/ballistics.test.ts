@@ -185,3 +185,42 @@ describe("a spawn point is never tested (only the samples after it are)", () => 
     expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: -4, y: 300 });
   });
 });
+
+describe("bounces", () => {
+  /** A gravity-free shell at (x, y) px moving (vx, vy) px/s, with one terrain bounce at `pct`% restitution. */
+  const bouncer = (x: number, y: number, vx: number, vy: number, pct = 100): Shell => {
+    const s = shellAt(fromInt(x), fromInt(y), fromInt(vx), fromInt(vy), fromInt(200), 0);
+    s.bounces = 1;
+    s.restitutionPct = pct;
+    return s;
+  };
+  it("reflects off flat ground exactly and ends the step at the last free sample", () => {
+    const s = bouncer(600, 398, 100, 200);
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "bounce", x: 601, y: 400, wall: false });
+    expect([s.vx, s.vy]).toEqual([fromInt(100), fromInt(-200)]);
+    expect(floorPx(s.y)).toBe(399);
+    expect([s.bounces, s.alive]).toEqual([0, true]);
+  });
+  it("keeps restitutionPct of both components", () => {
+    const s = bouncer(600, 398, 100, 200, 55);
+    stepShell(s, flat(400), [], 0);
+    expect([s.vx, s.vy]).toEqual([fromInt(55), fromInt(-110)]);
+  });
+  it("sends a vertical drop onto a 45° rise away horizontally", () => {
+    const t = makeTerrain();
+    for (let x = 0; x < t.height.length; x++) t.height[x] = Math.max(0, Math.min(WORLD_H, 900 - x)); // rising to the right
+    spansFromHeight(t);
+    const s = bouncer(600, 290, 0, 200);
+    let hit: Impact | null = null;
+    while (hit === null) hit = stepShell(s, t, [], 0);
+    expect(hit).toEqual({ kind: "bounce", x: 600, y: 300, wall: false });
+    expect([s.vx, s.vy]).toEqual([fromInt(-200), 0]);
+  });
+  it("reflects off a side wall and flies on", () => {
+    const s = shellAt(fromInt(5), fromInt(100), fromInt(-600), 0, fromInt(600), 0);
+    s.wallBounces = 1;
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "bounce", x: 0, y: 100, wall: true });
+    expect(s.vx).toBe(fromInt(600));
+    expect(stepShell(s, flat(400), [], 0)).toBeNull();
+  });
+});

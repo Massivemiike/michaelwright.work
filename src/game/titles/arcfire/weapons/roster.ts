@@ -86,6 +86,21 @@ export const ROSTER: readonly WeaponDef[] = [
     stage: { on: "apex", effects: [{ split: { count: 6, spreadDeg: 0, speedPct: 100, from: "ahead", gapPx: 30,
       child: { on: "impact", effects: [{ blast: blast(20, 18) }] } } }], early: [{ blast: blast(20, 18) }] },
   },
+  {
+    id: "skipper", name: "Skipper", tag: "BOUNCE", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", bounce: { times: 3, restitutionPct: 55, blastEach: blast(22, 20) }, effects: [{ blast: blast(26, 24) }] },
+  },
+  {
+    id: "pinball", name: "Pinball", tag: "BOUNCE", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", bounce: { times: 6, restitutionPct: 80 }, effects: [{ blast: blast(36, 55) }] },
+  },
+  {
+    id: "ricochet", name: "Ricochet", tag: "BOUNCE", tier: 1, power: 30,
+    launch: { kind: "shell" },
+    stage: { on: "impact", bounce: { times: 2, restitutionPct: 100, walls: true }, effects: [{ blast: blast(30, 40) }] },
+  },
 ];
 
 /** Roster index by weapon id. */
