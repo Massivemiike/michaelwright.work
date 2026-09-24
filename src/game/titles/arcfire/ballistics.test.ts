@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fromInt } from "@/game/sim/math/fixed";
 import { makeTerrain, spansFromHeight, type Terrain } from "./terrain";
-import { launchShell, stepShell, muzzle, type HitCircle, type Impact, type Shell } from "./ballistics";
+import { launchShell, stepShell, muzzle, shellAt, type HitCircle, type Impact, type Shell } from "./ballistics";
 import { WORLD_H, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, MAX_SPANS, GRAVITY_STEP } from "./constants";
 
 function flat(y: number): Terrain {
@@ -86,7 +86,7 @@ describe("stepShell", () => {
     expect(s.alive).toBe(false);
   });
   it("gives up at the flight cap", () => {
-    const s: Shell = { x: fromInt(600), y: fromInt(100), vx: 0, vy: 0, gravityStep: 0, steps: 0, alive: true };
+    const s = shellAt(fromInt(600), fromInt(100), 0, 0, 0, 0);
     expect(fly(s).kind).toBe("out");
     expect(s.steps).toBe(MAX_FLIGHT_STEPS);
     expect(s.alive).toBe(false);
@@ -108,7 +108,7 @@ describe("Plan 2A carry-forwards", () => {
   });
   it("floors pixels: a shell crossing x in (-1, 0) is off the world at column -1", () => {
     // x = 100/65536 px, moving left at 6 px/s: its first sample is at x ≈ -0.098 px
-    const s: Shell = { x: 100, y: fromInt(100), vx: fromInt(-6), vy: 0, gravityStep: 0, steps: 0, alive: true };
+    const s = shellAt(100, fromInt(100), fromInt(-6), 0, 0, 0);
     expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: -1, y: 100 });
     expect(s.alive).toBe(false);
   });

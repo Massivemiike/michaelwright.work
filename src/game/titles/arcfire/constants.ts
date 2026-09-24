@@ -44,3 +44,11 @@ export const TERRAIN_BLUR_PASSES = 3;
 
 // --- match (spec §2)
 export const SUDDEN_DEATH_WEAPON = 0; // roster index of Pulse
+
+// --- weapons (Plan 2A, spec §4)
+export const MAX_TURN_STEPS = 4800; // backstop on one turn's steps; the roster's static bound (3,600) never reaches it
+export const MAX_SHELLS = 64; // backstop on the shells one turn may create; the roster's static bound (13) never reaches it
+export const MAX_STAGE_DEPTH = 4; // stage nesting a WeaponDef may use (Cascade uses 3)
+export const BOUNCE_PROBE_R = 8; // px: the disc sampled for a bounce's surface normal (8 reads gentle slopes, not their 1 px steps)
+export const ROLL_PROBE = 6; // px either side sampled to find the downhill direction (roll, burn)
+export const DIG_MAX_PITCH = 30; // degrees: a tunnel never dives steeper than this below level

@@ -3,19 +3,28 @@
 // resolveTurn (spec §1.3): one whole turn — the optional move, then the shot —
 // resolved to completion. It MUTATES the MatchState it's given; callers that
 // need the original (AI search, previews) resolve a cloneMatch() copy. The
-// caller (match.ts applyTurn) validates the command first. Plan 1 resolves
-// shell launches with impact blasts; Plan 2 adds the other primitives.
+// caller (match.ts applyTurn) validates the command first.
+//
+// The step loop and its ORDER are part of the determinism contract:
+//   step s = 1, 2, ...:
+//     1. delays due at s fire, in the order they were armed;
+//     2. every shell that existed at the start of the step and is alive moves
+//        once (stepShell), in creation order; a shell that triggers applies
+//        its effects at once, in list order (so a later shell this step sees
+//        their terrain); children it spawns are appended and first move at s + 1;
+//   until no shell is alive and no delay is armed (or MAX_TURN_STEPS). Then
+//   settle once, then score.
 import { fromInt } from "@/game/sim/math/fixed";
 import { ROSTER } from "./weapons/roster";
-import type { Blast } from "./weapons/types";
-import { launchShell, muzzle, stepShell, type HitCircle, type Shell } from "./ballistics";
-import { carveCircle, settle, spansFromHeight } from "./terrain";
-import { blastDamage } from "./damage";
+import { launchShell, muzzle, stepShell } from "./ballistics";
+import { settle, spansFromHeight } from "./terrain";
 import { hitCircles, moveTarget } from "./tanks";
 import { idiv, floorPx } from "./imath";
-import { STEPS_PER_SEC, MAX_FLIGHT_STEPS } from "./constants";
+import { STEPS_PER_SEC, MAX_TURN_STEPS } from "./constants";
+import { addShell, applyEffects, emit, fanOffset, type Shot } from "./weapons/primitives";
 import type { MatchState } from "./state";
-import type { Timeline, TimelineEvent } from "./timeline";
+import type { Timeline } from "./timeline";
+import type { WeaponDef } from "./weapons/types";
 
 export interface TurnInput {
   move: -1 | 0 | 1;
@@ -25,16 +34,30 @@ export interface TurnInput {
 }
 
 export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
+  return resolveWeapon(m, ROSTER[input.weapon], input, true);
+}
+
+/** resolveTurn without building the Timeline's paths or events: the same state and points, faster (AI search, verification). */
+export function resolveTurnPoints(m: MatchState, input: TurnInput): [number, number] {
+  return resolveWeapon(m, ROSTER[input.weapon], input, false).points;
+}
+
+/**
+ * resolveTurn with the weapon passed in: the seam unit tests use to fire
+ * synthetic WeaponDefs (and 2B's probe shell). `input.weapon` is only
+ * recorded. `record = false` leaves `shells`, `events` and `settle.falls` empty.
+ */
+export function resolveWeapon(m: MatchState, def: WeaponDef, input: TurnInput, record = true): Timeline {
   const shooter = m.shooter;
-  const def = ROSTER[input.weapon];
   const tl: Timeline = {
     shooter,
     move: null,
     wind: m.wind,
     weapon: input.weapon,
+    steps: 0,
     shells: [],
     events: [],
-    settle: { heights: m.terrain.height.slice(), falls: [] },
+    settle: { heights: m.terrain.height, falls: [] }, // replaced by the settle below
     points: [0, 0],
   };
 
@@ -48,67 +71,84 @@ export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
     }
   }
 
-  // 2. Launch the volley from the shooter's muzzle.
+  // 2. Launch: shells fan out from the muzzle.
   spansFromHeight(m.terrain);
-  const tanks = hitCircles(m);
-  const count = def.launch.count ?? 1;
-  const spread = def.launch.spreadDeg ?? 0;
-  const shells: Shell[] = [];
-  for (let i = 0; i < count; i++) {
-    const offset = count > 1 ? idiv((2 * i - (count - 1)) * spread, 2 * (count - 1)) : 0;
-    const angle = input.angle + offset; // never clamped: an edge shell may leave below the horizon
-    const mz = muzzle(tanks[shooter].x, tanks[shooter].y, angle);
-    shells.push(launchShell(mz.x, mz.y, angle, input.power, def.launch.speedPct ?? 100, def.launch.gravityPct ?? 100));
-    tl.shells.push({ angle, points: [mz.x, mz.y] });
+  const shot: Shot = {
+    t: m.terrain, tanks: hitCircles(m), shooter, shells: [], stages: [], live: 0, pending: [], received: [0, 0],
+    rec: record, tl,
+  };
+  const launch = def.launch;
+  if (launch.kind === "shell" && def.stage) {
+    const count = launch.count ?? 1;
+    for (let i = 0; i < count; i++) {
+      const angle = input.angle + fanOffset(i, count, launch.spreadDeg ?? 0); // never clamped: may leave 0..180 near the horizon
+      const mz = muzzle(shot.tanks[shooter].x, shot.tanks[shooter].y, angle);
+      const s = launchShell(mz.x, mz.y, angle, input.power, launch.speedPct ?? 100, launch.gravityPct ?? 100);
+      addShell(shot, s, def.stage, angle, -1, 0);
+    }
   }
 
-  // 3. Fly every shell together, one step at a time, in shell order.
+  // 3. The step loop.
   const windStep = idiv(fromInt(m.wind), STEPS_PER_SEC);
-  const received = [0, 0]; // damage each tank took this turn
-  for (let step = 1; step <= MAX_FLIGHT_STEPS; step++) {
-    let anyAlive = false;
-    for (let i = 0; i < shells.length; i++) {
-      const s = shells[i];
-      if (!s.alive) continue;
-      const hit = stepShell(s, m.terrain, tanks, windStep);
-      if (hit === null) {
-        tl.shells[i].points.push(floorPx(s.x), floorPx(s.y));
-        anyAlive = true;
-        continue;
-      }
-      tl.shells[i].points.push(hit.x, hit.y);
-      if (hit.kind === "out") {
-        tl.events.push({ step, kind: "out", shell: i, x: hit.x, y: hit.y });
-        continue;
-      }
-      for (const eff of def.stage.effects) applyBlast(m, eff.blast, hit.x, hit.y, step, i, tanks, received, tl.events);
+  for (let step = 1; shot.live > 0 || shot.pending.length > 0; step++) {
+    if (step > MAX_TURN_STEPS) {
+      abandon(shot, MAX_TURN_STEPS);
+      break;
     }
-    if (!anyAlive) break;
+    tl.steps = step;
+    const n = shot.shells.length; // shells spawned during this step first move at step + 1
+    for (let j = 0; j < shot.pending.length; ) {
+      const p = shot.pending[j];
+      if (p.at !== step) {
+        j++;
+        continue;
+      }
+      shot.pending.splice(j, 1);
+      applyEffects(shot, { ...p.trig, step }, p.effects);
+    }
+    for (let i = 0; i < n; i++) {
+      const s = shot.shells[i];
+      if (!s.alive) continue;
+      const hit = stepShell(s, shot.t, shot.tanks, windStep);
+      const path = record ? tl.shells[i].points : null;
+      if (hit === null) {
+        if (path) path.push(floorPx(s.x), floorPx(s.y));
+        continue;
+      }
+      if (!s.alive) shot.live--;
+      if (hit.kind === "out") {
+        if (path) path.push(hit.x, hit.y);
+        emit(shot, { step, kind: "out", shell: i, x: hit.x, y: hit.y, lag: 0 });
+        continue;
+      }
+      if (path) path.push(hit.x, hit.y);
+      applyEffects(shot, {
+        step, shell: i, x: hit.x, y: hit.y, fx: hit.fx, fy: hit.fy, vx: s.vx, vy: s.vy,
+        speed: s.speed, gravityStep: s.gravityStep, tank: hit.kind === "tank" ? hit.tank : -1,
+      }, shot.stages[i].effects);
+    }
   }
 
   // 4. Dirt settles once, after the whole shot.
-  tl.settle = settle(m.terrain);
+  tl.settle = settle(m.terrain, record);
 
   // 5. Damage to the opponent scores for the shooter; self-damage scores for the opponent.
   const opp = 1 - shooter;
-  tl.points[shooter] += received[opp];
-  tl.points[opp] += received[shooter];
+  tl.points[shooter] += shot.received[opp];
+  tl.points[opp] += shot.received[shooter];
   m.scores[0] += tl.points[0];
   m.scores[1] += tl.points[1];
   return tl;
 }
 
-function applyBlast(
-  m: MatchState, b: Blast, x: number, y: number, step: number, shell: number,
-  tanks: readonly HitCircle[], received: number[], events: TimelineEvent[]
-): void {
-  carveCircle(m.terrain, x, y, b.radius);
-  events.push({ step, kind: "blast", shell, x, y, radius: b.radius });
-  for (let p = 0; p < 2; p++) {
-    const dmg = blastDamage(b, x, y, tanks[p].x, tanks[p].y);
-    if (dmg > 0) {
-      received[p] += dmg;
-      events.push({ step, kind: "damage", target: p, amount: dmg });
-    }
+/** The turn backstop: everything still flying is lost at `step` and armed delays are dropped (their `fuse` events keep an `at` beyond tl.steps: playback's cue). */
+function abandon(shot: Shot, step: number): void {
+  for (let i = 0; i < shot.shells.length; i++) {
+    const s = shot.shells[i];
+    if (!s.alive) continue;
+    s.alive = false;
+    emit(shot, { step, kind: "out", shell: i, x: floorPx(s.x), y: floorPx(s.y), lag: 0 });
   }
+  shot.live = 0;
+  shot.pending.length = 0;
 }

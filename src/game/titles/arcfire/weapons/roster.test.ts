@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { ROSTER, ROSTER_INDEX } from "./roster";
-import { SUDDEN_DEATH_WEAPON } from "../constants";
+import { weaponErrors, maxShells, maxTurnSteps } from "./validate";
+import { SUDDEN_DEATH_WEAPON, MAX_TURN_STEPS, MAX_SHELLS } from "../constants";
+
+// The wire order pinned so far. Append-only: T7–T12 each append their slice of ids here; T13 replaces this
+// prefix pin with the exact 32-id pin (§8.2). A prefix pin stays green when a later task appends weapons.
+const WIRE = ["pulse", "pulse2", "nova", "needle", "crater", "triad", "fan", "railshot"];
 
 describe("ROSTER", () => {
   it("has unique ids that index back to themselves", () => {
@@ -11,19 +16,14 @@ describe("ROSTER", () => {
   it("keeps Pulse at the sudden-death index", () => {
     expect(ROSTER[SUDDEN_DEATH_WEAPON].id).toBe("pulse");
   });
-  it("gives every weapon a shell launch, at least one blast, and a 1..100 draft power", () => {
-    for (const w of ROSTER) {
-      expect(w.launch.kind).toBe("shell");
-      expect(w.stage.effects.length).toBeGreaterThan(0);
-      for (const e of w.stage.effects) {
-        expect(e.blast.radius).toBeGreaterThan(0);
-        expect(e.blast.damage).toBeGreaterThan(0);
-      }
-      expect(w.power).toBeGreaterThanOrEqual(1);
-      expect(w.power).toBeLessThanOrEqual(100);
-    }
+  it("pins the wire order so far (append-only: existing indices never move)", () => {
+    expect(ROSTER.slice(0, WIRE.length).map((w) => w.id)).toEqual(WIRE);
   });
-  it("pins the Plan-1 wire order (the roster is append-only)", () => {
-    expect(ROSTER.map((w) => w.id)).toEqual(["pulse", "pulse2", "nova", "needle", "crater", "triad", "fan", "railshot"]);
+  it("every weapon is valid and within the static cost bounds", () => {
+    for (const w of ROSTER) {
+      expect(weaponErrors(w), w.id).toEqual([]);
+      expect(maxShells(w)).toBeLessThanOrEqual(MAX_SHELLS);
+      expect(maxTurnSteps(w)).toBeLessThan(MAX_TURN_STEPS);
+    }
   });
 });

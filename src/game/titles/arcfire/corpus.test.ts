@@ -12,7 +12,8 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { FNV_OFFSET, fnvFold, fnvHex } from "@/game/sim/hash";
 import { runCorpus, corpusDigest, type Fingerprint } from "@/game/test/arcfire/corpus";
-import { ROSTER } from "./weapons/roster";
+import { ROSTER, ROSTER_INDEX } from "./weapons/roster";
+import { maxShells, maxTurnSteps } from "./weapons/validate";
 import { MAX_FLIGHT_STEPS } from "./constants";
 import type { WeaponDef } from "./weapons/types";
 
@@ -38,16 +39,37 @@ interface CorpusFixture { digest: string; defs: Record<string, string>; cases: R
 
 describe("arcfire corpus", () => {
   it("reproduces every pinned case and weapon definition", () => {
+    const kinds = new Set<string>();
+    const volleyAngles: number[] = [];
     let capped = false;
-    const cases = runCorpus((_c, tl) => {
-      for (const s of tl.shells) if (s.points.length === 2 * (MAX_FLIGHT_STEPS + 1)) capped = true;
+    let beamHit = false;
+    const cases = runCorpus((c, tl) => {
+      const def = ROSTER[ROSTER_INDEX[c.w]];
+      for (const e of tl.events) kinds.add(e.kind === "bounce" ? `bounce:${e.wall ? "wall" : "terrain"}` : e.kind === "build" ? `build:${e.shape}` : e.kind);
+      for (const s of tl.shells) {
+        if (s.parent === -1) volleyAngles.push(s.angle);
+        if (s.points.length === 2 * (MAX_FLIGHT_STEPS + 1)) capped = true;
+      }
+      if (def.launch.kind === "beam" && tl.points[c.shooter] > 0) beamHit = true;
+      // the static cost bounds hold for every case
+      expect(tl.steps).toBeLessThanOrEqual(maxTurnSteps(def));
+      expect(tl.shells.length).toBeLessThanOrEqual(maxShells(def));
     });
     const defs = Object.fromEntries(ROSTER.map((w) => [w.id, defDigest(w)]));
     const fresh: CorpusFixture = { digest: corpusDigest(cases), defs, cases };
 
-    // Not inert: the corpus exercises the flight cap. (The Plan 2A data model adds the
-    // horizon, static-bound and event-kind gates to this test.)
+    // Not inert: the corpus exercises the flight cap, both sides of the horizon, and — once
+    // the weapon that makes it exists — every event kind (the gates switch on as weapons land).
     expect(capped, "a shell reached the per-shell flight cap").toBe(true);
+    expect(Math.min(...volleyAngles)).toBeLessThan(0);
+    expect(Math.max(...volleyAngles)).toBeGreaterThan(180);
+    const gates: [string, string][] = [
+      ["twinnova", "fuse"], ["cascade", "split"], ["skipper", "bounce:terrain"], ["ricochet", "bounce:wall"],
+      ["tumbler", "roll"], ["burrow", "dig"], ["inferno", "burn"], ["rampart", "build:wall"], ["bastion", "build:ball"],
+      ["leveler", "build:level"], ["lancer", "beam"], ["quake", "quake"],
+    ];
+    for (const [id, kind] of gates) if (id in ROSTER_INDEX) expect(kinds.has(kind), `${id} emits ${kind}`).toBe(true);
+    if ("lancer" in ROSTER_INDEX) expect(beamHit, "a beam scored").toBe(true);
 
     const mode = process.env.UPDATE_ARCFIRE_CORPUS;
     const old: CorpusFixture | null = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, "utf8")) : null;

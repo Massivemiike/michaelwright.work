@@ -4,6 +4,10 @@
 // then fixed 1/60 s steps of semi-implicit Euler in Q16.16. Each step's
 // movement is swept in <= 1 px increments against the tank hitboxes and the
 // terrain spans, so nothing tunnels through a thin wall or clips past a tank.
+// Plan 2A adds the flight modifiers a Stage can ask for — stop at the apex,
+// homing after the apex, bounces off the terrain or the side walls — and a
+// shell spawned inside a tank's hitbox ignores that tank until it has left it.
+// A shell with no modifiers takes exactly Plan 1's path (pixels are floored).
 import type { Fx } from "@/game/sim/types";
 import { fromInt, toInt, mul } from "@/game/sim/math/fixed";
 import { cosDeg, sinDeg } from "./aimTable";
@@ -19,8 +23,19 @@ export interface Shell {
   vx: Fx; // px/s
   vy: Fx; // px/s, positive = falling
   gravityStep: Fx; // fall-speed gain per step (weapon-scaled gravity)
-  steps: number; // steps flown so far
+  steps: number; // steps flown so far (the per-shell flight cap counts these)
   alive: boolean;
+  // --- Plan 2A
+  speed: Fx; // nominal speed: the launch speed, or a child's split speed ("up"/"cone" splits scale it)
+  apexed: boolean; // latched on the step a rising shell stops rising
+  stopAtApex: boolean; // die with an "apex" result on the step `apexed` latches
+  homeDeg: number; // > 0: once apexed, turn <= this many whole degrees per step toward (homeX, homeY)
+  homeX: number;
+  homeY: number;
+  bounces: number; // terrain reflections left
+  wallBounces: number; // side-wall reflections left
+  restitutionPct: number; // speed kept per reflection
+  ignore: number; // bitmask of tanks whose hitbox the shell spawned inside; a bit clears once a sample is outside
 }
 
 /** A tank hitbox centre in px; the radius is TANK_HIT_R. */
@@ -30,9 +45,9 @@ export interface HitCircle {
 }
 
 export type Impact =
-  | { kind: "terrain"; x: number; y: number }
-  | { kind: "tank"; x: number; y: number; tank: number }
-  | { kind: "out"; x: number; y: number }; // left the world sideways, or hit the flight cap
+  | { kind: "terrain"; x: number; y: number; fx: Fx; fy: Fx } // (x, y) = first solid px; (fx, fy) = last free position
+  | { kind: "tank"; x: number; y: number; tank: number; fx: Fx; fy: Fx }
+  | { kind: "out"; x: number; y: number }; // left the world sideways, or hit the per-shell flight cap
 
 /** The muzzle point for a hitbox centre and an integer angle (any integer degrees), px. */
 export function muzzle(cx: number, cy: number, angleDeg: number): { x: number; y: number } {
@@ -42,26 +57,32 @@ export function muzzle(cx: number, cy: number, angleDeg: number): { x: number; y
   };
 }
 
-export function launchShell(
-  x: number, y: number, angleDeg: number, power: number, speedPct = 100, gravityPct = 100
-): Shell {
-  const speed = idiv(power * V_UNIT * speedPct, 100);
+/** A shell at Q16.16 position (x, y) with velocity (vx, vy), nominal speed `speed` and no flight modifiers. */
+export function shellAt(x: Fx, y: Fx, vx: Fx, vy: Fx, speed: Fx, gravityStep: Fx): Shell {
   return {
-    x: fromInt(x),
-    y: fromInt(y),
-    vx: mul(speed, cosDeg(angleDeg)),
-    vy: 0 - mul(speed, sinDeg(angleDeg)),
-    gravityStep: idiv(GRAVITY_STEP * gravityPct, 100),
-    steps: 0,
-    alive: true,
+    x, y, vx, vy, gravityStep, steps: 0, alive: true,
+    speed, apexed: false, stopAtApex: false, homeDeg: 0, homeX: 0, homeY: 0,
+    bounces: 0, wallBounces: 0, restitutionPct: 100, ignore: 0,
   };
 }
 
+/** A shell at (x, y) px flying at `speed` (Fx px/s) along an integer angle (any integer degrees). */
+export function launchAt(x: number, y: number, angleDeg: number, speed: Fx, gravityStep: Fx): Shell {
+  return shellAt(fromInt(x), fromInt(y), mul(speed, cosDeg(angleDeg)), 0 - mul(speed, sinDeg(angleDeg)), speed, gravityStep);
+}
+
+export function launchShell(
+  x: number, y: number, angleDeg: number, power: number, speedPct = 100, gravityPct = 100
+): Shell {
+  return launchAt(x, y, angleDeg, idiv(power * V_UNIT * speedPct, 100), idiv(GRAVITY_STEP * gravityPct, 100));
+}
+
 /**
- * Advance one physics step. Returns the first impact along the swept path, or
+ * Advance one physics step. Returns the first event along the swept path, or
  * null while the shell is still flying. windStep is the horizontal velocity
- * change per step (Fx). Pixels are floored (floorPx): column c is [c, c + 1),
- * so the left world edge is exactly x = 0.
+ * change per step (Fx). The order inside a step is part of the determinism
+ * contract: wind, gravity, then the sweep, whose every sample checks the side
+ * edges, then the tanks in index order, then the terrain.
  */
 export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], windStep: Fx): Impact | null {
   s.vx += windStep;
@@ -70,9 +91,13 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
   const ny = s.y + idiv(s.vy, STEPS_PER_SEC);
   const n = Math.max(Math.abs(floorPx(nx) - floorPx(s.x)), Math.abs(floorPx(ny) - floorPx(s.y)), 1);
   const r2 = TANK_HIT_R * TANK_HIT_R;
+  let fx = s.x; // the last free sample
+  let fy = s.y;
   for (let i = 1; i <= n; i++) {
-    const cx = floorPx(s.x + idiv((nx - s.x) * i, n));
-    const cy = floorPx(s.y + idiv((ny - s.y) * i, n));
+    const sx = s.x + idiv((nx - s.x) * i, n);
+    const sy = s.y + idiv((ny - s.y) * i, n);
+    const cx = floorPx(sx);
+    const cy = floorPx(sy);
     if (cx < 0 || cx >= WORLD_W) {
       s.alive = false;
       return { kind: "out", x: cx, y: cy };
@@ -82,13 +107,15 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
       const dy = cy - tanks[k].y;
       if (dx * dx + dy * dy <= r2) {
         s.alive = false;
-        return { kind: "tank", x: cx, y: cy, tank: k };
+        return { kind: "tank", x: cx, y: cy, tank: k, fx, fy };
       }
     }
     if (isSolid(t, cx, cy)) {
       s.alive = false;
-      return { kind: "terrain", x: cx, y: cy };
+      return { kind: "terrain", x: cx, y: cy, fx, fy };
     }
+    fx = sx;
+    fy = sy;
   }
   s.x = nx;
   s.y = ny;

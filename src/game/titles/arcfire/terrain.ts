@@ -149,9 +149,10 @@ function removeInterval(t: Terrain, x: number, a: number, b: number): void {
 /**
  * Drop every floating span straight down onto the stack below it. All solid
  * material in a column ends up as ONE span resting on the floor, so the new
- * surface is WORLD_H minus the column's total solid length.
+ * surface is WORLD_H minus the column's total solid length. `collect = false`
+ * skips building `falls` (the quiet resolve path); the terrain is identical.
  */
-export function settle(t: Terrain): SettleResult {
+export function settle(t: Terrain, collect = true): SettleResult {
   const falls: SettleFall[] = [];
   for (let x = 0; x < WORLD_W; x++) {
     const o = x * STRIDE;
@@ -159,7 +160,7 @@ export function settle(t: Terrain): SettleResult {
     for (let i = t.spanCount[x] - 1; i >= 0; i--) {
       const top = t.spans[o + i * 2];
       const bot = t.spans[o + i * 2 + 1];
-      if (stackTop > bot) falls.push({ x, top, bottom: bot, fall: stackTop - bot });
+      if (collect && stackTop > bot) falls.push({ x, top, bottom: bot, fall: stackTop - bot });
       stackTop -= bot - top;
     }
     t.height[x] = stackTop;

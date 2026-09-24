@@ -100,7 +100,7 @@ describe("the timeline", () => {
     for (const [weapon, angle, power] of [[ROSTER_INDEX.fan, 36, 48], [PULSE, 170, 100], [PULSE, 60, 30]]) {
       const tl = resolveTurn(flatBattle(), { move: 0, weapon, angle, power });
       for (const e of tl.events) {
-        if (e.kind === "damage") continue;
+        if (e.kind !== "blast" && e.kind !== "out") continue;
         expect(tl.shells[e.shell].points.slice(-2)).toEqual([e.x, e.y]);
       }
     }
