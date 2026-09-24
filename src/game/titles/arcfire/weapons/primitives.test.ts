@@ -101,3 +101,112 @@ describe("the quiet path", () => {
     expect(tl.steps).toBeGreaterThan(0);
   });
 });
+
+describe("delay", () => {
+  it("Twin Nova blasts twice at one point, 30 steps apart, announced by a fuse", () => {
+    const tl = fire(flatBattle(), "twinnova", 60, 50);
+    expect(eventsOf(tl, "blast").map((b) => [b.step, b.x, b.y, b.radius])).toEqual([[124, 663, 400, 50], [154, 663, 400, 70]]);
+    expect(eventsOf(tl, "fuse")).toEqual([{ step: 124, kind: "fuse", shell: 0, x: 663, y: 400, at: 154 }]);
+    expect(tl.steps).toBe(154);
+    expect(tl.points).toEqual([65, 0]);
+  });
+  it("a delay past the turn backstop is dropped: one blast, and a fuse whose `at` is beyond tl.steps", () => {
+    const B = { radius: 28, damage: 40 };
+    const tl = fireDef(flatBattle(), synth({ on: "impact", effects: [{ blast: B }, { delay: { steps: 5000, then: [{ blast: B }] } }] }), 60, 50);
+    expect(eventsOf(tl, "blast").length).toBe(1);
+    expect(tl.steps).toBe(MAX_TURN_STEPS);
+    const fuses = eventsOf(tl, "fuse");
+    expect(fuses.length).toBe(1);
+    expect(fuses[0].at).toBeGreaterThan(tl.steps);
+  });
+});
+
+describe("split", () => {
+  it("Cascade: 13 shells over three generations, each fanned about straight up", () => {
+    const tl = fire(flatBattle(), "cascade", 60, 50);
+    expect(tl.shells.length).toBe(13);
+    const splits = eventsOf(tl, "split");
+    expect(splits.map((s) => [s.step, s.children.length])).toEqual([[124, 3], [156, 3], [173, 3], [186, 3]]);
+    expect(eventsOf(tl, "blast").length).toBe(13);
+    const first = splits[0];
+    expect(first.shell).toBe(0);
+    first.children.forEach((c, k) => {
+      const p = tl.shells[c];
+      expect([p.angle, p.parent, p.start]).toEqual([[-25, 0, 25][k], 0, first.step]);
+      expect(p.points[3]).toBeLessThan(p.points[1]); // its first step moves up
+    });
+    expect(tl.points).toEqual([35, 0]);
+  });
+  it("Hydra splits at its apex, where the parent stopped, into 5 heavies about its heading", () => {
+    const tl = fire(flatBattle(), "hydra", 45, 60);
+    const splits = eventsOf(tl, "split");
+    expect(splits.length).toBe(1);
+    const sp = splits[0];
+    expect([sp.step, sp.x, sp.y]).toEqual([59, 595, 235]);
+    const parent = tl.shells[0].points;
+    expect(parent.length / 2).toBe(sp.step); // no point for the apex step: it did not move
+    expect(parent.slice(-2)).toEqual([sp.x, sp.y]);
+    expect(sp.children.map((c) => tl.shells[c].angle)).toEqual([-20, -10, 0, 10, 20]);
+  });
+  it("Hydra fired level never apexes: its early effect is one child's blast", () => {
+    const tl = fire(flatBattle(), "hydra", 0, 60);
+    expect(eventsOf(tl, "split")).toEqual([]);
+    expect(eventsOf(tl, "blast").map((b) => b.radius)).toEqual([26]);
+  });
+  it("an apex weapon that hits something before its apex uses `early`, or is a dud without it", () => {
+    const wall = (): MatchState => setHeights(flatBattle(), (x) => (x >= 400 && x < 420 ? 100 : 400));
+    const tl = fire(wall(), "barrage", 45, 90);
+    expect(eventsOf(tl, "split")).toEqual([]);
+    expect(eventsOf(tl, "blast").map((b) => b.radius)).toEqual([20]);
+    const bare = synth({ on: "apex", effects: [{ split: { count: 2, spreadDeg: 10, speedPct: 100, from: "ahead",
+      child: { on: "impact", effects: [{ blast: { radius: 20, damage: 18 } }] } } }] });
+    const dud = fireDef(wall(), bare, 45, 90);
+    expect(eventsOf(dud, "dud").length).toBe(1);
+    expect(eventsOf(dud, "blast")).toEqual([]);
+  });
+  it("Barrage drops a line of 6 at its apex, 30 px apart, that lands exactly 30 px apart", () => {
+    const tl = fire(flatBattle(300, 1000), "barrage", 45, 60);
+    const sp = eventsOf(tl, "split")[0];
+    expect(sp.children.map((c) => tl.shells[c].points[0])).toEqual([520, 550, 580, 610, 640, 670]);
+    expect(eventsOf(tl, "blast").map((b) => b.x).sort((a, b) => a - b)).toEqual([818, 848, 878, 908, 938, 968]);
+  });
+  it("a line child spawned inside a hill impacts at its first sample, one step later", () => {
+    const m = setHeights(flatBattle(300, 1000), (x) => (x >= 630 && x < 700 ? 200 : 400));
+    const tl = fire(m, "barrage", 45, 60);
+    const sp = eventsOf(tl, "split")[0];
+    expect([sp.step, sp.x, sp.y]).toEqual([59, 595, 235]); // the split is unchanged
+    for (const [shell, spawnX, hitX] of [[5, 640, 641], [6, 670, 671]]) {
+      expect(tl.shells[shell].points).toEqual([spawnX, 235, hitX, 235]);
+      expect(tl.events).toContainEqual({ step: 60, kind: "blast", shell, x: hitX, y: 235, radius: 20, lag: 0 });
+    }
+  });
+  it("Hailstorm bursts 9 shells downward at its apex, carried by the parent's motion", () => {
+    const tl = fire(flatBattle(300, 1000), "hailstorm", 45, 60);
+    const sp = eventsOf(tl, "split")[0];
+    expect([sp.x, sp.y, sp.children.length]).toEqual([595, 235, 9]);
+    for (const c of sp.children) expect(tl.shells[c].points[3]).toBeGreaterThan(tl.shells[c].points[1]); // first step moves down
+    const xs = eventsOf(tl, "blast").map((b) => b.x);
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([737, 795]);
+  });
+  it("Shrapnel fans 6 fragments at -80, -48, -16, 16, 48 and 80 degrees off straight up", () => {
+    const tl = fire(flatBattle(), "shrapnel", 60, 50);
+    const sp = eventsOf(tl, "split")[0];
+    expect(sp.children.map((c) => tl.shells[c].angle)).toEqual([-80, -48, -16, 16, 48, 80]);
+  });
+  it("a child spawned inside a hitbox ignores that tank until it leaves it; a rear child can still fly into the shooter (O5)", () => {
+    const tl = fire(flatBattle(300, 400), "barrage", 3, 60);
+    const sp = eventsOf(tl, "split")[0];
+    expect(sp.step).toBe(5);
+    const insideOf = (c: number): number => [300, 400].findIndex((tx) => {
+      const dx = tl.shells[c].points[0] - tx;
+      const dy = tl.shells[c].points[1] - 388; // both hitbox centres are at y = 400 - TANK_HIT_DY
+      return dx * dx + dy * dy <= 14 * 14;
+    });
+    const inside = sp.children.filter((c) => insideOf(c) >= 0);
+    expect(inside.map(insideOf)).toEqual([0, 1]); // one child spawned inside each hitbox ...
+    const endStep = (c: number): number => tl.shells[c].start + tl.shells[c].points.length / 2 - 1;
+    expect(inside.map(endStep)).toEqual([18, 22]); // ... and neither ended on its first sample
+    expect(tl.shells[sp.children[0]].points[0]).toBe(273); // the rear child spawned outside the shooter's hitbox ...
+    expect(tl.points[1]).toBe(18); // ... and flew into it: 18 self-damage, scored for the opponent
+  });
+});

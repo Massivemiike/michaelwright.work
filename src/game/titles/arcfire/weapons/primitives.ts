@@ -7,13 +7,15 @@
 // weapon draws from the match RNG. The order effects run in is part of the
 // determinism contract (see resolve.ts).
 import type { Fx } from "@/game/sim/types";
+import { fromInt, mul } from "@/game/sim/math/fixed";
+import { cosDeg, sinDeg } from "../aimTable";
 import { idiv, floorPx } from "../imath";
 import { carveCircle, type Terrain } from "../terrain";
-import type { HitCircle, Shell } from "../ballistics";
+import { rotateVel, shellAt, type HitCircle, type Shell } from "../ballistics";
 import { blastDamage } from "../damage";
 import { TANK_HIT_R, MAX_SHELLS } from "../constants";
 import type { Timeline, TimelineEvent } from "../timeline";
-import type { Blast, Effect, Stage } from "./types";
+import type { Blast, Effect, Split, Stage } from "./types";
 
 /** Everything one shot's effects can touch. Built by resolveWeapon; lives for one turn. */
 export interface Shot {
@@ -58,6 +60,12 @@ export function emit(shot: Shot, ev: TimelineEvent): void {
 export function applyEffects(shot: Shot, trig: Trigger, effects: readonly Effect[]): void {
   for (const e of effects) {
     if ("blast" in e) blastAt(shot, e.blast, trig.x, trig.y, trig.step, trig.shell, 0);
+    else if ("split" in e) split(shot, trig, e.split);
+    else if ("delay" in e) {
+      const at = trig.step + (e.delay.steps > 1 ? e.delay.steps : 1);
+      shot.pending.push({ at, trig, effects: e.delay.then });
+      emit(shot, { step: trig.step, kind: "fuse", shell: trig.shell, x: trig.x, y: trig.y, at });
+    }
   }
 }
 
@@ -118,3 +126,29 @@ export function addShell(shot: Shot, s: Shell, stage: Stage, angle: number, pare
 /** Fan offset of item i of count across a TOTAL spread (the volley rule; count > 1 guards the divisor). */
 export const fanOffset = (i: number, count: number, spread: number): number =>
   count > 1 ? idiv((2 * i - (count - 1)) * spread, 2 * (count - 1)) : 0;
+
+function split(shot: Shot, trig: Trigger, sp: Split): void {
+  const children: number[] = [];
+  const speed = idiv(trig.speed * sp.speedPct, 100); // the children's nominal speed
+  for (let i = 0; i < sp.count; i++) {
+    const off = fanOffset(i, sp.count, sp.spreadDeg);
+    let vx: Fx;
+    let vy: Fx;
+    if (sp.from === "up") {
+      vx = mul(speed, cosDeg(90 + off));
+      vy = 0 - mul(speed, sinDeg(90 + off));
+    } else if (sp.from === "cone") {
+      vx = trig.vx + mul(speed, cosDeg(270 + off));
+      vy = trig.vy - mul(speed, sinDeg(270 + off));
+    } else {
+      const [rx, ry] = rotateVel(trig.vx, trig.vy, off);
+      vx = idiv(rx * sp.speedPct, 100);
+      vy = idiv(ry * sp.speedPct, 100);
+    }
+    const gx = sp.gapPx ? idiv((2 * i - (sp.count - 1)) * sp.gapPx, 2) : 0;
+    const s = shellAt(trig.fx + fromInt(gx), trig.fy, vx, vy, speed, trig.gravityStep);
+    const id = addShell(shot, s, sp.child, off, trig.shell, trig.step);
+    if (id >= 0) children.push(id);
+  }
+  emit(shot, { step: trig.step, kind: "split", shell: trig.shell, x: trig.x, y: trig.y, children });
+}

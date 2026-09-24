@@ -47,6 +47,7 @@ export interface HitCircle {
 export type Impact =
   | { kind: "terrain"; x: number; y: number; fx: Fx; fy: Fx } // (x, y) = first solid px; (fx, fy) = last free position
   | { kind: "tank"; x: number; y: number; tank: number; fx: Fx; fy: Fx }
+  | { kind: "apex"; x: number; y: number; fx: Fx; fy: Fx } // only for stopAtApex shells; the shell has not moved this step
   | { kind: "out"; x: number; y: number }; // left the world sideways, or hit the per-shell flight cap
 
 /** The muzzle point for a hitbox centre and an integer angle (any integer degrees), px. */
@@ -77,16 +78,32 @@ export function launchShell(
   return launchAt(x, y, angleDeg, idiv(power * V_UNIT * speedPct, 100), idiv(GRAVITY_STEP * gravityPct, 100));
 }
 
+/** Rotate a velocity by an integer angle in the aim sense (+ turns a rightward vector toward up). */
+export function rotateVel(vx: Fx, vy: Fx, deg: number): [Fx, Fx] {
+  const c = cosDeg(deg);
+  const s = sinDeg(deg);
+  return [mul(vx, c) + mul(vy, s), mul(vy, c) - mul(vx, s)];
+}
+
 /**
  * Advance one physics step. Returns the first event along the swept path, or
  * null while the shell is still flying. windStep is the horizontal velocity
  * change per step (Fx). The order inside a step is part of the determinism
- * contract: wind, gravity, then the sweep, whose every sample checks the side
- * edges, then the tanks in index order, then the terrain.
+ * contract: wind, gravity, the apex latch (an apex stage ends the step here),
+ * then the sweep, whose every sample checks the side edges, then the
+ * tanks in index order, then the terrain.
  */
 export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], windStep: Fx): Impact | null {
+  const rising = s.vy < 0;
   s.vx += windStep;
   s.vy += s.gravityStep;
+  if (!s.apexed && rising && s.vy >= 0) {
+    s.apexed = true;
+    if (s.stopAtApex) {
+      s.alive = false;
+      return { kind: "apex", x: floorPx(s.x), y: floorPx(s.y), fx: s.x, fy: s.y };
+    }
+  }
   const nx = s.x + idiv(s.vx, STEPS_PER_SEC);
   const ny = s.y + idiv(s.vy, STEPS_PER_SEC);
   const n = Math.max(Math.abs(floorPx(nx) - floorPx(s.x)), Math.abs(floorPx(ny) - floorPx(s.y)), 1);
@@ -105,7 +122,12 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
     for (let k = 0; k < tanks.length; k++) {
       const dx = cx - tanks[k].x;
       const dy = cy - tanks[k].y;
-      if (dx * dx + dy * dy <= r2) {
+      const inside = dx * dx + dy * dy <= r2;
+      if ((s.ignore >> k) & 1) {
+        if (!inside) s.ignore &= ~(1 << k);
+        continue;
+      }
+      if (inside) {
         s.alive = false;
         return { kind: "tank", x: cx, y: cy, tank: k, fx, fy };
       }

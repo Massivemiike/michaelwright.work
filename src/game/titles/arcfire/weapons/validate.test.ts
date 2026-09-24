@@ -72,3 +72,13 @@ describe("totality: degenerate definitions resolve without throwing", () => {
     expectTotal(weapon({ launch: { kind: "shell", count: 9, spreadDeg: 180, speedPct: 300, gravityPct: 0 } }));
   });
 });
+
+describe("totality: split", () => {
+  it("a zero-child split and a cyclic split", () => {
+    const child: Stage = { on: "impact", effects: [{ blast: B }] };
+    expectTotal(impact([{ blast: B }, { split: { count: 0, spreadDeg: 30, speedPct: 50, from: "up", child } }]));
+    const loop: Stage = { on: "impact", effects: [{ blast: B }] };
+    loop.effects.push({ split: { count: 3, spreadDeg: 60, speedPct: 80, from: "up", child: loop } });
+    expectTotal(weapon({ stage: loop }));
+  });
+});

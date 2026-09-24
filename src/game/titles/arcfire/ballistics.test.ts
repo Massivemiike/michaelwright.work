@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fromInt } from "@/game/sim/math/fixed";
 import { makeTerrain, spansFromHeight, type Terrain } from "./terrain";
-import { launchShell, stepShell, muzzle, shellAt, type HitCircle, type Impact, type Shell } from "./ballistics";
+import { launchShell, stepShell, muzzle, shellAt, rotateVel, type HitCircle, type Impact, type Shell } from "./ballistics";
+import { floorPx } from "./imath";
 import { WORLD_H, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, MAX_SPANS, GRAVITY_STEP } from "./constants";
 
 function flat(y: number): Terrain {
@@ -111,5 +112,76 @@ describe("Plan 2A carry-forwards", () => {
     const s = shellAt(100, fromInt(100), fromInt(-6), 0, 0, 0);
     expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: -1, y: 100 });
     expect(s.alive).toBe(false);
+  });
+});
+
+describe("rotateVel", () => {
+  it("turns a rightward velocity toward up for a positive angle (aim sense)", () => {
+    expect(rotateVel(fromInt(100), 0, 90)).toEqual([0, fromInt(-100)]);
+  });
+});
+
+describe("the apex latch", () => {
+  it("a stopAtApex shell ends on the step it stops rising, without moving that step", () => {
+    const s = launchShell(600, 300, 60, 50);
+    s.stopAtApex = true;
+    const t = flat(WORLD_H);
+    let step = 0;
+    let hit: Impact | null = null;
+    let at = { x: s.x, y: s.y };
+    while (hit === null) {
+      step++;
+      const vyBefore = s.vy;
+      at = { x: s.x, y: s.y };
+      hit = stepShell(s, t, [], 0);
+      if (hit !== null) {
+        expect(vyBefore).toBeLessThan(0); // rising before the step's gravity ...
+        expect(s.vy).toBeGreaterThanOrEqual(0); // ... and not after it
+      }
+    }
+    expect(step).toBe(60);
+    expect(hit).toEqual({ kind: "apex", x: floorPx(at.x), y: floorPx(at.y), fx: at.x, fy: at.y });
+    expect([s.x, s.y]).toEqual([at.x, at.y]); // it did not move on the apex step
+    expect([s.apexed, s.alive]).toEqual([true, false]);
+  });
+  it("a shell launched level never apexes", () => {
+    const s = launchShell(100, 300, 0, 50);
+    s.stopAtApex = true;
+    expect(fly(s, flat(400)).kind).toBe("terrain");
+    expect(s.apexed).toBe(false);
+  });
+});
+
+describe("the spawn-inside mask", () => {
+  it("ignores the tank it spawned inside until a sample leaves the hitbox, then can hit it", () => {
+    const tanks = [{ x: 600, y: 300 }];
+    const t = flat(WORLD_H);
+    const s = shellAt(fromInt(600), fromInt(300), fromInt(600), 0, fromInt(600), 0); // 10 px/step right, no gravity
+    s.ignore = 1;
+    const back = fromInt(-40); // wind: -40 px/s per step, so it turns around after 15 steps
+    let hit: Impact | null = null;
+    for (let step = 1; hit === null && step <= 100; step++) {
+      hit = stepShell(s, t, tanks, back);
+      if (step === 1) expect(s.ignore).toBe(1); // still inside
+      if (step === 2) expect(s.ignore).toBe(0); // a sample left the hitbox
+    }
+    expect(hit).toMatchObject({ kind: "tank", tank: 0, x: 614, y: 300 }); // back into it from the right
+  });
+});
+
+describe("a spawn point is never tested (only the samples after it are)", () => {
+  // flat ground at 400, no tanks, no wind, no gravity
+  it("a shell spawned inside the ground impacts at its first sample", () => {
+    const s = shellAt(fromInt(600), fromInt(420), fromInt(60), 0, fromInt(60), 0); // 20 px deep, 1 px/step right
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "terrain", x: 601, y: 420, fx: fromInt(600), fy: fromInt(420) });
+  });
+  it("a shell spawned on a surface pixel moving out flies on", () => {
+    const s = shellAt(fromInt(600), fromInt(400), 0, fromInt(-60), fromInt(60), 0); // rising 1 px/step
+    expect(stepShell(s, flat(400), [], 0)).toBeNull();
+    expect([floorPx(s.x), floorPx(s.y), s.alive]).toEqual([600, 399, true]);
+  });
+  it("a shell spawned off the world is out at its first sample", () => {
+    const s = shellAt(fromInt(-5), fromInt(300), fromInt(60), 0, fromInt(60), 0);
+    expect(stepShell(s, flat(400), [], 0)).toEqual({ kind: "out", x: -4, y: 300 });
   });
 });

@@ -121,11 +121,20 @@ export function resolveWeapon(m: MatchState, def: WeaponDef, input: TurnInput, r
         emit(shot, { step, kind: "out", shell: i, x: hit.x, y: hit.y, lag: 0 });
         continue;
       }
-      if (path) path.push(hit.x, hit.y);
+      if (hit.kind !== "apex" && path) path.push(hit.x, hit.y);
+      const stage = shot.stages[i];
+      let effects = stage.effects;
+      if (hit.kind !== "apex" && stage.on === "apex") { // an apex weapon that hit something before its apex
+        if (!stage.early) {
+          emit(shot, { step, kind: "dud", shell: i, x: hit.x, y: hit.y });
+          continue;
+        }
+        effects = stage.early;
+      }
       applyEffects(shot, {
         step, shell: i, x: hit.x, y: hit.y, fx: hit.fx, fy: hit.fy, vx: s.vx, vy: s.vy,
         speed: s.speed, gravityStep: s.gravityStep, tank: hit.kind === "tank" ? hit.tank : -1,
-      }, shot.stages[i].effects);
+      }, effects);
     }
   }
 
