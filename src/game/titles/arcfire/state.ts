@@ -17,6 +17,18 @@ export interface MatchSettings {
   rosterSize: number; // the pool is drawn from ROSTER[0, rosterSize): pins a match to a roster prefix, so appends never move it
 }
 
+/** The daily challenge and default free play (spec §2): 10 weapons each from a 24-weapon pool. */
+export const STANDARD_SETTINGS: MatchSettings = Object.freeze({
+  weaponsEach: 10,
+  poolSize: 24,
+  wind: false,
+  guaranteeTags: Object.freeze(["BLAST", "SPLIT", "DIRT"] as Tag[]),
+  rosterSize: 32, // a literal, NOT ROSTER.length: a roster append must be a deliberate settings + simVersion change
+});
+
+/** Short free play: 5 each from a pool of 12. */
+export const SHORT_SETTINGS: MatchSettings = Object.freeze({ ...STANDARD_SETTINGS, weaponsEach: 5, poolSize: 12 });
+
 export interface MatchState {
   settings: MatchSettings;
   rng: Rng;

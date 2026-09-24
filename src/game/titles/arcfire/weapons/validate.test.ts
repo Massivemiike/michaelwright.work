@@ -104,3 +104,9 @@ describe("totality: beam", () => {
     expectTotal(weapon({ launch: { kind: "beam", count: 1, spreadDeg: 0, length: 0, width: 0, damage: 0 }, stage: undefined }));
   });
 });
+
+describe("totality: quake", () => {
+  it("a zero-reach quake", () => {
+    expectTotal(impact([{ quake: { reach: 0, damage: 0, furrow: 0 } }]));
+  });
+});

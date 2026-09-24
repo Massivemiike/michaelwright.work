@@ -462,3 +462,33 @@ describe("beam", () => {
     }
   });
 });
+
+describe("quake", () => {
+  it("Quake's shockwave hurts the enemy by the horizontal distance to its hitbox edge", () => {
+    const tl = fire(flatBattle(), "quake", 60, 50);
+    const [q] = eventsOf(tl, "quake");
+    expect([q.x, q.reach, q.furrow]).toEqual([663, 260, 6]);
+    const d = Math.max(0, Math.abs(700 - q.x) - 14); // 23
+    expect(eventsOf(tl, "damage").map((e) => [e.target, e.amount])).toEqual([[1, Math.floor((55 * (260 - d)) / 260)]]);
+    expect(tl.points).toEqual([50, 0]);
+  });
+  it("furrows the surface: 6 px at the source, tapering to nothing at the reach", () => {
+    const m = flatBattle();
+    fire(m, "quake", 60, 50);
+    expect([0, 100, 200, 259, 260].map((dx) => m.terrain.height[663 + dx])).toEqual([406, 403, 401, 400, 400]);
+  });
+  it("reaches across a chasm: the reach is horizontal", () => {
+    const m = setHeights(flatBattle(), (x) => (x >= 675 && x <= 681 ? 499 : 400));
+    const tl = fire(m, "quake", 60, 50);
+    expect(eventsOf(tl, "quake")[0].x).toBe(663);
+    expect(tl.points).toEqual([50, 0]);
+  });
+  it("never hurts the shooter: Quake on its own tank scores nothing, while Aftershock's blast still does", () => {
+    const q = fire(flatBattle(), "quake", 90, 0);
+    expect([eventsOf(q, "quake").length, eventsOf(q, "damage").length]).toEqual([1, 0]);
+    expect(q.points).toEqual([0, 0]);
+    const a = fire(flatBattle(), "aftershock", 90, 0);
+    expect(eventsOf(a, "damage").map((e) => [e.target, e.amount])).toEqual([[0, 50]]); // the blast, not the shockwave
+    expect(a.points).toEqual([0, 50]);
+  });
+});

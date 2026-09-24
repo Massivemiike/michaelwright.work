@@ -164,6 +164,16 @@ export const ROSTER: readonly WeaponDef[] = [
     launch: { kind: "shell", count: 5, spreadDeg: 14 },
     stage: { on: "impact", homing: { degPerStep: 1 }, effects: [{ blast: blast(16, 20) }] },
   },
+  {
+    id: "quake", name: "Quake", tag: "QUAKE", tier: 2, power: 55,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ quake: { reach: 260, damage: 55, furrow: 6 } }] },
+  },
+  {
+    id: "aftershock", name: "Aftershock", tag: "QUAKE", tier: 3, power: 80,
+    launch: { kind: "shell" },
+    stage: { on: "impact", effects: [{ blast: blast(40, 50) }, { quake: { reach: 200, damage: 35, furrow: 4 } }] },
+  },
 ];
 
 /** Roster index by weapon id. */

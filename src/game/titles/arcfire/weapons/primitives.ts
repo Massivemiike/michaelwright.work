@@ -17,7 +17,7 @@ import { muzzle, rotateVel, shellAt, type HitCircle, type Shell } from "../balli
 import { blastDamage } from "../damage";
 import { WORLD_W, WORLD_H, TANK_HIT_R, ROLL_PROBE, MAX_SHELLS, DIG_MAX_PITCH } from "../constants";
 import { SHOW_PX_PER_STEP, showSteps, type Timeline, type TimelineEvent } from "../timeline";
-import type { Blast, BeamLaunch, Build, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
+import type { Blast, BeamLaunch, Build, Burn, Dig, Effect, Quake, Roll, Split, Stage } from "./types";
 
 /** Everything one shot's effects can touch. Built by resolveWeapon; lives for one turn. */
 export interface Shot {
@@ -67,7 +67,8 @@ export function applyEffects(shot: Shot, trig: Trigger, effects: readonly Effect
     else if ("dig" in e) dig(shot, trig, e.dig);
     else if ("burn" in e) burn(shot, trig, e.burn);
     else if ("build" in e) build(shot, trig, e.build);
-    else if ("delay" in e) {
+    else if ("quake" in e) quake(shot, trig, e.quake);
+    else {
       const at = trig.step + (e.delay.steps > 1 ? e.delay.steps : 1);
       shot.pending.push({ at, trig, effects: e.delay.then });
       emit(shot, { step: trig.step, kind: "fuse", shell: trig.shell, x: trig.x, y: trig.y, at });
@@ -301,6 +302,23 @@ function build(shot: Shot, trig: Trigger, b: Build): void {
   }
   emit(shot, { step: trig.step, kind: "build", shell: trig.shell, shape: b.shape, x, y,
     size: b.shape === "wall" ? b.height : b.radius, width: b.shape === "wall" ? b.width : 2 * b.radius + 1 });
+}
+
+function quake(shot: Shot, trig: Trigger, q: Quake): void {
+  if (q.reach <= 0) return; // divisor guard (the roster validator requires reach >= 1)
+  const x = trig.x;
+  for (let cx = Math.max(0, x - q.reach + 1); cx <= Math.min(WORLD_W - 1, x + q.reach - 1); cx++) {
+    const depth = idiv(q.furrow * (q.reach - Math.abs(cx - x)), q.reach); // furrow px at the source, 0 at ±reach
+    const top = surfaceTop(shot.t, cx);
+    if (depth > 0 && top < WORLD_H) removeInterval(shot.t, cx, top, top + depth);
+  }
+  emit(shot, { step: trig.step, kind: "quake", shell: trig.shell, x, y: trig.y, reach: q.reach, furrow: q.furrow,
+    dur: showSteps(q.reach, SHOW_PX_PER_STEP.quake) });
+  // The shockwave hurts only the opponent: the shooter's own tank is exempt (its blasts are not).
+  const p = 1 - shot.shooter;
+  const gap = Math.abs(shot.tanks[p].x - x) - TANK_HIT_R; // horizontal distance to the hitbox edge, like a blast's
+  const d = gap > 0 ? gap : 0;
+  if (d < q.reach) hurt(shot, p, idiv(q.damage * (q.reach - d), q.reach), trig.step, showSteps(d, SHOW_PX_PER_STEP.quake));
 }
 
 /**
