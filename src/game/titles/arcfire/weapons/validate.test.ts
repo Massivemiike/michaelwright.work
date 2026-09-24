@@ -50,6 +50,38 @@ describe("weaponErrors", () => {
     expect(maxShells(def)).toBeGreaterThan(MAX_SHELLS);
     expect(maxTurnSteps(def)).toBeGreaterThan(MAX_TURN_STEPS);
   });
+  it("detects a cycle directly: a stage that refers to itself 5 times reports each back-reference once, fast", () => {
+    const loop: Stage = { on: "impact", effects: [{ blast: B }] };
+    for (let k = 0; k < 5; k++) loop.effects.push({ split: { count: 1, spreadDeg: 0, speedPct: 50, from: "up", child: loop } });
+    const t0 = performance.now();
+    const errs = weaponErrors(weapon({ stage: loop }));
+    const ms = performance.now() - t0;
+    expect(errs).toEqual([1, 2, 3, 4, 5].map((k) => `stage.effects[${k}].split.child: cyclic stage, so its stages nest deeper than 4`));
+    expect(ms).toBeLessThan(50);
+  });
+  it("does not mistake a shared, acyclic child for a cycle", () => {
+    const child: Stage = { on: "impact", effects: [{ blast: B }] };
+    const split = { count: 2, spreadDeg: 10, speedPct: 50, from: "up" as const, child };
+    expect(weaponErrors(impact([{ split }, { split }]))).toEqual([]);
+  });
+  it("never throws on malformed input: a missing or null nested object is reported at its path", () => {
+    const bad = <T>(v: unknown): T => v as T;
+    const child: Stage = { on: "impact", effects: [{ blast: B }] };
+    const cases: [WeaponDef, string][] = [
+      [bad<WeaponDef>(null), "def: missing"],
+      [weapon({ stage: bad<Stage>(null) }), "stage: a shell launch needs one"],
+      [impact([{ split: { count: 2, spreadDeg: 10, speedPct: 50, from: "up", child: bad<Stage>(null) } }]), "stage.effects[0].split.child: missing"],
+      [weapon({ launch: bad<WeaponDef["launch"]>(undefined) }), "launch: missing"],
+      [impact([bad<Effect>(null)]), "stage.effects[0]: missing"],
+      [impact([bad<Effect>({})]), "stage.effects[0]: an effect has exactly one known key"],
+      [impact([bad<Effect>({ split: null })]), "stage.effects[0].split: missing"],
+      [impact([bad<Effect>({ roll: { maxDistance: 100, then: null } })]), "stage.effects[0].roll.then: missing"],
+      [impact([{ blast: B }], { bounce: bad<Stage["bounce"]>(null) }), "stage.bounce: missing"],
+      [weapon({ stage: { on: "apex", effects: [{ split: { count: 2, spreadDeg: 10, speedPct: 50, from: "ahead", child } }], early: bad<Effect[]>([null]) } }),
+        "stage.early[0]: missing"],
+    ];
+    for (const [def, err] of cases) expect(weaponErrors(def), err).toContain(err);
+  });
 });
 
 /** Resolve `def` at 45/60, 90/0 and 0/100 on flatBattle(): no throw, integer state, a valid hash, and within the backstops. */

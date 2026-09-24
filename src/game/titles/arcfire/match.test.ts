@@ -47,6 +47,11 @@ describe("createMatch", () => {
     expect(() => createMatch(1, { ...SMALL, rosterSize: ROSTER.length + 1 })).toThrow(RangeError);
     expect(() => createMatch(1, { ...SMALL, poolSize: 6, rosterSize: 7.5 })).toThrow(RangeError);
   });
+  it("rejects a weaponsEach that is not an integer >= 1, and a poolSize that is not an integer", () => {
+    for (const weaponsEach of [2.5, 0, -1, NaN]) expect(() => createMatch(1, { ...SMALL, weaponsEach }), `${weaponsEach}`).toThrow(RangeError);
+    expect(() => createMatch(1, { ...SMALL, poolSize: 8.5, rosterSize: 9 })).toThrow(RangeError);
+    expect(() => createMatch(1, { ...SMALL, poolSize: NaN })).toThrow(RangeError);
+  });
   it("draws the pool from the roster prefix ROSTER[0, rosterSize)", () => {
     for (let seed = 0; seed < 20; seed++) {
       expect(createMatch(seed, { ...SMALL, poolSize: 6, rosterSize: 6 }).pool).toEqual([0, 1, 2, 3, 4, 5]);

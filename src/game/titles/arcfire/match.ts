@@ -26,6 +26,12 @@ export type TurnResult = { ok: true; timeline: Timeline } | { ok: false; reason:
 
 /** A fresh match: seeded terrain, both tanks spawned, the pool drawn, the coin flipped. */
 export function createMatch(seed: number, settings: MatchSettings): MatchState {
+  if (!Number.isInteger(settings.weaponsEach) || settings.weaponsEach < 1) {
+    throw new RangeError(`createMatch: weaponsEach ${settings.weaponsEach} must be an integer >= 1`);
+  }
+  if (!Number.isInteger(settings.poolSize)) {
+    throw new RangeError(`createMatch: poolSize ${settings.poolSize} must be an integer`);
+  }
   if (settings.poolSize < settings.weaponsEach * 2) {
     throw new RangeError(`createMatch: poolSize ${settings.poolSize} < 2 × weaponsEach ${settings.weaponsEach}`);
   }

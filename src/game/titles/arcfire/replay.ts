@@ -7,7 +7,10 @@
 // non-object entry, an unknown `k`) is rejected the same way — replayMatch
 // never throws on one. An UNFINISHED log is accepted (resume re-simulates a
 // partial match, spec §6.5), so a verifier must additionally require
-// state.phase === "over" (Plan 4's binding).
+// state.phase === "over" (Plan 4's binding). The settings, unlike the
+// commands, are trusted input: the verifier supplies them (STANDARD_SETTINGS),
+// and createMatch throws a RangeError on settings it rejects instead of
+// returning a result.
 import { createMatch, applyPick, applyTurn } from "./match";
 import { hashMatch } from "./hash";
 import type { MatchSettings, MatchState } from "./state";

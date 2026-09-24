@@ -7,17 +7,31 @@
 // damage.ts / primitives.ts let the degenerate defs the totality test covers
 // (zeros, count 0, a cyclic stage, the launch maxima) resolve without throwing;
 // data far outside these ranges (a huge carve radius, NaN) is not covered.
+// weaponErrors itself never throws: a missing or null nested object is reported
+// as `<path>: missing`, and a cyclic stage is reported once per back-reference
+// and not descended into, so a small cyclic def validates in linear time.
 import type { Blast, Effect, Stage, WeaponDef } from "./types";
 import { MAX_FLIGHT_STEPS, MAX_SHELLS, MAX_STAGE_DEPTH, MAX_TURN_STEPS } from "../constants";
 
 const isInt = (v: unknown, lo: number, hi: number): boolean =>
   typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi;
 
+/** A non-null object: the guard before reading any nested field. */
+const isObj = (v: unknown): v is object => typeof v === "object" && v !== null;
+
 function check(errs: string[], path: string, v: unknown, lo: number, hi: number): void {
   if (!isInt(v, lo, hi)) errs.push(`${path}: ${String(v)} is not an integer in [${lo}, ${hi}]`);
 }
 
+/** Push `<path>: missing` unless v is an object; true when it is. */
+function present(errs: string[], path: string, v: unknown): boolean {
+  if (isObj(v)) return true;
+  errs.push(`${path}: missing`);
+  return false;
+}
+
 function checkBlast(errs: string[], path: string, b: Blast): void {
+  if (!present(errs, path, b)) return;
   check(errs, `${path}.radius`, b.radius, 1, 200);
   check(errs, `${path}.damage`, b.damage, 1, 200);
   if (b.falloff !== undefined && b.falloff !== "linear" && b.falloff !== "quadratic") errs.push(`${path}.falloff: unknown`);
@@ -25,18 +39,22 @@ function checkBlast(errs: string[], path: string, b: Blast): void {
 
 const EFFECT_KEYS = ["blast", "split", "roll", "dig", "burn", "build", "quake", "delay"];
 
-function checkEffects(errs: string[], path: string, effects: readonly Effect[], apexList: boolean, depth: number, inDelay: boolean): void {
+function checkEffects(
+  errs: string[], path: string, effects: readonly Effect[], apexList: boolean, depth: number, inDelay: boolean, onPath: Set<Stage>,
+): void {
   if (!Array.isArray(effects) || effects.length === 0) {
     errs.push(`${path}: must be a non-empty effect list`);
     return;
   }
   effects.forEach((e, i) => {
     const p = `${path}[${i}]`;
+    if (!present(errs, p, e)) return;
     const keys = Object.keys(e);
     if (keys.length !== 1 || !EFFECT_KEYS.includes(keys[0])) {
       errs.push(`${p}: an effect has exactly one known key`);
       return;
     }
+    if (!present(errs, `${p}.${keys[0]}`, (e as unknown as Record<string, unknown>)[keys[0]])) return;
     if (inDelay && (keys[0] === "split" || keys[0] === "delay")) errs.push(`${p}: a delay cannot schedule a ${keys[0]}`);
     if ("blast" in e) checkBlast(errs, `${p}.blast`, e.blast);
     else if ("split" in e) {
@@ -47,7 +65,7 @@ function checkEffects(errs: string[], path: string, effects: readonly Effect[], 
       if (s.gapPx !== undefined) check(errs, `${p}.split.gapPx`, s.gapPx, 0, 200);
       if (s.from !== "up" && s.from !== "ahead" && s.from !== "cone") errs.push(`${p}.split.from: unknown`);
       else if (s.from !== "up" && !apexList) errs.push(`${p}.split.from: "${s.from}" only in an apex stage's effects (at an impact the heading points into the ground)`);
-      checkStage(errs, `${p}.split.child`, s.child, depth + 1);
+      checkStage(errs, `${p}.split.child`, s.child, depth + 1, onPath);
     } else if ("roll" in e) {
       check(errs, `${p}.roll.maxDistance`, e.roll.maxDistance, 1, 1200);
       checkBlast(errs, `${p}.roll.then`, e.roll.then);
@@ -80,32 +98,47 @@ function checkEffects(errs: string[], path: string, effects: readonly Effect[], 
       check(errs, `${p}.quake.furrow`, e.quake.furrow, 0, 50);
     } else {
       check(errs, `${p}.delay.steps`, e.delay.steps, 1, 600);
-      checkEffects(errs, `${p}.delay.then`, e.delay.then as Effect[], false, depth, true);
+      checkEffects(errs, `${p}.delay.then`, e.delay.then as Effect[], false, depth, true, onPath);
     }
   });
 }
 
-function checkStage(errs: string[], path: string, st: Stage, depth: number): void {
+/**
+ * Check one stage. `onPath` holds the stages from the root down to this one:
+ * meeting one of them again is a cycle, reported once at that back-reference
+ * and not descended into (a stage that refers to itself k times costs k
+ * checks, not k^4).
+ */
+function checkStage(errs: string[], path: string, st: Stage, depth: number, onPath: Set<Stage>): void {
+  if (!present(errs, path, st)) return;
+  if (onPath.has(st)) {
+    errs.push(`${path}: cyclic stage, so its stages nest deeper than ${MAX_STAGE_DEPTH}`);
+    return;
+  }
   if (depth > MAX_STAGE_DEPTH) {
     errs.push(`${path}: stages nest deeper than ${MAX_STAGE_DEPTH}`);
-    return; // also stops a cyclic def
+    return;
   }
+  onPath.add(st);
   if (st.on !== "impact" && st.on !== "apex") errs.push(`${path}.on: unknown`);
-  checkEffects(errs, `${path}.effects`, st.effects, st.on === "apex", depth, false);
+  checkEffects(errs, `${path}.effects`, st.effects, st.on === "apex", depth, false, onPath);
   if (st.early !== undefined) {
     if (st.on !== "apex") errs.push(`${path}.early: only on an apex stage`);
-    checkEffects(errs, `${path}.early`, st.early, false, depth, false);
+    checkEffects(errs, `${path}.early`, st.early, false, depth, false, onPath);
   }
   if (st.homing !== undefined) {
     if (st.on !== "impact") errs.push(`${path}.homing: only on an impact stage`);
-    check(errs, `${path}.homing.degPerStep`, st.homing.degPerStep, 1, 10);
+    if (present(errs, `${path}.homing`, st.homing)) check(errs, `${path}.homing.degPerStep`, st.homing.degPerStep, 1, 10);
   }
   if (st.bounce !== undefined) {
     if (st.on !== "impact") errs.push(`${path}.bounce: only on an impact stage`);
-    check(errs, `${path}.bounce.times`, st.bounce.times, 1, 10);
-    check(errs, `${path}.bounce.restitutionPct`, st.bounce.restitutionPct, 1, 100);
-    if (st.bounce.blastEach !== undefined) checkBlast(errs, `${path}.bounce.blastEach`, st.bounce.blastEach);
+    if (present(errs, `${path}.bounce`, st.bounce)) {
+      check(errs, `${path}.bounce.times`, st.bounce.times, 1, 10);
+      check(errs, `${path}.bounce.restitutionPct`, st.bounce.restitutionPct, 1, 100);
+      if (st.bounce.blastEach !== undefined) checkBlast(errs, `${path}.bounce.blastEach`, st.bounce.blastEach);
+    }
   }
+  onPath.delete(st);
 }
 
 /** Shells one stage's shell can lead to, itself included (the larger of its effects and its early list). */
@@ -145,17 +178,22 @@ export function maxTurnSteps(def: WeaponDef): number {
 /** Every rule `def` breaks; [] when it is valid. */
 export function weaponErrors(def: WeaponDef): string[] {
   const errs: string[] = [];
+  if (!present(errs, "def", def)) return errs;
   if (typeof def.id !== "string" || def.id === "") errs.push("id: empty");
   check(errs, "tier", def.tier, 1, 3);
   check(errs, "power", def.power, 1, 100);
   const l = def.launch;
+  if (!present(errs, "launch", l)) {
+    if (def.stage !== undefined) checkStage(errs, "stage", def.stage, 1, new Set());
+    return errs;
+  }
   check(errs, "launch.count", l.count ?? 1, 1, 9);
   check(errs, "launch.spreadDeg", l.spreadDeg ?? 0, 0, 180);
   if (l.kind === "shell") {
     check(errs, "launch.speedPct", l.speedPct ?? 100, 1, 300);
     check(errs, "launch.gravityPct", l.gravityPct ?? 100, 0, 200);
     if (!def.stage) errs.push("stage: a shell launch needs one");
-    else checkStage(errs, "stage", def.stage, 1);
+    else checkStage(errs, "stage", def.stage, 1, new Set());
   } else if (l.kind === "beam") {
     check(errs, "launch.length", l.length, 1, 1400);
     check(errs, "launch.width", l.width, 2, 12);
