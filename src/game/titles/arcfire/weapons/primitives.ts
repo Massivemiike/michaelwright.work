@@ -13,11 +13,11 @@ import { idiv, isqrt, floorPx } from "../imath";
 import {
   isSolid, carveCircle, carveCapsule, removeInterval, addInterval, groundBelow, surfaceTop, type Terrain,
 } from "../terrain";
-import { rotateVel, shellAt, type HitCircle, type Shell } from "../ballistics";
+import { muzzle, rotateVel, shellAt, type HitCircle, type Shell } from "../ballistics";
 import { blastDamage } from "../damage";
 import { WORLD_W, WORLD_H, TANK_HIT_R, ROLL_PROBE, MAX_SHELLS, DIG_MAX_PITCH } from "../constants";
 import { SHOW_PX_PER_STEP, showSteps, type Timeline, type TimelineEvent } from "../timeline";
-import type { Blast, Build, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
+import type { Blast, BeamLaunch, Build, Burn, Dig, Effect, Roll, Split, Stage } from "./types";
 
 /** Everything one shot's effects can touch. Built by resolveWeapon; lives for one turn. */
 export interface Shot {
@@ -301,4 +301,49 @@ function build(shot: Shot, trig: Trigger, b: Build): void {
   }
   emit(shot, { step: trig.step, kind: "build", shell: trig.shell, shape: b.shape, x, y,
     size: b.shape === "wall" ? b.height : b.radius, width: b.shape === "wall" ? b.width : 2 * b.radius + 1 });
+}
+
+/**
+ * The direction (aim sense: 0 = right, 90 = up, 270 = down) of a beam fired
+ * at command angle `angle` by `shooter`. A beam reads the angle on the shell
+ * dial turned a quarter turn toward the shooter's facing (player 0 faces
+ * right and player 1 left; tanks never cross): clockwise for player 0,
+ * anticlockwise for player 1. So 90 is level at the opponent's side, the
+ * shooter's usual half of the dial (0..90 for player 0, 90..180 for player 1)
+ * runs from straight down to level, the other half from level to straight up,
+ * and the mirror of a beam command is 180 - angle, as for a shell. The wire
+ * angle stays an integer in 0..180; the HUD and the AI call this function.
+ */
+export const beamDir = (shooter: number, angle: number): number => (shooter === 0 ? angle - 90 : angle + 90);
+
+/** Fire a beam launch at command angle `angle` (step 1): straight lines that carve and pass through terrain and tanks. */
+export function fireBeams(shot: Shot, launch: BeamLaunch, angle: number): void {
+  const count = launch.count ?? 1;
+  const reach = TANK_HIT_R + idiv(launch.width, 2);
+  const from = shot.tanks[shot.shooter];
+  for (let b = 0; b < count; b++) {
+    const a = beamDir(shot.shooter, angle + fanOffset(b, count, launch.spreadDeg ?? 0));
+    const mz = muzzle(from.x, from.y, a);
+    const dx = toInt(mul(fromInt(launch.length), cosDeg(a)));
+    const dy = 0 - toInt(mul(fromInt(launch.length), sinDeg(a)));
+    const n = Math.max(Math.abs(dx), Math.abs(dy), 1);
+    let hit = 0; // tank bitmask
+    let last = 0;
+    for (let i = 0; i <= n; i++) {
+      const sx = mz.x + idiv(dx * i, n);
+      const sy = mz.y + idiv(dy * i, n);
+      if (sx < 0 || sx >= WORLD_W || sy >= WORLD_H) break; // the side edges; the floor is bedrock
+      last = i;
+      for (let p = 0; p < 2; p++) {
+        const ex = sx - shot.tanks[p].x;
+        const ey = sy - shot.tanks[p].y;
+        if (ex * ex + ey * ey <= reach * reach) hit |= 1 << p;
+      }
+    }
+    const x1 = mz.x + idiv(dx * last, n);
+    const y1 = mz.y + idiv(dy * last, n);
+    carveCapsule(shot.t, mz.x, mz.y, x1, y1, idiv(launch.width, 2));
+    emit(shot, { step: 1, kind: "beam", beam: b, x0: mz.x, y0: mz.y, x1, y1, width: launch.width });
+    for (let p = 0; p < 2; p++) if ((hit >> p) & 1) hurt(shot, p, launch.damage, 1, 0);
+  }
 }

@@ -13,7 +13,7 @@
 //        its effects at once, in list order (so a later shell this step sees
 //        their terrain); children it spawns are appended and first move at s + 1;
 //   until no shell is alive and no delay is armed (or MAX_TURN_STEPS). Then
-//   settle once, then score.
+//   settle once, then score. Beams resolve before the loop, at step 1.
 import { fromInt } from "@/game/sim/math/fixed";
 import { ROSTER } from "./weapons/roster";
 import { launchShell, muzzle, stepShell } from "./ballistics";
@@ -21,7 +21,7 @@ import { settle, spansFromHeight } from "./terrain";
 import { hitCircles, moveTarget } from "./tanks";
 import { idiv, floorPx } from "./imath";
 import { STEPS_PER_SEC, MAX_TURN_STEPS } from "./constants";
-import { addShell, applyEffects, blastAt, emit, fanOffset, type Shot } from "./weapons/primitives";
+import { addShell, applyEffects, blastAt, emit, fanOffset, fireBeams, type Shot } from "./weapons/primitives";
 import type { MatchState } from "./state";
 import type { Timeline } from "./timeline";
 import type { WeaponDef } from "./weapons/types";
@@ -29,7 +29,7 @@ import type { WeaponDef } from "./weapons/types";
 export interface TurnInput {
   move: -1 | 0 | 1;
   weapon: number; // roster index
-  angle: number; // integer degrees 0..180
+  angle: number; // integer degrees 0..180 (a beam reads it on the beam dial: weapons/primitives.ts beamDir)
   power: number; // integer 0..100
 }
 
@@ -71,14 +71,17 @@ export function resolveWeapon(m: MatchState, def: WeaponDef, input: TurnInput, r
     }
   }
 
-  // 2. Launch: shells fan out from the muzzle.
+  // 2. Launch: beams resolve at once (step 1); shells fan out from the muzzle.
   spansFromHeight(m.terrain);
   const shot: Shot = {
     t: m.terrain, tanks: hitCircles(m), shooter, shells: [], stages: [], live: 0, pending: [], received: [0, 0],
     rec: record, tl,
   };
   const launch = def.launch;
-  if (launch.kind === "shell" && def.stage) {
+  if (launch.kind === "beam") {
+    fireBeams(shot, launch, input.angle);
+    tl.steps = 1;
+  } else if (def.stage) {
     const count = launch.count ?? 1;
     for (let i = 0; i < count; i++) {
       const angle = input.angle + fanOffset(i, count, launch.spreadDeg ?? 0); // never clamped: may leave 0..180 near the horizon

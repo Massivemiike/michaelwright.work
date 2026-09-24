@@ -146,6 +146,14 @@ export const ROSTER: readonly WeaponDef[] = [
     launch: { kind: "shell" },
     stage: { on: "impact", effects: [{ build: { shape: "level", radius: 80 } }] },
   },
+  {
+    id: "lancer", name: "Lancer", tag: "BEAM", tier: 2, power: 55,
+    launch: { kind: "beam", length: 1200, width: 8, damage: 60 },
+  },
+  {
+    id: "prism", name: "Prism", tag: "BEAM", tier: 3, power: 80,
+    launch: { kind: "beam", count: 3, spreadDeg: 8, length: 1200, width: 6, damage: 35 },
+  },
 ];
 
 /** Roster index by weapon id. */

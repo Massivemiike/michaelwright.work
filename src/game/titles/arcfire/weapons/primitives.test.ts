@@ -13,6 +13,7 @@ import { hashMatch } from "../hash";
 import { isSolid } from "../terrain";
 import { hitCircles } from "../tanks";
 import { ROSTER, ROSTER_INDEX } from "./roster";
+import { beamDir } from "./primitives";
 import { MAX_TURN_STEPS, WORLD_H, TANK_HIT_DY } from "../constants";
 import { CORPUS_SEED, CORPUS_SETTINGS } from "@/game/test/arcfire/corpus";
 import { flatBattle, setHeights } from "@/game/test/arcfire/fixtures";
@@ -384,5 +385,68 @@ describe("build", () => {
       expect(m.terrain.height[700]).toBe(320);
     }
     expect(found).toBe(49);
+  });
+});
+
+describe("beam", () => {
+  it("reads the command angle on the beam dial: 90 is level at the opponent, and the mirror is 180 - angle", () => {
+    expect([0, 90, 180].map((a) => beamDir(0, a))).toEqual([-90, 0, 90]);
+    expect([0, 90, 180].map((a) => beamDir(1, a))).toEqual([90, 180, 270]);
+    for (let a = 0; a <= 180; a++) expect((((beamDir(1, 180 - a) + beamDir(0, a)) % 360) + 360) % 360).toBe(180);
+  });
+  it("Lancer at 90 runs level at the opponent through a mound, whatever the power", () => {
+    const mound = (): MatchState => setHeights(flatBattle(300, 900), (x) => (x >= 550 && x < 650 ? 340 : 400));
+    const a = mound();
+    const b = mound();
+    const ta = fire(a, "lancer", 90, 0);
+    const tb = fire(b, "lancer", 90, 100);
+    expect([ta.points, tb.points]).toEqual([[60, 0], [60, 0]]);
+    expect(Array.from(b.terrain.height)).toEqual(Array.from(a.terrain.height));
+    expect(a.terrain.height[600]).toBe(349); // the mound (340) is cut through
+    expect(eventsOf(ta, "beam")).toEqual([{ step: 1, kind: "beam", beam: 0, x0: 322, y0: 388, x1: 1199, y1: 388, width: 8 }]);
+    expect([ta.shells.length, ta.steps]).toEqual([0, 1]);
+  });
+  /** Player 0 on a plateau at 250 (columns 0..399), the enemy below on flat ground at 400: tanks 300 / 700. */
+  const plateau = (): MatchState => setHeights(flatBattle(300, 700), (x) => (x < 400 ? 250 : 400));
+  it("aims below level: from a plateau Lancer hits the enemy at exactly the command angles 67..71", () => {
+    const hits: number[] = [];
+    for (let a = 0; a <= 180; a++) if (fire(plateau(), "lancer", a, 50).points[0] > 0) hits.push(a);
+    expect(hits).toEqual([67, 68, 69, 70, 71]); // 19°..23° below level
+  });
+  it("is mirror-exact: the mirrored board at 180 - angle gives the swapped points and the mirrored terrain", () => {
+    for (const [id, a] of [["lancer", 69], ["lancer", 150], ["prism", 69], ["prism", 20]] as [string, number][]) {
+      const m = plateau();
+      const tl = fire(m, id, a, 50);
+      const w = setHeights(flatBattle(499, 899), (x) => (x >= 800 ? 250 : 400)); // x -> 1199 - x
+      w.shooter = 1;
+      const tw = fire(w, id, 180 - a, 50);
+      expect(tw.points, `${id} ${a}`).toEqual([tl.points[1], tl.points[0]]);
+      expect(Array.from(w.terrain.height), `${id} ${a}`).toEqual(Array.from(m.terrain.height).reverse());
+    }
+  });
+  it("fired straight down it cuts to the floor and scores nothing", () => {
+    const m = flatBattle();
+    const tl = fire(m, "lancer", 0, 50);
+    expect(eventsOf(tl, "beam").map((b) => [b.x0, b.y0, b.x1, b.y1])).toEqual([[300, 410, 300, 499]]);
+    expect(tl.points).toEqual([0, 0]);
+    expect(m.terrain.height[300]).toBe(494);
+  });
+  it("Prism fans 3 beams 4° apart on the dial; at 90 only the level one hits", () => {
+    const tl = fire(flatBattle(300, 800), "prism", 90, 50);
+    const beams = eventsOf(tl, "beam");
+    expect(beams.map((b) => b.beam)).toEqual([0, 1, 2]);
+    expect([beams[0].x0, beams[0].y0, beams[0].x1, beams[0].y1]).toEqual([321, 389, 1199, 449]); // 4° below level
+    expect(tl.points).toEqual([35, 0]);
+  });
+  it("never hits its own tank, at any command angle, for either shooter", () => {
+    for (const id of ["lancer", "prism"]) {
+      for (const shooter of [0, 1]) {
+        for (let a = 0; a <= 180; a++) {
+          const m = flatBattle(100, 1100);
+          m.shooter = shooter;
+          expect(fire(m, id, a, 50).points[1 - shooter], `${id} p${shooter} ${a}`).toBe(0);
+        }
+      }
+    }
   });
 });

@@ -1,5 +1,5 @@
 {
- "digest": "085791c6",
+ "digest": "cc40894a",
  "defs": {
   "pulse": "e151d5df",
   "pulse2": "1a588902",
@@ -26,7 +26,9 @@
   "wildfire": "be236dc7",
   "rampart": "98540804",
   "bastion": "a9c8b577",
-  "leveler": "af18fce6"
+  "leveler": "af18fce6",
+  "lancer": "26421a9a",
+  "prism": "540c4e8a"
  },
  "cases": {
   "pulse|hills|p0|w0|m0|35/70": {
@@ -2754,6 +2756,216 @@
   },
   "leveler|flat|p0|w0|m0|0/60": {
    "board": "b6f939dc",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|35/70": {
+   "board": "8364b333",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|50/80": {
+   "board": "968928fe",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|65/95": {
+   "board": "5312011e",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w40|m0|50/80": {
+   "board": "968928fe",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w-40|m0|50/80": {
+   "board": "968928fe",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p1|w0|m0|130/80": {
+   "board": "f5c72b1c",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m1|55/75": {
+   "board": "445175fd",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|0/100": {
+   "board": "e28bf669",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|180/100": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|90/0": {
+   "board": "d50641a7",
+   "points": [
+    60,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|90/100": {
+   "board": "d50641a7",
+   "points": [
+    60,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|2/30": {
+   "board": "b4796f23",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|hills|p0|w0|m0|178/30": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|flat|p0|w0|m0|45/60": {
+   "board": "ef19aae1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "lancer|flat|p0|w0|m0|0/60": {
+   "board": "679bbbae",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|35/70": {
+   "board": "6ee852cc",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|50/80": {
+   "board": "6865e99d",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|65/95": {
+   "board": "7ffd5571",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w40|m0|50/80": {
+   "board": "6865e99d",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w-40|m0|50/80": {
+   "board": "6865e99d",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p1|w0|m0|130/80": {
+   "board": "07f88bd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m1|55/75": {
+   "board": "b540f710",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|0/100": {
+   "board": "e824e6f6",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|180/100": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|90/0": {
+   "board": "a0987729",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|90/100": {
+   "board": "a0987729",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|2/30": {
+   "board": "e18607dd",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|hills|p0|w0|m0|178/30": {
+   "board": "14e2cfd1",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|flat|p0|w0|m0|45/60": {
+   "board": "9ac1ce5b",
+   "points": [
+    0,
+    0
+   ]
+  },
+  "prism|flat|p0|w0|m0|0/60": {
+   "board": "3d521649",
    "points": [
     0,
     0

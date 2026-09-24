@@ -97,3 +97,10 @@ describe("totality: build", () => {
     expectTotal(impact([{ build: { shape: "wall", width: 0, height: 0 } }]));
   });
 });
+
+describe("totality: beam", () => {
+  it("an all-zero beam launch, with no beams and with one", () => {
+    expectTotal(weapon({ launch: { kind: "beam", count: 0, spreadDeg: 0, length: 0, width: 0, damage: 0 }, stage: undefined }));
+    expectTotal(weapon({ launch: { kind: "beam", count: 1, spreadDeg: 0, length: 0, width: 0, damage: 0 }, stage: undefined }));
+  });
+});
