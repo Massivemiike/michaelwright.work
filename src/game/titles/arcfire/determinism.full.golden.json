@@ -1,0 +1,244 @@
+{
+  "replay": {
+    "seed": 20260927,
+    "settings": {
+      "weaponsEach": 10,
+      "poolSize": 24,
+      "wind": false,
+      "guaranteeTags": [
+        "BLAST",
+        "SPLIT",
+        "DIRT"
+      ],
+      "rosterSize": 32
+    },
+    "commands": [
+      {
+        "k": "pick",
+        "w": 23
+      },
+      {
+        "k": "pick",
+        "w": 22
+      },
+      {
+        "k": "pick",
+        "w": 21
+      },
+      {
+        "k": "pick",
+        "w": 20
+      },
+      {
+        "k": "pick",
+        "w": 19
+      },
+      {
+        "k": "pick",
+        "w": 18
+      },
+      {
+        "k": "pick",
+        "w": 17
+      },
+      {
+        "k": "pick",
+        "w": 16
+      },
+      {
+        "k": "pick",
+        "w": 15
+      },
+      {
+        "k": "pick",
+        "w": 14
+      },
+      {
+        "k": "pick",
+        "w": 13
+      },
+      {
+        "k": "pick",
+        "w": 12
+      },
+      {
+        "k": "pick",
+        "w": 11
+      },
+      {
+        "k": "pick",
+        "w": 10
+      },
+      {
+        "k": "pick",
+        "w": 9
+      },
+      {
+        "k": "pick",
+        "w": 8
+      },
+      {
+        "k": "pick",
+        "w": 7
+      },
+      {
+        "k": "pick",
+        "w": 6
+      },
+      {
+        "k": "pick",
+        "w": 5
+      },
+      {
+        "k": "pick",
+        "w": 4
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 5,
+        "angle": 150,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 7,
+        "angle": 25,
+        "power": 40
+      },
+      {
+        "k": "turn",
+        "move": -1,
+        "w": 8,
+        "angle": 110,
+        "power": 90
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 9,
+        "angle": 50,
+        "power": 70
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 10,
+        "angle": 110,
+        "power": 90
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 11,
+        "angle": 55,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 14,
+        "angle": 135,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 15,
+        "angle": 45,
+        "power": 60
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 18,
+        "angle": 110,
+        "power": 90
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 19,
+        "angle": 55,
+        "power": 70
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 20,
+        "angle": 110,
+        "power": 90
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 21,
+        "angle": 65,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 22,
+        "angle": 110,
+        "power": 90
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 23,
+        "angle": 25,
+        "power": 40
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 25,
+        "angle": 155,
+        "power": 40
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 26,
+        "angle": 25,
+        "power": 40
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 27,
+        "angle": 155,
+        "power": 40
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 28,
+        "angle": 70,
+        "power": 80
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 29,
+        "angle": 115,
+        "power": 100
+      },
+      {
+        "k": "turn",
+        "move": 0,
+        "w": 31,
+        "angle": 70,
+        "power": 90
+      }
+    ]
+  },
+  "hash": "3f614265",
+  "scores": [
+    359,
+    448
+  ],
+  "winner": 1
+}

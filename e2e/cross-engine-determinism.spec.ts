@@ -3,7 +3,7 @@
 // §10.1 cross-engine determinism gate. Bundles the pure sim once with
 // esbuild, then in Chromium, Firefox and WebKit recomputes every committed
 // determinism pin and asserts each engine reproduces the Node value: Circle
-// TD's golden, Arcfire's golden and the Arcfire corpus digest. Catches the
+// TD's golden, Arcfire's two goldens and the Arcfire corpus digest. Catches the
 // single largest board-correctness risk: an honest Safari/Firefox run
 // rejected by the V8 verifier over a ULP divergence.
 //
@@ -21,6 +21,7 @@ import { resolve } from "node:path";
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
 const circleGolden = readJson<{ replay: unknown; hash: string }>("src/game/test/determinism.golden.json");
 const arcfireGolden = readJson<{ replay: unknown; hash: string }>("src/game/titles/arcfire/determinism.golden.json");
+const arcfireFullGolden = readJson<{ replay: unknown; hash: string }>("src/game/titles/arcfire/determinism.full.golden.json");
 const arcfireCorpus = readJson<{ digest: string }>("src/game/titles/arcfire/corpus.golden.json");
 
 /** Every pin an engine must reproduce: its name, the committed Node value, and how the page computes it. */
@@ -34,6 +35,11 @@ const PINS: Array<{ label: string; expected: string; run: (page: Page) => Promis
     label: "Arcfire golden",
     expected: arcfireGolden.hash,
     run: (page) => page.evaluate((replay) => window.runArcfireGolden(replay as never), arcfireGolden.replay),
+  },
+  {
+    label: "Arcfire full-roster golden",
+    expected: arcfireFullGolden.hash,
+    run: (page) => page.evaluate((replay) => window.runArcfireGolden(replay as never), arcfireFullGolden.replay),
   },
   {
     label: "Arcfire corpus digest",

@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createMatch, applyPick, applyTurn } from "./match";
 import { replayMatch, type ArcfireCommand, type ArcfireReplay } from "./replay";
-import type { MatchSettings } from "./state";
+import { cloneMatch, type MatchSettings } from "./state";
 import { SUDDEN_DEATH_WEAPON } from "./constants";
 import { ROSTER } from "./weapons/roster";
 
@@ -61,6 +61,74 @@ describe("arcfire golden determinism", () => {
     }
     expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=1").toBe(true);
     const golden = JSON.parse(readFileSync(FIXTURE, "utf8"));
+    expect(replay).toEqual(golden.replay);
+    expect(result.hash).toBe(golden.hash);
+    expect(Array.from(result.state.scores)).toEqual(golden.scores);
+  });
+});
+
+// The full-roster golden: the daily-challenge shape (10 each from 24, BLAST/SPLIT/DIRT
+// guaranteed) drawn from all 32 weapons. The settings are a LITERAL, frozen with
+// rosterSize 32, so a later roster append can't move this pin either.
+const FULL_FIXTURE = join("src/game/titles/arcfire/determinism.full.golden.json");
+const FULL_SEED = 20260927;
+const FULL_SETTINGS: MatchSettings = { weaponsEach: 10, poolSize: 24, wind: false, guaranteeTags: ["BLAST", "SPLIT", "DIRT"], rosterSize: 32 };
+
+/** Draft the highest free slot; each turn fire the lowest weapon in hand at the best point of a coarse grid (resolved on clones). */
+function buildFullReplay(): ArcfireReplay {
+  const m = createMatch(FULL_SEED, FULL_SETTINGS);
+  const commands: ArcfireCommand[] = [];
+  while (m.phase === "draft") {
+    let w = m.poolOwner.length - 1;
+    while (m.poolOwner[w] !== -1) w--;
+    if (!applyPick(m, w).ok) throw new Error("full-golden strategy made an illegal pick");
+    commands.push({ k: "pick", w });
+  }
+  for (let turn = 0; m.phase !== "over"; turn++) {
+    const p = m.shooter;
+    const w = m.phase === "suddenDeath" ? SUDDEN_DEATH_WEAPON : m.hands[p][0];
+    const move: -1 | 0 | 1 = turn === 2 ? (p === 0 ? 1 : -1) : 0;
+    let best = -Infinity;
+    let angle = 0;
+    let power = 0;
+    for (let a = 25; a <= 70; a += 5) {
+      for (let pw = 40; pw <= 100; pw += 10) {
+        const c = cloneMatch(m);
+        const aim = p === 0 ? a : 180 - a;
+        if (!applyTurn(c, { move, w, angle: aim, power: pw }).ok) throw new Error("full-golden probe was illegal");
+        const v = c.scores[p] - m.scores[p] - (c.scores[1 - p] - m.scores[1 - p]);
+        if (v > best) {
+          best = v;
+          angle = aim;
+          power = pw;
+        }
+      }
+    }
+    if (!applyTurn(m, { move, w, angle, power }).ok) throw new Error(`full-golden strategy made an illegal turn at ${turn}`);
+    commands.push({ k: "turn", move, w, angle, power });
+  }
+  return { seed: FULL_SEED, settings: FULL_SETTINGS, commands };
+}
+
+describe("arcfire full-roster golden", () => {
+  it("replays the generated full-roster log to its pinned hash", () => {
+    const replay = buildFullReplay();
+    const result = replayMatch(replay);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Not inert: decisive, both sides scored, a tank moved, and every one of the 12 tags was fired.
+    expect(result.state.phase).toBe("over");
+    expect([0, 1]).toContain(result.state.winner);
+    expect(result.state.scores[0]).toBeGreaterThan(0);
+    expect(result.state.scores[1]).toBeGreaterThan(0);
+    expect(replay.commands.some((c) => c.k === "turn" && c.move !== 0)).toBe(true);
+    expect(new Set(replay.commands.flatMap((c) => (c.k === "turn" ? [ROSTER[c.w].tag] : [])))).toEqual(new Set(ROSTER.map((w) => w.tag)));
+    if (process.env.UPDATE_ARCFIRE_GOLDEN === "1") {
+      const fixture = { replay, hash: result.hash, scores: Array.from(result.state.scores), winner: result.state.winner };
+      writeFileSync(FULL_FIXTURE, JSON.stringify(fixture, null, 2) + "\n");
+    }
+    expect(existsSync(FULL_FIXTURE), "create it once with UPDATE_ARCFIRE_GOLDEN=1").toBe(true);
+    const golden = JSON.parse(readFileSync(FULL_FIXTURE, "utf8"));
     expect(replay).toEqual(golden.replay);
     expect(result.hash).toBe(golden.hash);
     expect(Array.from(result.state.scores)).toEqual(golden.scores);
