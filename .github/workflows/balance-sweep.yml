@@ -7,8 +7,9 @@ on:
 
 jobs:
   balance-sweep:
-    name: BALANCE_SWEEP=1 npm test
+    name: Circle TD BALANCE_SWEEP=1 (Arcfire's sweep runs in its own jobs)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,4 +18,49 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Full balance sweep + grid
-        run: BALANCE_SWEEP=1 npm test
+        run: BALANCE_SWEEP=1 npx vitest run --exclude src/game/test/arcfire/arcfire.sweep.test.ts
+
+  arcfire-sweep:
+    name: Arcfire sweep shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: BALANCE_SWEEP=1 ARCFIRE_SWEEP_SHARD=${{ matrix.shard }}/4 npx vitest run src/game/test/arcfire/arcfire.sweep.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arcfire-sweep-${{ matrix.shard }}
+          path: test-results/arcfire-sweep/shard-${{ matrix.shard }}.json
+
+  arcfire-sweep-report:
+    name: Arcfire tier separation + balance verdict
+    needs: arcfire-sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: arcfire-sweep-*
+          path: test-results/arcfire-sweep
+          merge-multiple: true
+      - run: BALANCE_SWEEP=1 ARCFIRE_SWEEP_MERGE=test-results/arcfire-sweep npx vitest run src/game/test/arcfire/arcfire.sweep.test.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcfire-balance-report
+          path: test-results/arcfire-balance/
