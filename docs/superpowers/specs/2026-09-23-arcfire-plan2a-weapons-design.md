@@ -2338,9 +2338,9 @@ export interface Timeline {
 
 1. **Before touching sim code**, run `npx vitest run src/game/titles/arcfire`. All green.
 2. **Make the one change.** Run the suite without update variables. It must fail **only** in the declared set for that task (§7.2). Anything else failing is a bug: stop.
-3. **Re-pin with the variables set to exactly `1`:**
-   - `UPDATE_ARCFIRE_GOLDEN=1 npx vitest run src/game/titles/arcfire/determinism.test.ts`
-   - `UPDATE_ARCFIRE_CORPUS=1 npx vitest run src/game/titles/arcfire/corpus.test.ts`
+3. **Re-pin, one golden or the corpus at a time** (the commands as of the final review, Revision 3):
+   - `UPDATE_ARCFIRE_GOLDEN=plan1 npx vitest run src/game/titles/arcfire/determinism.test.ts` (`=full` re-pins the full-roster golden, `=1` both; neither touches Plan 2B's vs-AI goldens, which only `UPDATE_ARCFIRE_GOLDEN=vsai` re-pins, in `ai.corpus.test.ts`)
+   - `UPDATE_ARCFIRE_CORPUS=1 ARCFIRE_CORPUS_EXPECT_MOVED=<n> npx vitest run src/game/titles/arcfire/corpus.test.ts`, where `<n>` is the declared number of moved cases plus moved definition digests
 
    Edit the windless and Fan literals by hand. Re-run with no variables: green.
 
@@ -3351,10 +3351,10 @@ Measurements use the **blind grid** of §1: 20 seeded hills boards × both shoot
 - **Beams ignore power** (`def.launch.kind === "beam"`), so the probe grid can collapse that axis. They read the angle on the beam dial: `beamDir(shooter, angle)` (exported from `weapons/primitives.ts`) is the direction a command fires, 90 is level at the opponent for both players, and the mirror of a beam command is `180 − angle` as for shells, so a mirrored aim grid covers beams unchanged. From spawn, 2–3 of Lancer's 181 angles hit on every blind-grid board (§10.1 O1).
 - **Homing is at the spec numbers** (O2): Seeker and Swarm score far above Pulse on a blind grid (§10.1), and the harness's first run is where a lock radius or turn budget would be judged.
 - **Static cost bounds:** `maxShells(def)` ≤ 13 and `maxTurnSteps(def)` ≤ 3,600 for the roster. Measured costs are in §4.8. Budget in sims, as the spec says; the bounds are there if the owner wants weapon-independent timing.
-- **Timing:** bundle the sim before timing (§4.8), and use `copyMatchInto` (K10).
-- **Quiet-path allocations to gate** before the AI's inner loop multiplies them (K12): the walk paths, `children`, the per-trigger objects, `settle`'s heights copy and `carveCapsule`'s `half` table. The parity test proves such a change inert.
+- **Timing:** bundle the sim before timing (§4.8), and use `copyMatchInto` (K10). *Done in 2B:* `copyMatchInto` is in `state.ts`, and the AI's bundled timing test is `ai.perf.test.ts`.
+- **Quiet-path allocations to gate** before the AI's inner loop multiplies them (K12): the walk paths, `children`, the per-trigger objects, `settle`'s heights copy and `carveCapsule`'s `half` table. The parity test proves such a change inert. *Done in 2B* (the Plan 2B addendum, `2026-09-24-arcfire-plan2b-ai-design.md` §7.3), **with a deliberate deviation:** the walk paths, `children`, `settle`'s heights copy and the `half` table are gated, but the `Timeline` object, one `Trigger` per trigger, the `[p0, p1]` points array and `stepShell`'s `Impact` results stay allocated on the quiet path. Gating them would save about 0.3% of an Ace match's time (GC), and a shared points array would be a trap for callers.
 - **The corpus runner** is reusable as a regression net for AI-side changes.
-- **Deferred minors** from the final review (Revision 3; spec §9.1 lists them under Plan 2B): a split child's `Timeline.shells` angle can be −0 (compare sign-insensitively); `endBounce` repeats `stepShell`'s cap check (keep the bounce-at-the-cap test green through any refactor); and `abandon()`'s `out` events for shells alive at step 4,800 are untested (no legal weapon reaches them).
+- **Deferred minors** from the final review (Revision 3; spec §9.1 lists them under Plan 2B): a split child's `Timeline.shells` angle can be −0 (compare sign-insensitively); `endBounce` repeats `stepShell`'s cap check (keep the bounce-at-the-cap test green through any refactor); and `abandon()`'s `out` events for shells alive at step 4,800 are untested (no legal weapon reaches them). *Done in 2B* (the Plan 2B addendum §11): `fanOffset` never returns −0, `endStep` is shared by the free-flight end and `endBounce`, the backstop's `out` events are pinned by `carryovers.test.ts`, and so are the validator's delay and multi-stage-cycle fixes, the homing-null guard and the `maxTurnSteps` bound. No pin moved.
 
 ---
 
