@@ -42,6 +42,9 @@ function defDigest(def: WeaponDef): string {
 interface CorpusFixture { digest: string; defs: Record<string, string>; cases: Record<string, Fingerprint> }
 
 describe("arcfire corpus", () => {
+  it("definition digests ignore `power`, so a balance write-back moves no corpus pin", () => {
+    for (const def of ROSTER) expect(defDigest({ ...def, power: def.power === 1 ? 2 : 1 }), def.id).toBe(defDigest(def));
+  });
   it("reproduces every pinned case and weapon definition", () => {
     const kinds = new Set<string>();
     const volleyAngles: number[] = [];
@@ -90,7 +93,7 @@ describe("arcfire corpus", () => {
       expect(declared, why).toBe(String(moved.length));
     }
     if (mode === "1" || (mode === "add" && moved.length === 0)) writeFileSync(FIXTURE, JSON.stringify(fresh, null, 1) + "\n");
-    expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_CORPUS=1").toBe(true);
+    expect(existsSync(FIXTURE), "create it once with UPDATE_ARCFIRE_CORPUS=1 ARCFIRE_CORPUS_EXPECT_MOVED=0").toBe(true);
     if (mode !== "1") expect(moved, "moved cases").toEqual([]);
     const pinned: CorpusFixture = JSON.parse(readFileSync(FIXTURE, "utf8"));
     expect(Object.keys(cases).sort()).toEqual(Object.keys(pinned.cases).sort()); // no case missing or unpinned

@@ -8,8 +8,10 @@
 // (zeros, count 0, a cyclic stage, the launch maxima) resolve without throwing;
 // data far outside these ranges (a huge carve radius, NaN) is not covered.
 // weaponErrors itself never throws: a missing or null nested object is reported
-// as `<path>: missing`, and a cyclic stage is reported once per back-reference
-// and not descended into, so a small cyclic def validates in linear time.
+// as `<path>: missing`; a cyclic stage is reported at each back-reference and
+// not descended into; a split or delay inside a delay list is reported and not
+// descended into (a delay list nests nothing); and a stage is checked at most
+// once per depth. So any def, cyclic or shared, validates in linear time.
 import type { Blast, Effect, Stage, WeaponDef } from "./types";
 import { MAX_FLIGHT_STEPS, MAX_SHELLS, MAX_STAGE_DEPTH, MAX_TURN_STEPS } from "../constants";
 
@@ -41,6 +43,7 @@ const EFFECT_KEYS = ["blast", "split", "roll", "dig", "burn", "build", "quake", 
 
 function checkEffects(
   errs: string[], path: string, effects: readonly Effect[], apexList: boolean, depth: number, inDelay: boolean, onPath: Set<Stage>,
+  seen: Map<Stage, number>,
 ): void {
   if (!Array.isArray(effects) || effects.length === 0) {
     errs.push(`${path}: must be a non-empty effect list`);
@@ -55,7 +58,10 @@ function checkEffects(
       return;
     }
     if (!present(errs, `${p}.${keys[0]}`, (e as unknown as Record<string, unknown>)[keys[0]])) return;
-    if (inDelay && (keys[0] === "split" || keys[0] === "delay")) errs.push(`${p}: a delay cannot schedule a ${keys[0]}`);
+    if (inDelay && (keys[0] === "split" || keys[0] === "delay")) {
+      errs.push(`${p}: a delay cannot schedule a ${keys[0]}`);
+      return; // not descended into: a self-containing or deep delay chain is this one report
+    }
     if ("blast" in e) checkBlast(errs, `${p}.blast`, e.blast);
     else if ("split" in e) {
       const s = e.split;
@@ -65,7 +71,7 @@ function checkEffects(
       if (s.gapPx !== undefined) check(errs, `${p}.split.gapPx`, s.gapPx, 0, 200);
       if (s.from !== "up" && s.from !== "ahead" && s.from !== "cone") errs.push(`${p}.split.from: unknown`);
       else if (s.from !== "up" && !apexList) errs.push(`${p}.split.from: "${s.from}" only in an apex stage's effects (at an impact the heading points into the ground)`);
-      checkStage(errs, `${p}.split.child`, s.child, depth + 1, onPath);
+      checkStage(errs, `${p}.split.child`, s.child, depth + 1, onPath, seen);
     } else if ("roll" in e) {
       check(errs, `${p}.roll.maxDistance`, e.roll.maxDistance, 1, 1200);
       checkBlast(errs, `${p}.roll.then`, e.roll.then);
@@ -98,7 +104,7 @@ function checkEffects(
       check(errs, `${p}.quake.furrow`, e.quake.furrow, 0, 50);
     } else {
       check(errs, `${p}.delay.steps`, e.delay.steps, 1, 600);
-      checkEffects(errs, `${p}.delay.then`, e.delay.then as Effect[], false, depth, true, onPath);
+      checkEffects(errs, `${p}.delay.then`, e.delay.then as Effect[], false, depth, true, onPath, seen);
     }
   });
 }
@@ -107,9 +113,16 @@ function checkEffects(
  * Check one stage. `onPath` holds the stages from the root down to this one:
  * meeting one of them again is a cycle, reported once at that back-reference
  * and not descended into (a stage that refers to itself k times costs k
- * checks, not k^4).
+ * checks, not k^4). `seen` maps each stage to a bitmask of the depths it was
+ * checked at: a second check at the same depth would walk the same stages to
+ * the same depth limit and find the same defects, so it is skipped, AFTER the
+ * cycle and depth checks (every back-reference and every over-deep reference
+ * is still reported). That bounds the walk by stages x MAX_STAGE_DEPTH, where
+ * a multi-stage cycle with k back-references per stage used to cost k^L. Not
+ * "this depth or a shallower one": a shallower check hits the depth limit
+ * later, so it can miss an over-deep path through the stage.
  */
-function checkStage(errs: string[], path: string, st: Stage, depth: number, onPath: Set<Stage>): void {
+function checkStage(errs: string[], path: string, st: Stage, depth: number, onPath: Set<Stage>, seen: Map<Stage, number>): void {
   if (!present(errs, path, st)) return;
   if (onPath.has(st)) {
     errs.push(`${path}: cyclic stage, so its stages nest deeper than ${MAX_STAGE_DEPTH}`);
@@ -119,12 +132,15 @@ function checkStage(errs: string[], path: string, st: Stage, depth: number, onPa
     errs.push(`${path}: stages nest deeper than ${MAX_STAGE_DEPTH}`);
     return;
   }
+  const at = seen.get(st) ?? 0;
+  if ((at & (1 << depth)) !== 0) return; // already checked at this depth
+  seen.set(st, at | (1 << depth));
   onPath.add(st);
   if (st.on !== "impact" && st.on !== "apex") errs.push(`${path}.on: unknown`);
-  checkEffects(errs, `${path}.effects`, st.effects, st.on === "apex", depth, false, onPath);
+  checkEffects(errs, `${path}.effects`, st.effects, st.on === "apex", depth, false, onPath, seen);
   if (st.early !== undefined) {
     if (st.on !== "apex") errs.push(`${path}.early: only on an apex stage`);
-    checkEffects(errs, `${path}.early`, st.early, false, depth, false, onPath);
+    checkEffects(errs, `${path}.early`, st.early, false, depth, false, onPath, seen);
   }
   if (st.homing !== undefined) {
     if (st.on !== "impact") errs.push(`${path}.homing: only on an impact stage`);
@@ -184,7 +200,7 @@ export function weaponErrors(def: WeaponDef): string[] {
   check(errs, "power", def.power, 1, 100);
   const l = def.launch;
   if (!present(errs, "launch", l)) {
-    if (def.stage !== undefined) checkStage(errs, "stage", def.stage, 1, new Set());
+    if (def.stage !== undefined) checkStage(errs, "stage", def.stage, 1, new Set(), new Map());
     return errs;
   }
   check(errs, "launch.count", l.count ?? 1, 1, 9);
@@ -193,7 +209,7 @@ export function weaponErrors(def: WeaponDef): string[] {
     check(errs, "launch.speedPct", l.speedPct ?? 100, 1, 300);
     check(errs, "launch.gravityPct", l.gravityPct ?? 100, 0, 200);
     if (!def.stage) errs.push("stage: a shell launch needs one");
-    else checkStage(errs, "stage", def.stage, 1, new Set());
+    else checkStage(errs, "stage", def.stage, 1, new Set(), new Map());
   } else if (l.kind === "beam") {
     check(errs, "launch.length", l.length, 1, 1400);
     check(errs, "launch.width", l.width, 2, 12);
