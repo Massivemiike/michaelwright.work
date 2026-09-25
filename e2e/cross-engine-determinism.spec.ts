@@ -136,14 +136,15 @@ for (const [name, engine] of engines) {
         const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
         const settings = { weaponsEach: 10, poolSize: 24, wind: false, guaranteeTags: ["BLAST", "SPLIT", "DIRT"], rosterSize: 32 };
         type Ev = { t: string; snap?: { toAct: number; phase: string; hash: string }; humanLog?: unknown[]; poolIndex?: number; cmd?: object };
-        /** Start with `log`, send the golden's remaining human commands whenever the human is to act; resolve at the end. */
-        const run = (log: unknown[]): Promise<{ hash: string; log: unknown[] }> => new Promise((done) => {
+        /** Start with `log`, send the golden's remaining human commands whenever the human is to act; resolve at the end, and fail at once on a rejected or error event. */
+        const run = (log: unknown[]): Promise<{ hash: string; log: unknown[] }> => new Promise((done, fail) => {
           const w = new Worker(url);
           const full: unknown[] = log.slice();
           let next = -1;
           let id = 2;
           w.onmessage = (e: MessageEvent<Ev>) => {
             const ev = e.data;
+            if (ev.t === "rejected" || ev.t === "error") { w.terminate(); fail(new Error(JSON.stringify(ev))); return; }
             if (ev.t === "state") next = ev.humanLog!.length;
             if (ev.t === "picked") full.push({ k: "pick", w: ev.poolIndex });
             if (ev.t === "shot") full.push({ k: "turn", ...ev.cmd });
