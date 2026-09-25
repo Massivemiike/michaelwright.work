@@ -8,10 +8,16 @@
 // (zeros, count 0, a cyclic stage, the launch maxima) resolve without throwing;
 // data far outside these ranges (a huge carve radius, NaN) is not covered.
 // weaponErrors itself never throws: a missing or null nested object is reported
-// as `<path>: missing`; a cyclic stage is reported at each back-reference and
-// not descended into; a split or delay inside a delay list is reported and not
+// as `<path>: missing`; a cyclic stage is reported at a back-reference and not
+// descended into; a split or delay inside a delay list is reported and not
 // descended into (a delay list nests nothing); and a stage is checked at most
-// once per depth. So any def, cyclic or shared, validates in linear time.
+// once per depth, which bounds the stage bodies checked by stages x
+// MAX_STAGE_DEPTH. A def with a cycle is still rejected (at least one cyclic or
+// too-deep report). Not every cost is memoised: a delay's `then` list is
+// checked once per reference to it, and the static bounds maxShells /
+// maxTurnSteps (run when a def has no other error) follow every path to the
+// depth limit, so a def that shares stages or lists heavily costs more than
+// linear time.
 import type { Blast, Effect, Stage, WeaponDef } from "./types";
 import { MAX_FLIGHT_STEPS, MAX_SHELLS, MAX_STAGE_DEPTH, MAX_TURN_STEPS } from "../constants";
 
@@ -115,9 +121,12 @@ function checkEffects(
  * and not descended into (a stage that refers to itself k times costs k
  * checks, not k^4). `seen` maps each stage to a bitmask of the depths it was
  * checked at: a second check at the same depth would walk the same stages to
- * the same depth limit and find the same defects, so it is skipped, AFTER the
- * cycle and depth checks (every back-reference and every over-deep reference
- * is still reported). That bounds the walk by stages x MAX_STAGE_DEPTH, where
+ * the same depth limit, so it is skipped, AFTER the cycle and depth checks (so
+ * this reference itself is still reported when it closes a cycle or goes too
+ * deep). A back-reference inside a skipped stage can go unreported on this
+ * path, since the earlier check saw other ancestors; each cycle still gets at
+ * least one report (cyclic, or too deep), so the def is still rejected. That
+ * bounds the stage bodies checked by stages x MAX_STAGE_DEPTH, where
  * a multi-stage cycle with k back-references per stage used to cost k^L. Not
  * "this depth or a shallower one": a shallower check hits the depth limit
  * later, so it can miss an over-deep path through the stage.

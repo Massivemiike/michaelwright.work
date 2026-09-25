@@ -37,7 +37,13 @@ export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
   return resolveWeapon(m, ROSTER[input.weapon], input, true);
 }
 
-/** resolveTurn without building the Timeline's paths or events: the same state and points, faster (AI search, verification). It returns only the points (resolveWeapon's `record = false`). */
+/**
+ * resolveTurn without building the Timeline's paths or events: the same state and points, faster. In the
+ * game only the AI's search calls it (search.ts valueOf, for every candidate and threat estimate, and plan.ts
+ * afterShot). Verification regenerates each AI decision through that same search, but applies every turn,
+ * the AI's and the human's, through applyTurn / resolveTurn. It returns only the points (resolveWeapon's
+ * `record = false`).
+ */
 export function resolveTurnPoints(m: MatchState, input: TurnInput): [number, number] {
   return resolveWeapon(m, ROSTER[input.weapon], input, false).points;
 }

@@ -6,9 +6,10 @@
 // regenerates every AI pick and shot. Both apply entries with applyCommand. Any illegal
 // command rejects the whole log, and a malformed log (not an array, a
 // non-object entry, an unknown `k`) is rejected the same way — replayMatch
-// never throws on one. An UNFINISHED log is accepted (resume re-simulates a
-// partial match, spec §6.5), so a verifier must additionally require
-// state.phase === "over" (Plan 4's binding). The settings, unlike the
+// never throws on any JSON value (plain data properties). An UNFINISHED
+// log is accepted (resume re-simulates a partial match, spec §6.5), so a
+// verifier must additionally require state.phase === "over" (Plan 4's
+// binding). The settings, unlike the
 // commands, are trusted input: the verifier supplies them (STANDARD_SETTINGS),
 // and createMatch throws a RangeError on settings it rejects instead of
 // returning a result.
@@ -33,7 +34,7 @@ export type ReplayMatchResult =
 
 export type CommandResult = { ok: true; timeline: Timeline | null } | { ok: false };
 
-/** Apply one log entry for whoever is to act (a pick has no Timeline). Never throws: a malformed entry is { ok: false } and changes nothing. */
+/** Apply one log entry for whoever is to act (a pick has no Timeline). Never throws on any JSON value (plain data properties): a malformed entry is { ok: false } and changes nothing. */
 export function applyCommand(m: MatchState, entry: unknown): CommandResult {
   if (typeof entry !== "object" || entry === null) return { ok: false };
   const c = entry as ArcfireCommand;

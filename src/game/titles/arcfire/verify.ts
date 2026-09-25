@@ -4,7 +4,9 @@
 // 4's Arcfire TitleDef binding wraps. Input: the seed and the HUMAN's
 // commands only; the settings and the tier are trusted (the binding derives
 // them from the mode: the daily challenge is STANDARD_SETTINGS vs Veteran).
-// Every AI pick and shot is regenerated. Never throws on any `commands` value.
+// Every AI pick and shot is regenerated. Never throws on any JSON `commands`
+// value (plain data properties); an illegal AI command still throws, on
+// purpose (a bug: the route answers 500, never a verdict on the player).
 import type { ReplayOutcome, ReplayRejection } from "@/game/sim/title";
 import { STANDARD_SETTINGS, type MatchSettings } from "./state";
 import { maxHumanCommands, replayVsAi } from "./vsai";
@@ -30,7 +32,8 @@ export function isArcfireCommand(c: unknown): c is ArcfireCommand {
  * human's points, hash = hashMatch of the final state. Rejections, cheapest first: invalid_command_shape
  * (not an array), too_long (more than 2 x weaponsEach + 1 commands, before any AI work),
  * invalid_command_shape (an entry of the wrong shape), invalid_command (an illegal command at any index),
- * not_a_win (unfinished, lost, or drawn).
+ * not_a_win (unfinished, lost, or drawn). Never throws on any JSON `commands` value (plain data properties);
+ * an illegal AI command throws on purpose (a bug).
  */
 export function scoreVsAi(
   seed: number, commands: unknown, settings: MatchSettings = STANDARD_SETTINGS, tier: AiTier = DAILY_TIER,

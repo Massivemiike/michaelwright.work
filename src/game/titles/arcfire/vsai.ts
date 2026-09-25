@@ -65,9 +65,10 @@ export type VsAiResult =
 
 /**
  * Replay a vs-AI match from the human's commands alone, regenerating every AI pick and shot (the
- * leaderboard's core guarantee). Never throws on the commands: a non-array or an illegal or malformed
- * entry is invalid_command at its index, and more than maxHumanCommands is too_long before any AI
- * work. Like replayMatch it accepts an unfinished log, so a verifier also requires `finished`.
+ * leaderboard's core guarantee). Never throws on any JSON `commands` value (plain data properties): a
+ * non-array or an illegal or malformed entry is invalid_command at its index, and more than
+ * maxHumanCommands is too_long before any AI work. An illegal AI command throws on purpose (a bug).
+ * Like replayMatch it accepts an unfinished log, so a verifier also requires `finished`.
  */
 export function replayVsAi(r: VsAiReplay): VsAiResult {
   if (!Array.isArray(r.commands)) return { ok: false, reason: "invalid_command", atIndex: 0 };
@@ -95,9 +96,10 @@ export type VsAiResume =
  * Resume a vs-AI match from its local blob's FULL log (both seats, in order) without a single
  * search: an AI entry is applied as recorded after advancing the RNG by the draws its decision
  * consumed (AI_PICK_DRAWS / AI_TURN_DRAWS). The state equals replayVsAi of the human sub-log whenever
- * the AI entries came from this code at this simVersion (the blob key carries it). Never throws: the
- * first entry that is malformed or illegal, and everything after it, is dropped (droppedFrom; -1 when
- * none was), and a non-array log is { ok: false }. It does not run the AI: if the log ends on the AI's
+ * the AI entries came from this code at this simVersion (the blob key carries it). Never throws on any
+ * JSON `log` value (plain data properties): the first entry that is malformed or illegal, and
+ * everything after it, is dropped (droppedFrom; -1 when none was), and a non-array log is
+ * { ok: false }. It does not run the AI: if the log ends on the AI's
  * move, the caller's advanceAi continues. Local resume only: a submission is the human sub-log, and
  * the server regenerates every AI decision from it.
  */
