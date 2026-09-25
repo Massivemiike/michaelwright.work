@@ -5,7 +5,7 @@
 // owns the request ids and the listeners; dispose() terminates the worker,
 // which is also how the UI abandons an AI that is still thinking, and every
 // request after it throws. Every listener gets every event: one that throws
-// cannot starve the others, and its error is reported asynchronously. Tests
+// cannot starve the others, and its error is reported, never swallowed. Tests
 // pass a factory that returns an in-process WorkerLike wired to createArcfireHost.
 import type { MatchSettings } from "@/game/titles/arcfire/state";
 import type { TurnCommand } from "@/game/titles/arcfire/match";
