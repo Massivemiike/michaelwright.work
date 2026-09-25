@@ -1,10 +1,11 @@
 // src/game/titles/arcfire/vsai.test.ts — vs-AI flow, human-only replay, search-free resume (SHORT_SETTINGS: fast)
 import { describe, it, expect } from "vitest";
 import { makeRng, nextRange } from "@/game/sim/math/rng";
-import { createMatch, toAct } from "./match";
-import { SHORT_SETTINGS, STANDARD_SETTINGS } from "./state";
+import { applyTurn, createMatch, toAct } from "./match";
+import { SHORT_SETTINGS, STANDARD_SETTINGS, cloneMatch } from "./state";
 import { hashMatch } from "./hash";
-import { AI, HUMAN, advanceAi, maxHumanCommands, replayVsAi, resumeVsAi } from "./vsai";
+import { AI, HUMAN, advanceAi, aiToAct, maxHumanCommands, replayVsAi, resumeVsAi } from "./vsai";
+import { scoreVsAi } from "./verify";
 import { playVsAi } from "@/game/test/arcfire/vsaiGolden";
 import type { ArcfireCommand } from "./replay";
 import type { MatchState } from "./state";
@@ -19,6 +20,33 @@ const quick = (m: MatchState): ArcfireCommand => {
   const w = m.phase === "suddenDeath" ? SUDDEN_DEATH_WEAPON : m.hands[HUMAN][0];
   const move = m.hands[HUMAN].length === S.weaponsEach - 1 && moveTarget(m, HUMAN, 1) !== -1 ? 1 : 0;
   return { k: "turn", move, w, angle: 45, power: 70 };
+};
+
+/**
+ * A tie-seeking scripted human (the final review's): the lowest free slot; each battle shot, the command from angles
+ * 20..80 step 10 and powers 30..100 step 10 over its hand that leaves |margin| smallest, and in sudden death the
+ * one that leaves the margin largest (the first of equals, on cloneMatch copies).
+ */
+const tieSeeker = (m: MatchState): ArcfireCommand => {
+  if (m.phase === "draft") return { k: "pick", w: m.poolOwner.findIndex((o) => o === -1) };
+  const sudden = m.phase === "suddenDeath";
+  let best: ArcfireCommand | null = null;
+  let bestV = 0;
+  for (const w of sudden ? [SUDDEN_DEATH_WEAPON] : m.hands[HUMAN]) {
+    for (let angle = 20; angle <= 80; angle += 10) {
+      for (let power = 30; power <= 100; power += 10) {
+        const c = cloneMatch(m);
+        if (!applyTurn(c, { move: 0, w, angle, power }).ok) continue;
+        const margin = c.scores[HUMAN] - c.scores[AI];
+        const v = sudden ? margin : 0 - Math.abs(margin);
+        if (best === null || v > bestV) {
+          best = { k: "turn", move: 0, w, angle, power };
+          bestV = v;
+        }
+      }
+    }
+  }
+  return best!;
 };
 
 describe("vs-AI flow", () => {
@@ -70,7 +98,30 @@ describe("vs-AI flow", () => {
     expect(r.ok && r.droppedFrom).toBe(7);
     if (r.ok) expect(r.log).toEqual(live.log.slice(0, 7));
     expect(resumeVsAi({ seed: 4, settings: S, log: "nope" })).toEqual({ ok: false });
-    expect(resumeVsAi({ seed: 4, settings: S, log: [null, 3] }).ok).toBe(true);
+    expect(resumeVsAi({ seed: 4, settings: S, log: [null, 3] })).toMatchObject({ ok: true, droppedFrom: 0, log: [], humanLog: [] });
+  }, 60_000);
+
+  it("resume drops an illegal AI entry (a pick, then a turn) and restores the RNG draws it advanced", () => {
+    const live = playVsAi(4, S, "rookie", quick);
+    /** The first log index where the AI is to act in `phase`. */
+    const firstAi = (phase: MatchState["phase"]): number => live.log.findIndex((_, i) => {
+      const r = resumeVsAi({ seed: 4, settings: S, log: live.log.slice(0, i) });
+      return r.ok && aiToAct(r.state) && r.state.phase === phase;
+    });
+    const cases: [number, ArcfireCommand][] = [
+      [firstAi("draft"), { k: "pick", w: 99 }],
+      [firstAi("battle"), { k: "turn", move: 0, w: 0, angle: 181, power: 50 }],
+    ];
+    for (const [i, illegal] of cases) {
+      expect(i).toBeGreaterThanOrEqual(0);
+      const bad = live.log.slice();
+      bad[i] = illegal;
+      const r = resumeVsAi({ seed: 4, settings: S, log: bad });
+      const clean = resumeVsAi({ seed: 4, settings: S, log: live.log.slice(0, i) });
+      expect(r).toMatchObject({ ok: true, droppedFrom: i, log: live.log.slice(0, i) });
+      if (!r.ok || !clean.ok) return;
+      expect(hashMatch(r.state), `the state and its RNG after dropping entry ${i}`).toBe(hashMatch(clean.state));
+    }
   }, 60_000);
 
   it("rejects a bad human log at the right index", () => {
@@ -110,4 +161,27 @@ describe("vs-AI flow", () => {
   it("allows 2 x weaponsEach + 1 human commands (21 in the daily)", () => {
     expect(maxHumanCommands(STANDARD_SETTINGS)).toBe(21);
   });
+
+  it("plays a vs-AI match into sudden death: its replay, every resume prefix, its score and the length cap", () => {
+    const seed = 18; // SHORT_SETTINGS vs Rookie: the tie-seeker ties the battle, then wins sudden death
+    const live = playVsAi(seed, S, "rookie", tieSeeker);
+    expect(live.state.shotsFired, "the match went into sudden death").toBe(2 * S.weaponsEach + 2);
+    expect(live.commands.length).toBe(maxHumanCommands(S));
+    const r = replayVsAi({ seed, settings: S, tier: "rookie", commands: live.commands });
+    expect(r.ok && r.hash).toBe(hashMatch(live.state));
+    for (let k = 0; k <= live.log.length; k++) {
+      const res = resumeVsAi({ seed, settings: S, log: live.log.slice(0, k) });
+      expect(res.ok && res.droppedFrom).toBe(-1);
+      if (!res.ok) return;
+      advanceAi(res.state, "rookie");
+      const rr = replayVsAi({ seed, settings: S, tier: "rookie", commands: res.humanLog });
+      expect(rr.ok && rr.hash, `prefix ${k}`).toBe(hashMatch(res.state));
+    }
+    const [hp, ap] = [live.state.scores[HUMAN], live.state.scores[AI]];
+    expect(live.state.winner).toBe(HUMAN);
+    expect(scoreVsAi(seed, live.commands, S, "rookie")).toEqual({ score: hp - ap, stat: hp, hash: hashMatch(live.state) });
+    const extra = [...live.commands, live.commands[live.commands.length - 1]];
+    expect(scoreVsAi(seed, extra, S, "rookie")).toEqual({ rejected: "too_long" });
+    expect(replayVsAi({ seed, settings: S, tier: "rookie", commands: extra })).toEqual({ ok: false, reason: "too_long", atIndex: maxHumanCommands(S) });
+  }, 60_000);
 });

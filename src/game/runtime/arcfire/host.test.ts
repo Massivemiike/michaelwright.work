@@ -1,8 +1,10 @@
 // src/game/runtime/arcfire/host.test.ts — the worker's host and client, driven in Node
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { SHORT_SETTINGS, STANDARD_SETTINGS } from "@/game/titles/arcfire/state";
-import { replayVsAi } from "@/game/titles/arcfire/vsai";
+import { SHORT_SETTINGS, STANDARD_SETTINGS, type MatchState } from "@/game/titles/arcfire/state";
+import { HUMAN, aiToAct, replayVsAi, resumeVsAi } from "@/game/titles/arcfire/vsai";
+import { SUDDEN_DEATH_WEAPON } from "@/game/titles/arcfire/constants";
+import { playVsAi } from "@/game/test/arcfire/vsaiGolden";
 import type { ArcfireCommand } from "@/game/titles/arcfire/replay";
 import { createArcfireHost } from "./host";
 import { ArcfireWorkerClient, type WorkerLike } from "./client";
@@ -104,6 +106,32 @@ describe("the Arcfire host", () => {
     const out = r.send({ t: "start", id: 1, seed: 9, settings: SHORT_SETTINGS, opponent: "local", log: cmds });
     expect(out.length).toBe(1);
     expect((out[0] as Extract<HostEvent, { t: "state" }>).snap.phase).toBe("battle");
+  }, 60_000);
+
+  it("resumes a damaged save up to its first bad entry, on both branches (droppedFrom)", () => {
+    const quick = (m: MatchState): ArcfireCommand => (m.phase === "draft"
+      ? { k: "pick", w: m.poolOwner.findIndex((o) => o === -1) }
+      : { k: "turn", move: 0, w: m.phase === "suddenDeath" ? SUDDEN_DEATH_WEAPON : m.hands[HUMAN][0], angle: 45, power: 70 });
+    const live = playVsAi(4, SHORT_SETTINGS, "rookie", quick);
+    /** The first log index where the AI is to act in `phase`. */
+    const firstAi = (phase: MatchState["phase"]): number => live.log.findIndex((_, i) => {
+      const r = resumeVsAi({ seed: 4, settings: SHORT_SETTINGS, log: live.log.slice(0, i) });
+      return r.ok && aiToAct(r.state) && r.state.phase === phase;
+    });
+    const cases: [number, ArcfireCommand][] = [
+      [firstAi("draft"), { k: "pick", w: 99 }],
+      [firstAi("battle"), { k: "turn", move: 0, w: 0, angle: 181, power: 50 }],
+    ];
+    for (const [i, illegal] of cases) {
+      expect(i).toBeGreaterThanOrEqual(0);
+      const bad = live.log.slice();
+      bad[i] = illegal;
+      const out = harness().send({ t: "start", id: 1, seed: 4, settings: SHORT_SETTINGS, opponent: "rookie", log: bad });
+      expect(out[0], `the vs-AI save damaged at ${i}`).toMatchObject({ t: "state", droppedFrom: i, seq: i, log: live.log.slice(0, i) });
+    }
+    const local = harness().send({ t: "start", id: 1, seed: 9, settings: SHORT_SETTINGS, opponent: "local", log: [{ k: "pick", w: 0 }, { k: "pick", w: 99 }, { k: "pick", w: 1 }] });
+    expect(local.length).toBe(1);
+    expect(local[0]).toMatchObject({ t: "state", droppedFrom: 1, seq: 1, log: [{ k: "pick", w: 0 }] });
   }, 60_000);
 });
 

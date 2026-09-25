@@ -5,6 +5,9 @@
 //     independent) and `draft` (reads `power`), plus coverage gates so the
 //     case list can never go inert: some case moved, saved a tier-3 weapon,
 //     built DIRT by the rule, chose a beam, played sudden death, faced wind;
+//     and every turn decision is checked against the rules its stats report
+//     (plan.ts): the budget, the DIRT threat and cut, the move gain, the
+//     tier-3 save. A re-pin re-baselines the fingerprints, never these rules;
 //   the vs-AI goldens (determinism.vsai.golden.json): a human win and a human
 //     loss against Veteran with STANDARD_SETTINGS, played live by the scripted
 //     human (vsaiGolden.ts), then replayed from the human's commands alone:
@@ -21,6 +24,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { build } from "esbuild";
 import { ROSTER } from "./weapons/roster";
+import { DIRT_GAIN, DIRT_THREAT, TIERS, tierBudget, type AiTier } from "./ai/tiers";
+import { kernelTotal, noiseKernel } from "./ai/noise";
+import { dealsDamage } from "./ai/model";
 import type { ArcfireCommand } from "./replay";
 import type { MatchSettings, MatchState } from "./state";
 import type { TurnCommand } from "./match";
@@ -57,6 +63,40 @@ const GOLDEN = "src/game/titles/arcfire/determinism.vsai.golden.json";
 
 interface CorpusFixture { turnDigest: string; draftDigest: string; turn: Record<string, AiFingerprint>; draft: Record<string, AiFingerprint> }
 
+/**
+ * The rules one turn decision's stats report, exactly as plan.ts applies them; returns the rules that applied.
+ * `plan.ranked` holds the stationary candidates, so its first damaging one is the best stationary value.
+ */
+function checkRules(id: string, plan: Plan): string[] {
+  const tier = id.split("|")[1] as AiTier;
+  const t = TIERS[tier];
+  const s = plan.stats;
+  const pick = plan.choices[0];
+  const applied: string[] = [];
+  expect(s.sims, `${id}: sims within the tier's budget`).toBeLessThanOrEqual(tierBudget(t));
+  if (s.reason === "dirt") { // built DIRT: the reply to the offensive pick was a threat, and a build cut it enough
+    applied.push("dirt");
+    expect(s.reply, `${id}: a DIRT build answers a threat`).toBeGreaterThanOrEqual(DIRT_THREAT);
+    expect(s.reply - s.replyDirt, `${id}: a DIRT build cuts the reply by DIRT_GAIN`).toBeGreaterThanOrEqual(DIRT_GAIN);
+  } else if (s.reply >= DIRT_THREAT && s.replyDirt >= 0) { // a threat, but no build cut it enough
+    applied.push("noDirt");
+    expect(s.reply - s.replyDirt, `${id}: an unbuilt DIRT cut is below DIRT_GAIN`).toBeLessThan(DIRT_GAIN);
+  }
+  if (s.reason === "move") { // the move's value beats staying by the move gain, and staying was below the move threshold
+    applied.push("move");
+    const scale = kernelTotal(noiseKernel(t.noiseAware ? t.noiseA : 0)) * kernelTotal(noiseKernel(t.noiseAware ? t.noiseP : 0));
+    const stay = plan.ranked.find((c) => dealsDamage(ROSTER[c.w]))!;
+    expect(pick.move, `${id}: a move`).not.toBe(0);
+    expect(pick.ev, `${id}: the move gains moveGain`).toBeGreaterThanOrEqual(stay.ev + t.moveGain * scale);
+    expect(stay.ev, `${id}: staying was below moveBelow`).toBeLessThan(t.moveBelow * scale);
+  }
+  if (s.reason === "saveT3") { // a tier-3 weapon was saved: the pick is another tier
+    applied.push("saveT3");
+    expect(ROSTER[pick.w].tier, `${id}: a saved tier-3 weapon is not fired`).not.toBe(3);
+  }
+  return applied;
+}
+
 const movedIn = (old: Record<string, AiFingerprint>, cur: Record<string, AiFingerprint>): string[] =>
   [...new Set([...Object.keys(old), ...Object.keys(cur)])].sort()
     .filter((id) => id in old && JSON.stringify(old[id]) !== JSON.stringify(cur[id] ?? null))
@@ -65,8 +105,10 @@ const movedIn = (old: Record<string, AiFingerprint>, cur: Record<string, AiFinge
 describe("arcfire AI corpus", () => {
   it("reproduces every pinned AI decision, and exercises every heuristic", () => {
     const seen = new Set<string>();
+    const ruled = new Set<string>();
     const corpus = ai.runAiCorpus((id, m, cmd, plan) => {
       expect(cmd.angle >= 0 && cmd.angle <= 180 && cmd.power >= 0 && cmd.power <= 100, id).toBe(true);
+      for (const r of checkRules(id, plan)) ruled.add(r);
       if (plan.stats.reason === "move" && cmd.move !== 0) seen.add("move");
       if (plan.stats.reason === "saveT3") seen.add("saveT3");
       if (plan.stats.reason === "dirt" && ROSTER[cmd.w].tag === "DIRT") seen.add("dirt");
@@ -75,6 +117,7 @@ describe("arcfire AI corpus", () => {
       if (m.wind !== 0) seen.add("wind");
     });
     expect([...seen].sort(), "coverage gates").toEqual(["beam", "dirt", "move", "saveT3", "sudden", "wind"]);
+    expect([...ruled].sort(), "every rule check applied to some case").toEqual(["dirt", "move", "noDirt", "saveT3"]);
     const fresh: CorpusFixture = { turnDigest: ai.aiDigest(corpus.turn), draftDigest: ai.aiDigest(corpus.draft), turn: corpus.turn, draft: corpus.draft };
     const mode = process.env.UPDATE_ARCFIRE_AI;
     const old: CorpusFixture | null = existsSync(CORPUS) ? JSON.parse(readFileSync(CORPUS, "utf8")) : null;
