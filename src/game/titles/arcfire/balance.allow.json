@@ -1,1 +1,11 @@
-{}
+{
+  "nova": "HIGH+WR: 90.5 net points a shot (tier 3 band 50-90), win-rate contribution +12.0%; tuning pass: damage x 0.77 (first sweep, 2026-09-24)",
+  "needle": "HIGH, structural: 78.6 net points a shot (tier 2 band 30-60), 75% hits, 104.7 points on a hit; tuning pass: a smaller damage (first sweep, 2026-09-24)",
+  "railshot": "LOW, structural: 27.6 net points a shot (tier 2 band 30-60), 38% hits; tuning pass: a larger radius (first sweep, 2026-09-24)",
+  "twinnova": "HIGH+WR: 104.3 net points a shot (tier 3 band 50-90), win-rate contribution +17.3%; tuning pass: damage x 0.67 (first sweep, 2026-09-24)",
+  "shrapnel": "LOW: 24.4 net points a shot (tier 2 band 30-60); tuning pass: damage x 1.84 (first sweep, 2026-09-24)",
+  "skipper": "LOW: 26.5 net points a shot (tier 2 band 30-60); tuning pass: damage x 1.70 (first sweep, 2026-09-24)",
+  "auger": "LOW, structural: 11.5 net points a shot (tier 2 band 30-60), 70% hits, 16.4 points on a hit; tuning pass: a shorter tunnel or a shallower pitch (first sweep, 2026-09-24)",
+  "prism": "LOW: 33.1 net points a shot (tier 3 band 50-90), one beam of three reaches; tuning pass: a narrower spread or more damage a beam (first sweep, 2026-09-24)",
+  "swarm": "HIGH+WR: 93.0 net points a shot (tier 3 band 50-90), win-rate contribution +15.9%; tuning pass: damage x 0.75, then the homing ruling (first sweep, 2026-09-24)"
+}
