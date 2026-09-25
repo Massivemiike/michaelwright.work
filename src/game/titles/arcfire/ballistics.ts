@@ -11,7 +11,7 @@
 import type { Fx } from "@/game/sim/types";
 import { fromInt, toInt, mul } from "@/game/sim/math/fixed";
 import { cosDeg, sinDeg } from "./aimTable";
-import { isSolid, type Terrain } from "./terrain";
+import { isSolid, surfaceTop, type Terrain } from "./terrain";
 import {
   WORLD_W, STEPS_PER_SEC, GRAVITY_STEP, V_UNIT, MAX_FLIGHT_STEPS, BARREL_LEN, TANK_HIT_R, BOUNCE_PROBE_R,
 } from "./constants";
@@ -152,16 +152,40 @@ function reflect(s: Shell, nx: number, ny: number): void {
   s.vy = idiv(s.vy * s.restitutionPct, 100);
 }
 
+/**
+ * Can this step's sweep hit nothing? Every sample of a step lies in the pixel box between its start
+ * (x0, y0) and end (x1, y1) pixels: the samples interpolate the step monotonically and floorPx is
+ * monotone. So the sweep is clear when that box lies inside the world, strictly above the top span of
+ * every column it covers, and outside the square around each hitbox circle. Exact, never approximate:
+ * when it answers false, the per-sample sweep decides exactly as before.
+ */
+function clearStep(t: Terrain, tanks: readonly HitCircle[], x0: number, y0: number, x1: number, y1: number): boolean {
+  const lo = x0 < x1 ? x0 : x1;
+  const hi = x0 < x1 ? x1 : x0;
+  if (lo < 0 || hi >= WORLD_W) return false;
+  const top = y0 < y1 ? y0 : y1;
+  const bot = y0 < y1 ? y1 : y0;
+  for (let k = 0; k < tanks.length; k++) {
+    const tk = tanks[k];
+    if (hi >= tk.x - TANK_HIT_R && lo <= tk.x + TANK_HIT_R && bot >= tk.y - TANK_HIT_R && top <= tk.y + TANK_HIT_R) return false;
+  }
+  for (let c = lo; c <= hi; c++) if (bot >= surfaceTop(t, c)) return false;
+  return true;
+}
+
+/** End a flown step at Q16.16 (x, y): count it, and lose the shell there (out) if it reached its flight cap. */
+function endStep(s: Shell, x: Fx, y: Fx): Impact | null {
+  s.x = x;
+  s.y = y;
+  s.steps++;
+  if (s.steps < MAX_FLIGHT_STEPS) return null;
+  s.alive = false;
+  return { kind: "out", x: floorPx(x), y: floorPx(y) };
+}
+
 /** A bounce ends the step at the last free sample; the flight cap still applies. */
 function endBounce(s: Shell, fx: Fx, fy: Fx, ev: Impact): Impact {
-  s.x = fx;
-  s.y = fy;
-  s.steps++;
-  if (s.steps >= MAX_FLIGHT_STEPS) {
-    s.alive = false;
-    return { kind: "out", x: floorPx(fx), y: floorPx(fy) };
-  }
-  return ev;
+  return endStep(s, fx, fy) ?? ev;
 }
 
 /**
@@ -170,9 +194,11 @@ function endBounce(s: Shell, fx: Fx, fy: Fx, ev: Impact): Impact {
  * change per step (Fx). The order inside a step is part of the determinism
  * contract: wind, gravity, the apex latch (an apex stage ends the step here),
  * homing, then the sweep, whose every sample checks the side edges, then the
- * tanks in index order, then the terrain.
+ * tanks in index order, then the terrain. A step whose sweep provably meets
+ * nothing (clearStep) skips the per-sample loop with the same result; `exact`
+ * forces the loop (the reference property test compares the two).
  */
-export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], windStep: Fx): Impact | null {
+export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], windStep: Fx, exact = false): Impact | null {
   const rising = s.vy < 0;
   s.vx += windStep;
   s.vy += s.gravityStep;
@@ -186,7 +212,16 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
   if (s.homeDeg > 0 && s.apexed) steer(s);
   const nx = s.x + idiv(s.vx, STEPS_PER_SEC);
   const ny = s.y + idiv(s.vy, STEPS_PER_SEC);
-  const n = Math.max(Math.abs(floorPx(nx) - floorPx(s.x)), Math.abs(floorPx(ny) - floorPx(s.y)), 1);
+  const x0 = floorPx(s.x);
+  const y0 = floorPx(s.y);
+  const x1 = floorPx(nx);
+  const y1 = floorPx(ny);
+  if (!exact && clearStep(t, tanks, x0, y0, x1, y1)) {
+    // the sweep below would find nothing, and every sample of it lies outside every hitbox, so it would clear every ignore bit
+    s.ignore = 0;
+    return endStep(s, nx, ny);
+  }
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
   const r2 = TANK_HIT_R * TANK_HIT_R;
   let fx = s.x; // the last free sample
   let fy = s.y;
@@ -231,12 +266,5 @@ export function stepShell(s: Shell, t: Terrain, tanks: readonly HitCircle[], win
     fx = sx;
     fy = sy;
   }
-  s.x = nx;
-  s.y = ny;
-  s.steps++;
-  if (s.steps >= MAX_FLIGHT_STEPS) {
-    s.alive = false;
-    return { kind: "out", x: floorPx(nx), y: floorPx(ny) };
-  }
-  return null;
+  return endStep(s, nx, ny);
 }
