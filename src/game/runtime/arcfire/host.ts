@@ -14,7 +14,7 @@ import { hashMatch } from "@/game/titles/arcfire/hash";
 import { resolveTurn } from "@/game/titles/arcfire/resolve";
 import { spansFromHeight } from "@/game/titles/arcfire/terrain";
 import { ROSTER } from "@/game/titles/arcfire/weapons/roster";
-import { SHORT_SETTINGS, type MatchState } from "@/game/titles/arcfire/state";
+import { SHORT_SETTINGS, type MatchSettings, type MatchState } from "@/game/titles/arcfire/state";
 import { AI, HUMAN, aiToAct, resumeVsAi, stepAi } from "@/game/titles/arcfire/vsai";
 import type { Timeline } from "@/game/titles/arcfire/timeline";
 import type { AiStats } from "@/game/titles/arcfire/ai/search";
@@ -74,38 +74,46 @@ export function createArcfireHost(post: Post): { receive(req: HostRequest): void
     }
   }
 
+  /** A fresh match, or null when createMatch rejects the settings (the only throw this catches). */
+  function freshMatch(seed: number, settings: MatchSettings): MatchState | null {
+    try {
+      return createMatch(seed, settings);
+    } catch {
+      return null;
+    }
+  }
+
   function start(req: Extract<HostRequest, { t: "start" }>): void {
-    const saved: unknown = req.log ?? [];
-    // build the new match first: a start that fails leaves the current match and its opponent as they were
-    let next: MatchState | null = null;
+    // a damaged blob is bad_log: a log that is present but not an array (null included), a seed that is
+    // not an integer, an unknown opponent, or settings createMatch rejects
+    const saved: unknown = req.log === undefined ? [] : req.log;
+    const fresh = Array.isArray(saved) && Number.isInteger(req.seed) && OPPONENTS.includes(req.opponent) ? freshMatch(req.seed, req.settings) : null;
+    if (fresh === null || !Array.isArray(saved)) {
+      post({ t: "rejected", id: req.id, reason: "bad_log" }, []);
+      return;
+    }
+    // re-apply the save outside that check: a throw here is a bug, and receive() posts it as `error`.
+    // The new match is built before it replaces the current one, so a failed start leaves the current
+    // match and its opponent as they were.
+    let next: MatchState = fresh;
     let nextLog: ArcfireCommand[] = [];
     let nextHuman: ArcfireCommand[] = [];
     let droppedFrom = -1;
-    if (Array.isArray(saved) && OPPONENTS.includes(req.opponent)) {
-      try {
-        if (req.opponent !== "local") {
-          const r = resumeVsAi({ seed: req.seed, settings: req.settings, log: saved });
-          if (r.ok) {
-            next = r.state;
-            nextLog = r.log;
-            nextHuman = r.humanLog;
-            droppedFrom = r.droppedFrom;
-          }
-        } else { // pass-and-play: the valid prefix of a plain 2-player log
-          const p = createMatch(req.seed, req.settings);
-          for (let i = 0; i < saved.length; i++) {
-            if (!applyCommand(p, saved[i]).ok) { droppedFrom = i; break; }
-            nextLog.push(saved[i] as ArcfireCommand);
-          }
-          next = p;
-        }
-      } catch {
-        next = null; // createMatch rejected the settings: a damaged blob like any other
+    if (req.opponent !== "local") {
+      const r = resumeVsAi({ seed: req.seed, settings: req.settings, log: saved });
+      if (!r.ok) { // unreachable while resumeVsAi fails only on a non-array log
+        post({ t: "rejected", id: req.id, reason: "bad_log" }, []);
+        return;
       }
-    }
-    if (next === null) { // a log that is not an array, an unknown opponent, or settings createMatch rejects
-      post({ t: "rejected", id: req.id, reason: "bad_log" }, []);
-      return;
+      next = r.state;
+      nextLog = r.log;
+      nextHuman = r.humanLog;
+      droppedFrom = r.droppedFrom;
+    } else { // pass-and-play: the valid prefix of a plain 2-player log
+      for (let i = 0; i < saved.length; i++) {
+        if (!applyCommand(next, saved[i]).ok) { droppedFrom = i; break; }
+        nextLog.push(saved[i] as ArcfireCommand);
+      }
     }
     opponent = req.opponent;
     m = next;

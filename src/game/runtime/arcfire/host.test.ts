@@ -71,8 +71,13 @@ describe("the Arcfire host", () => {
     expect(h.send({ t: "preview", id: 6, weapon: 99, angle: 45, power: 50 })).toEqual([{ t: "rejected", id: 6, reason: "invalid_command" }]);
     const pv = h.send({ t: "preview", id: 7, weapon: 1, angle: 45, power: 60 });
     expect(pv[0].t === "preview" && pv[0].timeline.events.some((e) => e.kind === "blast")).toBe(true);
-    for (const bad of [{ settings: { ...SHORT_SETTINGS, weaponsEach: 0 }, opponent: "local" }, { settings: null, opponent: "rookie" }, { settings: SHORT_SETTINGS, opponent: "boss" }]) {
-      expect(h.send({ t: "start", id: 8, seed: 7, ...bad } as never)).toEqual([{ t: "rejected", id: 8, reason: "bad_log" }]); // a damaged blob
+    for (const bad of [
+      { settings: { ...SHORT_SETTINGS, weaponsEach: 0 }, opponent: "local" }, { settings: null, opponent: "rookie" }, { settings: SHORT_SETTINGS, opponent: "boss" },
+      { settings: SHORT_SETTINGS, opponent: "rookie", log: null }, { settings: SHORT_SETTINGS, opponent: "local", log: null }, // present, but not an array
+      { seed: undefined, settings: SHORT_SETTINGS, opponent: "rookie" }, { seed: 1.5, settings: SHORT_SETTINGS, opponent: "local" },
+      { seed: "7", settings: SHORT_SETTINGS, opponent: "rookie" }, // a seed that is not an integer
+    ]) {
+      expect(h.send({ t: "start", id: 8, seed: 7, ...bad } as never), JSON.stringify(bad)).toEqual([{ t: "rejected", id: 8, reason: "bad_log" }]); // a damaged blob
     }
     expect(([...h.events].reverse().find((e) => "snap" in e) as Extract<HostEvent, { snap: unknown }>).snap.hash).toBe(hash.snap.hash); // untouched
     expect(snap.phase).toBe("draft");
