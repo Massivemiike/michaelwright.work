@@ -1,7 +1,8 @@
 // src/game/test/arcfire/balance.test.ts — the balance harness's pure half, on hand-built records (always on; no match is played)
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { ROSTER } from "@/game/titles/arcfire/weapons/roster";
+import { ROSTER, ROSTER_INDEX } from "@/game/titles/arcfire/weapons/roster";
+import type { WeaponDef } from "@/game/titles/arcfire/weapons/types";
 import { aggregate, costs, costTable, judge, report, writePowers, type WeaponDefLite } from "./balance";
 import type { MatchRecord, ShotRecord } from "./aiMatch";
 
@@ -81,19 +82,26 @@ describe("the balance harness", () => {
 
 describe("the power write-back", () => {
   const src = readFileSync("src/game/titles/arcfire/weapons/roster.ts", "utf8");
+  // the live powers, never literals, so a real ARCFIRE_BALANCE_WRITE write-back keeps this test green
+  const live = (id: string): WeaponDef => ROSTER[ROSTER_INDEX[id]];
+  const other = (p: number, by: number): number => (p + by <= 100 ? p + by : p - by); // another power in 1..100
+  const line = (id: string, power: number): string => {
+    const d = live(id);
+    return `id: "${d.id}", name: "${d.name}", tag: "${d.tag}", tier: ${d.tier}, power: ${power},`;
+  };
 
   it("rewrites exactly one line per changed power, and is idempotent", () => {
-    const w = writePowers(src, { pulse: 28, nova: 90 });
-    expect(w.changed).toEqual(["pulse: 30 -> 28", "nova: 80 -> 90"]);
+    const [pulse, nova] = [live("pulse").power, live("nova").power];
+    const to = { pulse: other(pulse, 2), nova: other(nova, 10) };
+    const w = writePowers(src, to);
+    expect(w.changed).toEqual([`pulse: ${pulse} -> ${to.pulse}`, `nova: ${nova} -> ${to.nova}`]);
     const before = src.split("\n");
     const after = w.src.split("\n");
     expect(after.length).toBe(before.length);
     const diff = after.flatMap((l, i) => (l === before[i] ? [] : [l.trim()]));
-    expect(diff).toEqual([
-      'id: "pulse", name: "Pulse", tag: "BLAST", tier: 1, power: 28,',
-      'id: "nova", name: "Nova", tag: "BLAST", tier: 3, power: 90,',
-    ]);
-    expect(writePowers(w.src, { pulse: 28, nova: 90 })).toEqual({ src: w.src, changed: [] });
+    expect(diff).toEqual([line("pulse", to.pulse), line("nova", to.nova)]);
+    expect(before.map((l) => l.trim())).toEqual(expect.arrayContaining([line("pulse", pulse), line("nova", nova)])); // the lines it rewrote
+    expect(writePowers(w.src, to)).toEqual({ src: w.src, changed: [] });
     const same = writePowers(src, Object.fromEntries(ROSTER.map((d) => [d.id, d.power]))); // every id matches exactly once
     expect(same).toEqual({ src, changed: [] });
   });

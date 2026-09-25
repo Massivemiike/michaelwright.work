@@ -12,7 +12,10 @@
 //     launch gate needs the allow-list empty.
 // CI runs it as a matrix: ARCFIRE_SWEEP_SHARD=k/n plays shard k and writes
 // test-results/arcfire-sweep/shard-k.json; ARCFIRE_SWEEP_MERGE=<dir> judges
-// the merged shards. Locally, one run does everything on every core.
+// the merged shards, and refuses a seed that is in two shard files or in none
+// (every group must hold seeds 1..N exactly). Locally, one run does everything
+// on every core. A malformed ARCFIRE_SWEEP_SHARD or ARCFIRE_SWEEP_THREADS fails
+// the run before any match is played.
 // ARCFIRE_BALANCE_WRITE=1 (local only: a full run or a merge) writes the
 // harness's `power` table into roster.ts and prints the AI re-pins it needs.
 import { describe, it, expect } from "vitest";
@@ -21,7 +24,7 @@ import { join } from "node:path";
 import { ROSTER } from "@/game/titles/arcfire/weapons/roster";
 import type { MatchRecord } from "./aiMatch";
 import { STANDARD_SETTINGS } from "@/game/titles/arcfire/state";
-import { bundleSweep, runMatches, separationJobs, shardOf, winRate, type MatchJob } from "./sweep";
+import { bundleSweep, runMatches, separationJobs, shardOf, threadsOf, winRate, type MatchJob } from "./sweep";
 import { aggregate, costTable, costs, judge, report, writePowers } from "./balance";
 
 const SWEEP = process.env.BALANCE_SWEEP === "1";
@@ -35,17 +38,22 @@ interface SweepData { ar: MatchRecord[]; av: MatchRecord[]; vr: MatchRecord[]; b
 
 const balanceJobs = (): MatchJob[] => Array.from({ length: 400 }, (_, i) => ({ seed: i + 1, tiers: ["ace", "ace"], draft: "random" }));
 
-async function play(): Promise<SweepData> {
+/**
+ * Every group's full job list, seeds 1..N (a shard plays each group's share; the merge needs them all).
+ * ONE queue, the slowest matches first (Ace-Ace about 4.2 s, Ace-Veteran 2.4, Ace-Rookie 2.2, Veteran-Rookie 0.45),
+ * so no thread idles at the end of a group.
+ */
+const allJobs = (): [keyof SweepData, MatchJob[]][] => [
+  ["balance", balanceJobs()],
+  ["av", separationJobs("ace", "veteran", 200)],
+  ["ar", separationJobs("ace", "rookie", 200)],
+  ["vr", separationJobs("veteran", "rookie", 200)],
+];
+
+async function play(threads: number | undefined): Promise<SweepData> {
+  // each group is sharded on its own, as the merge expects
+  const groups = allJobs().map(([k, jobs]): [keyof SweepData, MatchJob[]] => [k, shardOf(jobs, SHARD)]);
   const code = await bundleSweep();
-  const threads = process.env.ARCFIRE_SWEEP_THREADS ? Number(process.env.ARCFIRE_SWEEP_THREADS) : undefined;
-  // ONE queue, the slowest matches first (Ace-Ace about 4.2 s, Ace-Veteran 2.4, Ace-Rookie 2.2, Veteran-Rookie 0.45),
-  // so no thread idles at the end of a group; each group is sharded on its own, as the merge expects
-  const groups: [keyof SweepData, MatchJob[]][] = [
-    ["balance", shardOf(balanceJobs(), SHARD)],
-    ["av", shardOf(separationJobs("ace", "veteran", 200), SHARD)],
-    ["ar", shardOf(separationJobs("ace", "rookie", 200), SHARD)],
-    ["vr", shardOf(separationJobs("veteran", "rookie", 200), SHARD)],
-  ];
   const recs = await runMatches(code, groups.flatMap(([, jobs]) => jobs), threads);
   const data: SweepData = { ar: [], av: [], vr: [], balance: [] };
   let at = 0;
@@ -62,12 +70,21 @@ function merged(dir: string): SweepData {
     const d: SweepData = JSON.parse(readFileSync(join(dir, f), "utf8"));
     for (const k of ["ar", "av", "vr", "balance"] as const) all[k].push(...d[k]);
   }
-  for (const k of ["ar", "av", "vr", "balance"] as const) {
+  const gaps: string[] = []; // complete: exactly the full run's seeds, so a lost shard file is never judged on what is left
+  for (const [k, jobs] of allJobs()) {
     all[k].sort((a, b) => a.seed - b.seed);
     all[k].forEach((r, i) => {
       if (i > 0 && all[k][i - 1].seed === r.seed) throw new Error(`${dir}: seed ${r.seed} of "${k}" is in two shard files`);
     });
+    const want = jobs.map((j) => j.seed);
+    const have = all[k].map((r) => r.seed);
+    const missing = want.filter((s) => !have.includes(s));
+    const extra = have.filter((s) => !want.includes(s));
+    if (missing.length > 0 || extra.length > 0) {
+      gaps.push(`"${k}" must hold seeds 1..${want.length} exactly; missing ${missing.length}: ${missing.join(", ") || "none"}; unexpected: ${extra.join(", ") || "none"}`);
+    }
   }
+  if (gaps.length > 0) throw new Error(`${dir}: the shard files are incomplete\n${gaps.join("\n")}`);
   return all;
 }
 
@@ -80,7 +97,9 @@ function publish(text: string): void {
 
 describe.runIf(SWEEP)("arcfire sweeps (BALANCE_SWEEP=1)", () => {
   it("separates the tiers and judges every weapon", async () => {
-    const data = MERGE ? merged(MERGE) : await play();
+    const threads = threadsOf(process.env.ARCFIRE_SWEEP_THREADS); // both knobs fail loudly before any work
+    shardOf([], SHARD);
+    const data = MERGE ? merged(MERGE) : await play(threads);
     if (!MERGE) { // the records, for a later merge: a matrix shard stops here, and the merge job judges
       mkdirSync(OUT, { recursive: true });
       writeFileSync(join(OUT, `shard-${SHARD ? SHARD.split("/")[0] : "all"}.json`), JSON.stringify(data));
@@ -92,9 +111,11 @@ describe.runIf(SWEEP)("arcfire sweeps (BALANCE_SWEEP=1)", () => {
     const j = judge(rows, allow);
     const pctOf = (v: number): string => `${(100 * v).toFixed(1)}%`;
     const cost = costs([...data.ar, ...data.av, ...data.vr, ...data.balance]);
+    const n = [data.ar.length, data.av.length, data.vr.length]; // the matches each rate is over
+    const seeds = n[0] === n[1] && n[1] === n[2] ? `${n[0]} seeds each` : `seeds: Ace-Rookie ${n[0]}, Ace-Veteran ${n[1]}, Veteran-Rookie ${n[2]}`;
     publish([
       `## Arcfire sweeps`,
-      `tier separation (200 seeds each): Ace-Rookie ${pctOf(sep.ar)} (>= 85%), Ace-Veteran ${pctOf(sep.av)} (>= 60%), Veteran-Rookie ${pctOf(sep.vr)} (>= 70%)`,
+      `tier separation (${seeds}): Ace-Rookie ${pctOf(sep.ar)} (>= 85%), Ace-Veteran ${pctOf(sep.av)} (>= 60%), Veteran-Rookie ${pctOf(sep.vr)} (>= 70%)`,
       "",
       report(j, data.balance, "Balance: Ace vs Ace, random draft, STANDARD_SETTINGS"),
       "",

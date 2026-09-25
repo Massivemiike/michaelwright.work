@@ -40,6 +40,7 @@ jobs:
         with:
           name: arcfire-sweep-${{ matrix.shard }}
           path: test-results/arcfire-sweep/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
 
   arcfire-sweep-report:
     name: Arcfire tier separation + balance verdict

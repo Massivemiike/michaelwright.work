@@ -5,6 +5,9 @@
 // job order, so every aggregate is identical whatever the thread count.
 // ARCFIRE_SWEEP_SHARD=k/n keeps the jobs whose index is k - 1 mod n (a CI
 // matrix shard); ARCFIRE_SWEEP_THREADS caps the threads (default: all cores).
+// A malformed value of either throws, naming the variable. A job that throws,
+// a worker that fails, or a worker that exits with its job pending rejects the
+// run, and the first rejection stops every worker.
 import { Worker } from "node:worker_threads";
 import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
@@ -31,34 +34,59 @@ parentPort.on("message", ({ i, job }) => {
   catch (e) { parentPort.postMessage({ i, error: String((e && e.stack) || e) }); }
 });`;
 
-/** The jobs of shard `spec` ("k/n"), or all of them. */
+/** ARCFIRE_SWEEP_THREADS: undefined when unset (or empty), else an integer >= 1; anything else throws. */
+export function threadsOf(spec: string | undefined): number | undefined {
+  if (!spec) return undefined;
+  if (!/^\d+$/.test(spec) || Number(spec) < 1) throw new Error(`ARCFIRE_SWEEP_THREADS must be an integer >= 1, got "${spec}"`);
+  return Number(spec);
+}
+
+/** The jobs of shard `spec` (ARCFIRE_SWEEP_SHARD, "k/n" with 1 <= k <= n), or all of them when unset (or empty); anything else throws. */
 export function shardOf<T>(jobs: T[], spec: string | undefined): T[] {
   if (!spec) return jobs;
-  const [k, n] = spec.split("/").map(Number);
+  const hit = /^(\d+)\/(\d+)$/.exec(spec);
+  const k = hit === null ? 0 : Number(hit[1]);
+  const n = hit === null ? 0 : Number(hit[2]);
+  if (k < 1 || k > n) throw new Error(`ARCFIRE_SWEEP_SHARD must be k/n with 1 <= k <= n, got "${spec}"`);
   return jobs.filter((_, i) => i % n === k - 1);
 }
 
 export async function runMatches(code: string, jobs: MatchJob[], threads = availableParallelism()): Promise<MatchRecord[]> {
+  if (!Number.isInteger(threads) || threads < 1) throw new RangeError(`runMatches: threads must be an integer >= 1, got ${threads}`);
   const out: MatchRecord[] = new Array(jobs.length);
   let next = 0;
   let done = 0;
-  const n = Math.max(1, Math.min(threads, jobs.length));
+  const n = Math.min(threads, jobs.length);
   await new Promise<void>((res, rej) => {
     if (jobs.length === 0) return res();
+    const workers: Worker[] = [];
+    let failed = false;
+    const fail = (e: Error): void => { // the first failure rejects the run and stops every worker
+      if (failed) return;
+      failed = true;
+      for (const w of workers) void w.terminate();
+      rej(e);
+    };
     for (let k = 0; k < n; k++) {
       const w = new Worker(WORKER, { eval: true, workerData: { code } });
+      workers.push(w);
+      let held = -1; // the job this worker is playing (-1: none)
       const feed = (): void => {
-        if (next >= jobs.length) { void w.terminate(); return; }
-        const i = next++;
-        w.postMessage({ i, job: jobs[i] });
+        held = -1;
+        if (failed || next >= jobs.length) { void w.terminate(); return; }
+        held = next++;
+        w.postMessage({ i: held, job: jobs[held] });
       };
       w.on("message", (msg: { i: number; rec?: MatchRecord; error?: string }) => {
-        if (msg.error !== undefined) { rej(new Error(`job ${msg.i}: ${msg.error}`)); void w.terminate(); return; }
+        if (msg.error !== undefined) { fail(new Error(`job ${msg.i}: ${msg.error}`)); return; }
         out[msg.i] = msg.rec!;
         if (++done === jobs.length) res();
         feed();
       });
-      w.on("error", rej);
+      w.on("error", fail);
+      w.on("exit", (exitCode: number) => {
+        if (held !== -1) fail(new Error(`a sweep worker exited (code ${exitCode}) while playing job ${held}`));
+      });
       feed();
     }
   });
