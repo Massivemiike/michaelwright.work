@@ -62,3 +62,42 @@ export function cloneMatch(m: MatchState): MatchState {
     scores: m.scores.slice(),
   };
 }
+
+/**
+ * Copy every field of `src` into `dst` in place, allocating nothing (the AI's
+ * per-candidate reset: one scratch match reused for thousands of resolves).
+ * The in-shot spans are NOT copied: dst.terrain.spans / spanCount stay stale
+ * until spansFromHeight runs, and resolveWeapon runs it before anything reads
+ * them. So dst is a valid argument to resolveTurn / resolveTurnPoints /
+ * resolveWeapon and to hashMatch, but not to an isSolid reader before a
+ * resolve. dst must come from createMatch or cloneMatch; it never shares an
+ * array with src (a poolOwner of another length is reallocated).
+ */
+export function copyMatchInto(dst: MatchState, src: MatchState): void {
+  dst.settings = src.settings;
+  dst.rng.state = src.rng.state;
+  dst.phase = src.phase;
+  dst.terrain.height.set(src.terrain.height);
+  dst.tankX[0] = src.tankX[0];
+  dst.tankX[1] = src.tankX[1];
+  dst.movesLeft[0] = src.movesLeft[0];
+  dst.movesLeft[1] = src.movesLeft[1];
+  copyInts(dst.pool, src.pool);
+  if (dst.poolOwner.length !== src.poolOwner.length) dst.poolOwner = new Int32Array(src.poolOwner.length);
+  dst.poolOwner.set(src.poolOwner);
+  dst.firstPicker = src.firstPicker;
+  dst.picksMade = src.picksMade;
+  copyInts(dst.hands[0], src.hands[0]);
+  copyInts(dst.hands[1], src.hands[1]);
+  dst.shooter = src.shooter;
+  dst.shotsFired = src.shotsFired;
+  dst.wind = src.wind;
+  dst.scores[0] = src.scores[0];
+  dst.scores[1] = src.scores[1];
+  dst.winner = src.winner;
+}
+
+function copyInts(dst: number[], src: readonly number[]): void {
+  dst.length = src.length;
+  for (let i = 0; i < src.length; i++) dst[i] = src[i];
+}

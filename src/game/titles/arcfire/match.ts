@@ -66,6 +66,12 @@ export function createMatch(seed: number, settings: MatchSettings): MatchState {
   };
 }
 
+/** Whose command the match waits for: the picker in the draft, the shooter after it, or -1 once it is over. */
+export function toAct(m: MatchState): number {
+  if (m.phase === "over") return -1;
+  return m.phase === "draft" ? pickerAt(m.firstPicker, m.picksMade) : m.shooter;
+}
+
 /** Draft pick (by pool index) for whoever's pick it is. */
 export function applyPick(m: MatchState, poolIndex: number): PickResult {
   if (m.phase !== "draft") return { ok: false, reason: "invalid_command" };

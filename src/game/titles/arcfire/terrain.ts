@@ -236,6 +236,7 @@ export function addInterval(t: Terrain, x: number, a: number, b: number): void {
 // Scratch for carveCapsule: per-column [lo, hi) bounds over the columns it touches.
 const CAP_LO = new Int32Array(WORLD_W);
 const CAP_HI = new Int32Array(WORLD_W);
+const CAP_HALF = new Int32Array(17); // half-heights for radii up to 16 (the validator's largest capsule: dig width 32); larger radii allocate
 
 /**
  * Remove a capsule — the union of radius-r discs centred on every <= 1 px
@@ -253,7 +254,7 @@ export function carveCapsule(t: Terrain, x0: number, y0: number, x1: number, y1:
     CAP_LO[c] = 2147483647;
     CAP_HI[c] = -2147483648;
   }
-  const half = new Int32Array(r + 1); // half[d] = the disc's half-height d columns from its centre
+  const half = r < CAP_HALF.length ? CAP_HALF : new Int32Array(r + 1); // half[d] = the disc's half-height d columns from its centre
   for (let d = 0; d <= r; d++) half[d] = isqrt(r * r - d * d);
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -277,9 +278,11 @@ export function carveCapsule(t: Terrain, x0: number, y0: number, x1: number, y1:
  * material in a column ends up as ONE span resting on the floor, so the new
  * surface is WORLD_H minus the column's total solid length. `collect = false`
  * skips building `falls` (the quiet resolve path); the terrain is identical.
+ * With `collect = false`, `heights` is the live heightfield (no copy) and
+ * `falls` is a shared, frozen empty array: the quiet path discards both.
  */
 export function settle(t: Terrain, collect = true): SettleResult {
-  const falls: SettleFall[] = [];
+  const falls: SettleFall[] = collect ? [] : NO_FALLS;
   for (let x = 0; x < WORLD_W; x++) {
     const o = x * STRIDE;
     let stackTop = WORLD_H;
@@ -292,5 +295,8 @@ export function settle(t: Terrain, collect = true): SettleResult {
     t.height[x] = stackTop;
   }
   spansFromHeight(t);
-  return { heights: t.height.slice(), falls };
+  return { heights: collect ? t.height.slice() : t.height, falls }; // quiet: the live heightfield, not a copy
 }
+
+/** The quiet settle's `falls`: one array shared by every quiet resolve, frozen so that no caller can fill it. */
+const NO_FALLS = Object.freeze([]) as unknown as SettleFall[];

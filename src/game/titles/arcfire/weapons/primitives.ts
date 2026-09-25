@@ -130,12 +130,12 @@ export function addShell(shot: Shot, s: Shell, stage: Stage, angle: number, pare
   return shot.shells.length - 1;
 }
 
-/** Fan offset of item i of count across a TOTAL spread (the volley rule; count > 1 guards the divisor). */
+/** Fan offset of item i of count across a TOTAL spread (the volley rule; count > 1 guards the divisor). `| 0`: a zero offset is +0, never -0 (Timeline angles). */
 export const fanOffset = (i: number, count: number, spread: number): number =>
-  count > 1 ? idiv((2 * i - (count - 1)) * spread, 2 * (count - 1)) : 0;
+  count > 1 ? idiv((2 * i - (count - 1)) * spread, 2 * (count - 1)) | 0 : 0;
 
 function split(shot: Shot, trig: Trigger, sp: Split): void {
-  const children: number[] = [];
+  const children: number[] | null = shot.rec ? [] : null;
   const speed = idiv(trig.speed * sp.speedPct, 100); // the children's nominal speed
   for (let i = 0; i < sp.count; i++) {
     const off = fanOffset(i, sp.count, sp.spreadDeg);
@@ -155,31 +155,32 @@ function split(shot: Shot, trig: Trigger, sp: Split): void {
     const gx = sp.gapPx ? idiv((2 * i - (sp.count - 1)) * sp.gapPx, 2) : 0;
     const s = shellAt(trig.fx + fromInt(gx), trig.fy, vx, vy, speed, trig.gravityStep);
     const id = addShell(shot, s, sp.child, off, trig.shell, trig.step);
-    if (id >= 0) children.push(id);
+    if (id >= 0 && children) children.push(id);
   }
-  emit(shot, { step: trig.step, kind: "split", shell: trig.shell, x: trig.x, y: trig.y, children });
+  if (children) emit(shot, { step: trig.step, kind: "split", shell: trig.shell, x: trig.x, y: trig.y, children });
 }
 
-interface WalkEnd { x: number; g: number; stop: "far" | "rise" | "tank" | "edge"; tank: number }
+interface WalkEnd { x: number; g: number; stop: "far" | "rise" | "tank" | "edge"; tank: number; n: number } // n: columns walked
 
 /**
  * Walk along the ground from column x (standing on ground px g) toward dir,
  * up to maxPx columns. Level or downhill only: it stops before any rise (the
  * next column is solid at g - 1), at a world edge, or on entering a tank
- * hitbox (the walker's point is (x, g - 1)). Appends each point to `path`.
+ * hitbox (the walker's point is (x, g - 1)). Appends each point to `path`
+ * when there is one (recording); `n` counts the columns walked either way.
  */
-function walk(shot: Shot, x: number, g: number, dir: number, maxPx: number, path: number[]): WalkEnd {
+function walk(shot: Shot, x: number, g: number, dir: number, maxPx: number, path: number[] | null): WalkEnd {
   for (let k = 0; k < maxPx; k++) {
     const nx = x + dir;
-    if (nx < 0 || nx >= WORLD_W) return { x, g, stop: "edge", tank: -1 };
-    if (isSolid(shot.t, nx, g - 1)) return { x, g, stop: "rise", tank: -1 };
+    if (nx < 0 || nx >= WORLD_W) return { x, g, stop: "edge", tank: -1, n: k };
+    if (isSolid(shot.t, nx, g - 1)) return { x, g, stop: "rise", tank: -1, n: k };
     x = nx;
     g = groundBelow(shot.t, x, g);
-    path.push(x, g - 1);
+    if (path) path.push(x, g - 1);
     const tank = tankAt(shot, x, g - 1);
-    if (tank >= 0) return { x, g, stop: "tank", tank };
+    if (tank >= 0) return { x, g, stop: "tank", tank, n: k + 1 };
   }
-  return { x, g, stop: "far", tank: -1 };
+  return { x, g, stop: "far", tank: -1, n: maxPx };
 }
 
 /** Downhill direction at (x, g) from the ground ROLL_PROBE px either side; on level ground, the travel direction. */
@@ -195,13 +196,13 @@ function roll(shot: Shot, trig: Trigger, r: Roll): void {
   if (trig.tank >= 0) return blastAt(shot, r.then, trig.x, trig.y, trig.step, trig.shell, 0); // a direct hit doesn't roll
   const x = floorPx(trig.fx);
   const g = groundBelow(shot.t, x, floorPx(trig.fy));
-  const path = [x, g - 1];
+  const path = shot.rec ? [x, g - 1] : null;
   const against = tankAt(shot, x, g - 1); // landed against a tank: it stops at once
   const end: WalkEnd = against >= 0
-    ? { x, g, stop: "tank", tank: against }
+    ? { x, g, stop: "tank", tank: against, n: 0 }
     : walk(shot, x, g, downhill(shot.t, x, g, trig.vx), r.maxDistance, path);
-  const dur = showSteps(path.length / 2 - 1, SHOW_PX_PER_STEP.roll);
-  emit(shot, { step: trig.step, kind: "roll", shell: trig.shell, path, dur });
+  const dur = showSteps(end.n, SHOW_PX_PER_STEP.roll);
+  if (path) emit(shot, { step: trig.step, kind: "roll", shell: trig.shell, path, dur });
   if (end.stop === "edge") { // rolled off the world: lost, like any shell leaving the side edges
     emit(shot, { step: trig.step, kind: "out", shell: trig.shell, x: end.x + (end.x === 0 ? -1 : 1), y: end.g - 1, lag: dur });
     return;
@@ -263,17 +264,17 @@ function burn(shot: Shot, trig: Trigger, b: Burn): void {
   if (half > 0) runs.push(-1, half, 1, half);
   if (b.split) runs.push(-1, b.flow, 1, b.flow);
   else runs.push(downhill(shot.t, x, g, trig.vx), b.flow);
-  const flows: number[][] = [];
+  const flows: number[][] | null = shot.rec ? [] : null;
   let longest = 0;
   for (let j = 0; j < runs.length; j += 2) {
-    const path = [x, g - 1];
+    const path = flows ? [x, g - 1] : null;
     const end = walk(shot, x, g, runs[j], runs[j + 1], path);
-    const px = path.length / 2 - 1;
+    const px = end.n;
     if (end.tank >= 0 && (touched[end.tank] < 0 || px < touched[end.tank])) touched[end.tank] = px;
     if (px > longest) longest = px;
-    flows.push(path);
+    if (flows && path) flows.push(path);
   }
-  emit(shot, { step: trig.step, kind: "burn", shell: trig.shell, x, y: g - 1, flows, dur: showSteps(longest, SHOW_PX_PER_STEP.burn) });
+  if (flows) emit(shot, { step: trig.step, kind: "burn", shell: trig.shell, x, y: g - 1, flows, dur: showSteps(longest, SHOW_PX_PER_STEP.burn) });
   for (let p = 0; p < 2; p++) {
     if (touched[p] >= 0) hurt(shot, p, b.damage, trig.step, showSteps(touched[p], SHOW_PX_PER_STEP.burn));
   }

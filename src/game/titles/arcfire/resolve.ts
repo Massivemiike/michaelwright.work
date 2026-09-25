@@ -37,15 +37,18 @@ export function resolveTurn(m: MatchState, input: TurnInput): Timeline {
   return resolveWeapon(m, ROSTER[input.weapon], input, true);
 }
 
-/** resolveTurn without building the Timeline's paths or events: the same state and points, faster (AI search, verification). */
+/** resolveTurn without building the Timeline's paths or events: the same state and points, faster (AI search, verification). It returns only the points (resolveWeapon's `record = false`). */
 export function resolveTurnPoints(m: MatchState, input: TurnInput): [number, number] {
   return resolveWeapon(m, ROSTER[input.weapon], input, false).points;
 }
 
 /**
  * resolveTurn with the weapon passed in: the seam unit tests use to fire
- * synthetic WeaponDefs (and 2B's probe shell). `input.weapon` is only
- * recorded. `record = false` leaves `shells`, `events` and `settle.falls` empty.
+ * synthetic WeaponDefs. `input.weapon` is only recorded. `record = false`
+ * leaves `shells`, `events` and `settle.falls` empty, and its Timeline is for
+ * `.points` only: `settle.heights` is the live heightfield (the next resolve
+ * changes it) and `settle.falls` a shared, frozen empty array, so a quiet
+ * caller must not keep, write or transfer either.
  */
 export function resolveWeapon(m: MatchState, def: WeaponDef, input: TurnInput, record = true): Timeline {
   const shooter = m.shooter;
